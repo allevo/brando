@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 
-use crate::{builder::concretize_building, errors::{AddBuildingError, DeleteBuildingError}, heigth::Heigth, point::Point, requests::DeleteBuildingRequest, responses::{AddBuildingResponse, DeleteBuildingResponse}};
-
-use crate::requests::{
-    AddBuildingRequest,
+use crate::{
+    builder::concretize_building,
+    errors::{AddBuildingError, DeleteBuildingError},
+    heigth::Heigth,
+    point::Point,
+    requests::DeleteBuildingRequest,
+    responses::{AddBuildingResponse, DeleteBuildingResponse},
 };
+
 use crate::buildings::concrete::Building;
+use crate::requests::AddBuildingRequest;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +25,10 @@ pub struct BuildingsOnPoint {
 }
 
 pub trait Map {
-    fn add_building(self: &mut Self, request: AddBuildingRequest) -> Result<AddBuildingResponse, AddBuildingError>;
+    fn add_building(
+        self: &mut Self,
+        request: AddBuildingRequest,
+    ) -> Result<AddBuildingResponse, AddBuildingError>;
 
     fn check_for_adding_building(
         self: &Self,
@@ -39,7 +47,6 @@ pub trait Map {
 
     fn get_snapshot(self: &Self) -> MapSnapshot;
 }
-
 
 pub struct MatrixMap {
     dim: Point,
@@ -65,7 +72,10 @@ impl MatrixMap {
 }
 
 impl Map for MatrixMap {
-    fn add_building(self: &mut Self, request: AddBuildingRequest) -> Result<AddBuildingResponse, AddBuildingError> {
+    fn add_building(
+        self: &mut Self,
+        request: AddBuildingRequest,
+    ) -> Result<AddBuildingResponse, AddBuildingError> {
         if let Some(err) = self.check_for_adding_building(&request) {
             return Err(err);
         }
@@ -172,7 +182,6 @@ impl MapSnapshot {
     }
 }
 
-
 #[cfg(test)]
 mod test_matrix_map {
     use super::*;
@@ -182,7 +191,11 @@ mod test_matrix_map {
     fn check_for_adding_building_should_throw_if_point_is_out_of_the_map() {
         let map = MatrixMap::new(Point::new(20, 20));
 
-        let request = AddBuildingRequest::new(BuildingPrototypeType::Street, Point::new(50, 50), Heigth::Ground);
+        let request = AddBuildingRequest::new(
+            BuildingPrototypeType::Street,
+            Point::new(50, 50),
+            Heigth::Ground,
+        );
 
         let result = map.check_for_adding_building(&request);
 
@@ -197,12 +210,24 @@ mod test_matrix_map {
     fn check_for_adding_building_should_throw_if_point_already_taken_by_another_building() {
         let mut map = MatrixMap::new(Point::new(20, 20));
 
-        let request = AddBuildingRequest::new(BuildingPrototypeType::Street, Point::new(1, 1), Heigth::Ground);
+        let request = AddBuildingRequest::new(
+            BuildingPrototypeType::Street,
+            Point::new(1, 1),
+            Heigth::Ground,
+        );
 
         let result = map.add_building(request);
-        assert_eq!(Ok(AddBuildingResponse::new(44)), result, "in-map points are admitted");
+        assert_eq!(
+            Ok(AddBuildingResponse::new(44)),
+            result,
+            "in-map points are admitted"
+        );
 
-        let request = AddBuildingRequest::new(BuildingPrototypeType::Street, Point::new(1, 1), Heigth::Ground);
+        let request = AddBuildingRequest::new(
+            BuildingPrototypeType::Street,
+            Point::new(1, 1),
+            Heigth::Ground,
+        );
         let result = map.check_for_adding_building(&request);
         assert_eq!(
             Some(AddBuildingError::AlreadyTaken),
@@ -241,7 +266,11 @@ mod test_matrix_map {
     #[test]
     fn flow() {
         let mut map = MatrixMap::new(Point::new(20, 20));
-        let request = AddBuildingRequest::new(BuildingPrototypeType::Street, Point::new(0, 0), Heigth::Ground);
+        let request = AddBuildingRequest::new(
+            BuildingPrototypeType::Street,
+            Point::new(0, 0),
+            Heigth::Ground,
+        );
 
         map.add_building(request).unwrap();
         let snapshot = map.get_snapshot();

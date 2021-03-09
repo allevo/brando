@@ -1,8 +1,13 @@
-
-
-use crate::{builder::{concretize_building}, errors::{AddBuildingError, DeleteBuildingError}, map::{Map, MapSnapshot}, mayor::Mayor, requests::{AddBuildingRequest, DeleteBuildingRequest, GetSnapshotRequest, SpawnCitizensRequest}, responses::{
-        AddBuildingResponse, DeleteBuildingResponse
-    }};
+use crate::{
+    builder::concretize_building,
+    errors::{AddBuildingError, DeleteBuildingError},
+    map::{Map, MapSnapshot},
+    mayor::Mayor,
+    requests::{
+        AddBuildingRequest, DeleteBuildingRequest, GetSnapshotRequest, SpawnCitizensRequest,
+    },
+    responses::{AddBuildingResponse, DeleteBuildingResponse},
+};
 
 type Cost = u32;
 
@@ -62,9 +67,7 @@ impl<Map_: Map, Mayor_: Mayor> Orchestrator<Map_, Mayor_> {
         self.map.get_snapshot()
     }
 
-    pub fn spawn_citizens(self: &Self, _request: SpawnCitizensRequest) {
-
-    }
+    pub fn spawn_citizens(self: &Self, _request: SpawnCitizensRequest) {}
 
     fn calculate_cost(self: &Self, _request: &AddBuildingRequest) -> Cost {
         0

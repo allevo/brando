@@ -14,15 +14,12 @@ pub struct AddBuildingResponse {
 }
 impl AddBuildingResponse {
     pub fn new(building_id: BuildingId) -> Self {
-        Self {
-            building_id,
-        }
+        Self { building_id }
     }
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct DeleteBuildingResponse {
-}
+pub struct DeleteBuildingResponse {}
 impl DeleteBuildingResponse {
     pub fn new() -> Self {
         Self {}

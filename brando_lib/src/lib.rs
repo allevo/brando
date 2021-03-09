@@ -1,13 +1,13 @@
+mod builder;
+mod buildings;
+mod errors;
+mod heigth;
+mod map;
+mod mayor;
+mod orchestrator;
+mod point;
 mod requests;
 mod responses;
-mod orchestrator;
-mod map;
-mod buildings;
-mod heigth;
-mod mayor;
-mod point;
-mod errors;
-mod builder;
 
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -19,13 +19,13 @@ use point::Point;
 use requests::Request;
 use responses::Response;
 
-pub fn brando() -> (Sender<Request>, Receiver<Response>)  {
+pub fn brando() -> (Sender<Request>, Receiver<Response>) {
     let dim = Point::new(200, 200);
     let map = MatrixMap::new(dim);
     let mayor = MainMayor::new();
 
     let mut orchestrator = Orchestrator::new(map, mayor);
-    
+
     let (tx, rx): (Sender<Request>, Receiver<Request>) = mpsc::channel();
     let (tx_response, rx_response): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
@@ -58,7 +58,7 @@ pub fn brando() -> (Sender<Request>, Receiver<Response>)  {
         }
     }
 
-    return (tx, rx_response)
+    return (tx, rx_response);
 }
 
 #[cfg(test)]

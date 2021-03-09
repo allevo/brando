@@ -1,6 +1,5 @@
-
-use serde::{Serialize};
 use super::prototype::BuildingPrototype;
+use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Street {}
