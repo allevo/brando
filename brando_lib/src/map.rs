@@ -1,3 +1,5 @@
+#[cfg(test)]
+use mockers_derive::mocked;
 use std::collections::HashMap;
 
 use crate::{
@@ -12,7 +14,9 @@ use crate::{
 use crate::buildings::concrete::Building;
 use crate::requests::AddBuildingRequest;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+
+use std::rc::Rc;
 
 pub struct CellDescriptor<'a> {
     pub point: Point,
@@ -21,9 +25,10 @@ pub struct CellDescriptor<'a> {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BuildingsOnPoint {
-    pub ground: Option<Building>,
+    pub ground: Option<Rc<Building>>,
 }
 
+#[cfg_attr(test, mocked)]
 pub trait Map {
     fn add_building(
         self: &mut Self,
@@ -85,16 +90,15 @@ impl Map for MatrixMap {
             .entry(request.position)
             .or_insert(BuildingsOnPoint { ground: None });
 
-        let building = concretize_building(&request.building_prototype_type);
-        let building_id = building.id.clone();
+        let building = Rc::new(concretize_building(&request.building_prototype_type));
 
         match request.heigth {
             Heigth::Ground => {
-                buildings_on_point.ground = Some(building);
+                buildings_on_point.ground = Some(building.clone());
             }
         };
 
-        Ok(AddBuildingResponse::new(building_id))
+        Ok(AddBuildingResponse::new(building.clone()))
     }
 
     fn check_for_adding_building(
@@ -185,7 +189,10 @@ impl MapSnapshot {
 #[cfg(test)]
 mod test_matrix_map {
     use super::*;
-    use crate::buildings::prototype::BuildingPrototypeType;
+    use crate::buildings::{
+        concrete::{ConcreteBuilding, House1x1},
+        prototype::{BuildingPrototypeType, HOUSE_1x1},
+    };
 
     #[test]
     fn check_for_adding_building_should_throw_if_point_is_out_of_the_map() {
@@ -211,20 +218,24 @@ mod test_matrix_map {
         let mut map = MatrixMap::new(Point::new(20, 20));
 
         let request = AddBuildingRequest::new(
-            BuildingPrototypeType::Street,
+            BuildingPrototypeType::House1x1,
             Point::new(1, 1),
             Heigth::Ground,
         );
 
         let result = map.add_building(request);
         assert_eq!(
-            Ok(AddBuildingResponse::new(44)),
+            Ok(AddBuildingResponse::new(Rc::new(Building {
+                id: 44,
+                building: ConcreteBuilding::House1x1(House1x1::new(1, 0)),
+                prototype: &HOUSE_1x1
+            }))),
             result,
             "in-map points are admitted"
         );
 
         let request = AddBuildingRequest::new(
-            BuildingPrototypeType::Street,
+            BuildingPrototypeType::House1x1,
             Point::new(1, 1),
             Heigth::Ground,
         );

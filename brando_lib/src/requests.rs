@@ -1,8 +1,4 @@
-use crate::{
-    buildings::prototype::{BuildingPrototype, BuildingPrototypeType},
-    heigth::{self, Heigth},
-    point::Point,
-};
+use crate::{buildings::prototype::BuildingPrototypeType, heigth::Heigth, point::Point};
 
 pub enum Request {
     AddBuildingRequest(AddBuildingRequest),
@@ -12,6 +8,7 @@ pub enum Request {
     Close,
 }
 
+#[derive(Debug)]
 pub struct AddBuildingRequest {
     pub building_prototype_type: BuildingPrototypeType,
     pub position: Point,
@@ -32,6 +29,7 @@ impl AddBuildingRequest {
     }
 }
 
+#[derive(Debug)]
 pub struct DeleteBuildingRequest {
     pub position: Point,
     pub heigth: Heigth,

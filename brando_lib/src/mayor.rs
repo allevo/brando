@@ -1,6 +1,10 @@
+#[cfg(test)]
+use mockers_derive::mocked;
+
 #[derive(Debug)]
 pub enum DescrementBudgetError {}
 
+#[cfg_attr(test, mocked)]
 pub trait Mayor {
     fn has_budget(self: &Self, cost: u32) -> bool;
 
