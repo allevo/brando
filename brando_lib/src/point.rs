@@ -8,12 +8,12 @@ impl Point {
     }
 
     #[inline]
-    pub fn x(self: &Self) -> i32 {
+    pub fn x(&self) -> i32 {
         self.0 .0
     }
 
     #[inline]
-    pub fn y(self: &Self) -> i32 {
+    pub fn y(&self) -> i32 {
         self.0 .1
     }
 }

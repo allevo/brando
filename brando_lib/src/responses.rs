@@ -1,8 +1,4 @@
-use crate::{
-    builder,
-    buildings::concrete::{Building, BuildingId, ConcreteBuilding},
-    map::MapSnapshot,
-};
+use crate::{buildings::concrete::Building, map::MapSnapshot};
 use std::rc::Rc;
 
 pub enum Response {

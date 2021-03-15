@@ -54,11 +54,12 @@ pub fn brando() -> (Sender<Request>, Receiver<Response>) {
             }
             Request::Close => {
                 tx_response.send(Response::Close).unwrap();
+                break;
             }
         }
     }
 
-    return (tx, rx_response);
+    (tx, rx_response)
 }
 
 #[cfg(test)]

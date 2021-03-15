@@ -31,26 +31,23 @@ pub struct BuildingsOnPoint {
 #[cfg_attr(test, mocked)]
 pub trait Map {
     fn add_building(
-        self: &mut Self,
+        &mut self,
         request: AddBuildingRequest,
     ) -> Result<AddBuildingResponse, AddBuildingError>;
 
-    fn check_for_adding_building(
-        self: &Self,
-        request: &AddBuildingRequest,
-    ) -> Option<AddBuildingError>;
+    fn check_for_adding_building(&self, request: &AddBuildingRequest) -> Option<AddBuildingError>;
 
     fn delete_building(
-        self: &mut Self,
+        &mut self,
         request: DeleteBuildingRequest,
     ) -> Result<DeleteBuildingResponse, DeleteBuildingError>;
 
     fn check_for_deleting_building(
-        self: &Self,
+        &self,
         request: &DeleteBuildingRequest,
     ) -> Option<DeleteBuildingError>;
 
-    fn get_snapshot(self: &Self) -> MapSnapshot;
+    fn get_snapshot(&self) -> MapSnapshot;
 }
 
 pub struct MatrixMap {
@@ -66,7 +63,7 @@ impl MatrixMap {
         }
     }
 
-    fn is_in_map(self: &Self, point: &Point) -> bool {
+    fn is_in_map(&self, point: &Point) -> bool {
         let max_x = self.dim.x();
         let max_y = self.dim.y();
         let x = point.x();
@@ -78,7 +75,7 @@ impl MatrixMap {
 
 impl Map for MatrixMap {
     fn add_building(
-        self: &mut Self,
+        &mut self,
         request: AddBuildingRequest,
     ) -> Result<AddBuildingResponse, AddBuildingError> {
         if let Some(err) = self.check_for_adding_building(&request) {
@@ -98,13 +95,10 @@ impl Map for MatrixMap {
             }
         };
 
-        Ok(AddBuildingResponse::new(building.clone()))
+        Ok(AddBuildingResponse::new(building))
     }
 
-    fn check_for_adding_building(
-        self: &Self,
-        request: &AddBuildingRequest,
-    ) -> Option<AddBuildingError> {
+    fn check_for_adding_building(&self, request: &AddBuildingRequest) -> Option<AddBuildingError> {
         if !self.is_in_map(&request.position) {
             return Some(AddBuildingError::OutOfMap);
         }
@@ -122,7 +116,7 @@ impl Map for MatrixMap {
     }
 
     fn delete_building(
-        self: &mut Self,
+        &mut self,
         request: DeleteBuildingRequest,
     ) -> Result<DeleteBuildingResponse, DeleteBuildingError> {
         if let Some(err) = self.check_for_deleting_building(&request) {
@@ -142,7 +136,7 @@ impl Map for MatrixMap {
     }
 
     fn check_for_deleting_building(
-        self: &Self,
+        &self,
         request: &DeleteBuildingRequest,
     ) -> Option<DeleteBuildingError> {
         if !self.is_in_map(&request.position) {
@@ -161,7 +155,7 @@ impl Map for MatrixMap {
         }
     }
 
-    fn get_snapshot(self: &Self) -> MapSnapshot {
+    fn get_snapshot(&self) -> MapSnapshot {
         MapSnapshot::new(self.dim.clone(), self.buildings.clone())
     }
 }
@@ -177,7 +171,7 @@ impl MapSnapshot {
         Self { dim, buildings }
     }
 
-    pub fn get_cell_at(self: &Self, point: &Point) -> CellDescriptor {
+    pub fn get_cell_at(&self, point: &Point) -> CellDescriptor {
         let buildings_on_point = self.buildings.get(point);
         CellDescriptor {
             point: point.clone(),

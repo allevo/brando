@@ -1,5 +1,4 @@
 use crate::{
-    builder::concretize_building,
     errors::{AddBuildingError, DeleteBuildingError},
     map::{Map, MapSnapshot},
     mayor::Mayor,
@@ -22,7 +21,7 @@ impl<Map_: Map, Mayor_: Mayor> Orchestrator<Map_, Mayor_> {
     }
 
     pub fn add_building(
-        self: &mut Self,
+        &mut self,
         request: AddBuildingRequest,
     ) -> Result<AddBuildingResponse, AddBuildingError> {
         let cost = self.calculate_cost(&request);
@@ -43,19 +42,19 @@ impl<Map_: Map, Mayor_: Mayor> Orchestrator<Map_, Mayor_> {
     }
 
     pub fn delete_building(
-        self: &mut Self,
+        &mut self,
         request: DeleteBuildingRequest,
     ) -> Result<DeleteBuildingResponse, DeleteBuildingError> {
         self.map.delete_building(request)
     }
 
-    pub fn get_map_snapshot(self: &Self, _request: GetSnapshotRequest) -> MapSnapshot {
+    pub fn get_map_snapshot(&self, _request: GetSnapshotRequest) -> MapSnapshot {
         self.map.get_snapshot()
     }
 
-    pub fn spawn_citizens(self: &Self, _request: SpawnCitizensRequest) {}
+    pub fn spawn_citizens(&self, _request: SpawnCitizensRequest) {}
 
-    fn calculate_cost(self: &Self, _request: &AddBuildingRequest) -> Cost {
+    fn calculate_cost(&self, _request: &AddBuildingRequest) -> Cost {
         0
     }
 }
