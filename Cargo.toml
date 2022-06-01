@@ -1,0 +1,18 @@
+[package]
+name = "brando"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.7" }
+bevy_asset_loader =  { version = "0.10.0" }
+hyperid = { version = "2.3.1", features = ["url_safe"] }
+bevy_mod_picking = "0.6"
+thiserror = "1.0"
+flurry = "0.4.0"
+tracing = "*"
+pathfinding = "3.0.5"
+futures-lite = "1.12.0"
+ccl = "5.1.5"
