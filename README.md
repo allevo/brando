@@ -1,4 +1,4 @@
-# Brando
+# Brando ![example workflow](https://github.com/allevo/brando/actions/workflows/rust.yml/badge.svg)
 
 
 ## Articles

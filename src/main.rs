@@ -7,10 +7,7 @@ mod palatability;
 
 use std::collections::HashSet;
 
-use bevy::{
-    input::{keyboard::KeyboardInput, InputPlugin},
-    prelude::*,
-};
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
@@ -219,35 +216,26 @@ fn setup(mut commands: Commands) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        building::plugin::{EditMode, PlaneComponent},
-        common::configuration::CONFIGURATION,
-        palatability::manager::PalatabilityManager,
-        tests::helpers::*,
-        GameTick, MainPlugin,
+        building::plugin::PlaneComponent, common::configuration::CONFIGURATION,
+        palatability::manager::PalatabilityManager, tests::helpers::*, GameTick, MainPlugin,
     };
     use bevy::{
-        asset::{Asset, AssetPlugin},
+        asset::AssetPlugin,
         core::CorePlugin,
         core_pipeline::CorePipelinePlugin,
         ecs::event::Events,
-        gilrs::GilrsPlugin,
-        gltf::GltfPlugin,
         hierarchy::HierarchyPlugin,
-        input::{keyboard::KeyboardInput, ElementState, Input, InputPlugin},
+        input::{keyboard::KeyboardInput, ElementState, InputPlugin},
         log::{LogPlugin, LogSettings},
-        math::Vec2,
         pbr::PbrPlugin,
-        prelude::{App, Camera, Entity, KeyCode, MouseButton, With},
+        prelude::{App, Camera, Entity, KeyCode, With},
         render::{camera::RenderTarget, RenderPlugin},
         scene::ScenePlugin,
         sprite::SpritePlugin,
         text::TextPlugin,
         transform::TransformPlugin,
         ui::UiPlugin,
-        window::{
-            RawWindowHandleWrapper, Window, WindowDescriptor, WindowId, WindowPlugin, Windows,
-        },
-        winit::WinitPlugin,
+        window::{WindowId, WindowPlugin},
     };
     use bevy_mod_picking::PickingEvent;
     use tracing::Level;
@@ -260,13 +248,13 @@ mod tests {
         run!(app, 1);
 
         let entities = get_plane_entities!(app);
-        let house_entity = entities.get(CONFIGURATION.width() + 2).unwrap();
-        let street_entity_1 = entities.get(0).unwrap();
-        let street_entity_2 = entities.get(1).unwrap();
-        let street_entity_3 = entities.get(2).unwrap();
+        let house_entity = entities.get(position_to_index(1, 2)).unwrap();
+        let street_entity_1 = entities.get(position_to_index(0, 0)).unwrap();
+        let street_entity_2 = entities.get(position_to_index(0, 1)).unwrap();
+        let street_entity_3 = entities.get(position_to_index(0, 2)).unwrap();
 
-        let house_entity_2 = entities.get(CONFIGURATION.width() + 1).unwrap();
-        let garden_entity = entities.get(CONFIGURATION.width() * 2 + 1).unwrap();
+        let house_entity_2 = entities.get(position_to_index(1, 1)).unwrap();
+        let garden_entity = entities.get(position_to_index(2, 1)).unwrap();
 
         release_keyboard_key!(app, KeyCode::H);
         run!(app, 1);
@@ -293,7 +281,7 @@ mod tests {
         select_plane!(app, house_entity_2);
         run!(app, 20);
 
-        // Home is fulfilled
+        // palatability is not sufficient, so population count doesn't change
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 8);
 
@@ -302,9 +290,13 @@ mod tests {
         select_plane!(app, garden_entity);
         run!(app, 20);
 
-        // Home is fulfilled
+        // Homes are fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 16);
+    }
+
+    fn position_to_index(x: usize, y: usize) -> usize {
+        CONFIGURATION.width_table * x + y
     }
 
     mod helpers {
