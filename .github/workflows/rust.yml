@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  GAME_EXECUTABLE_NAME: brando
 
 jobs:
   build:
@@ -34,3 +35,42 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Build release
+        run: |
+          cargo build --release
+      #- name: Prepare release
+      #  run: |
+      #    mkdir target/release/assets && cp -r assets target/release/assets
+      #    mkdir target/release/credits && cp -r credits target/release/credits
+      - name: Zip release
+        uses: vimtor/action-zip@v1
+        with:
+          #files: target/release/assets/ target/release/credits/ target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
+          files: target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
+          dest: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
+          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_latest_windows.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+
+
+
+
+
+
+
+
+
+
