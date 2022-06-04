@@ -7,7 +7,10 @@ mod palatability;
 
 use std::collections::HashSet;
 
-use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use bevy::{
+    input::{keyboard::KeyboardInput, InputPlugin},
+    prelude::*,
+};
 use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
@@ -101,15 +104,23 @@ fn main() {
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_plugin(DebugCursorPickingPlugin) // <- Adds the green debug cursor.
-        .add_startup_system(setup)
-        .add_event::<GameTick>()
-        .add_system_to_stage(CoreStage::Update, tick)
-        .add_system_to_stage(CoreStage::PostUpdate, move_camera_on_keyboard_input)
-        .init_resource::<PbrBundles>()
-        .add_plugin(BuildingPlugin)
-        .add_plugin(NavigatorPlugin)
-        .add_plugin(PalatabilityPlugin)
+        .add_plugin(MainPlugin)
         .run();
+}
+
+pub struct MainPlugin;
+
+impl Plugin for MainPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_startup_system(setup)
+            .add_event::<GameTick>()
+            .add_system_to_stage(CoreStage::Update, tick)
+            .add_system_to_stage(CoreStage::PostUpdate, move_camera_on_keyboard_input)
+            .init_resource::<PbrBundles>()
+            .add_plugin(BuildingPlugin)
+            .add_plugin(NavigatorPlugin)
+            .add_plugin(PalatabilityPlugin);
+    }
 }
 
 fn tick(
@@ -207,55 +218,191 @@ fn setup(mut commands: Commands) {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{
-        position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+    use crate::{
+        building::plugin::{EditMode, PlaneComponent},
+        common::configuration::CONFIGURATION,
+        palatability::manager::PalatabilityManager,
+        tests::helpers::*,
+        GameTick, MainPlugin,
     };
-
-    use super::*;
+    use bevy::{
+        asset::{Asset, AssetPlugin},
+        core::CorePlugin,
+        core_pipeline::CorePipelinePlugin,
+        ecs::event::Events,
+        gilrs::GilrsPlugin,
+        gltf::GltfPlugin,
+        hierarchy::HierarchyPlugin,
+        input::{keyboard::KeyboardInput, ElementState, Input, InputPlugin},
+        log::{LogPlugin, LogSettings},
+        math::Vec2,
+        pbr::PbrPlugin,
+        prelude::{App, Camera, Entity, KeyCode, MouseButton, With},
+        render::{camera::RenderTarget, RenderPlugin},
+        scene::ScenePlugin,
+        sprite::SpritePlugin,
+        text::TextPlugin,
+        transform::TransformPlugin,
+        ui::UiPlugin,
+        window::{
+            RawWindowHandleWrapper, Window, WindowDescriptor, WindowId, WindowPlugin, Windows,
+        },
+        winit::WinitPlugin,
+    };
+    use bevy_mod_picking::PickingEvent;
+    use tracing::Level;
 
     #[test]
-    fn calculate_plate_positions() {
-        let half_width = CONFIGURATION.width_table as f32 / 2. * CONFIGURATION.cube_size;
-        let half_depth = CONFIGURATION.depth_table as f32 / 2. * CONFIGURATION.cube_size;
-        let x_positions = (0..CONFIGURATION.width_table)
-            .map(|i| i as f32 * CONFIGURATION.cube_size - half_width)
-            .collect::<Vec<f32>>();
-        let z_positions = (0..CONFIGURATION.depth_table)
-            .map(|i| i as f32 * CONFIGURATION.cube_size - half_depth)
-            .collect::<Vec<f32>>();
+    fn test_main() {
+        let mut app = create_app!();
 
-        assert_eq!(
-            x_positions,
-            vec![
-                -4.8, -4.5, -4.2000003, -3.9, -3.6000001, -3.3000002, -3.0, -2.7, -2.4, -2.1000001,
-                -1.8000002, -1.5, -1.2, -0.9000001, -0.5999999, -0.3000002, 0.0, 0.3000002,
-                0.5999999, 0.9000001, 1.1999998, 1.5, 1.8000002, 2.1, 2.4, 2.7000003, 3.0,
-                3.3000002, 3.6000004, 3.9000006, 4.2, 4.5
-            ]
-        );
-        assert_eq!(
-            z_positions,
-            vec![
-                -4.8, -4.5, -4.2000003, -3.9, -3.6000001, -3.3000002, -3.0, -2.7, -2.4, -2.1000001,
-                -1.8000002, -1.5, -1.2, -0.9000001, -0.5999999, -0.3000002, 0.0, 0.3000002,
-                0.5999999, 0.9000001, 1.1999998, 1.5, 1.8000002, 2.1, 2.4, 2.7000003, 3.0,
-                3.3000002, 3.6000004, 3.9000006, 4.2, 4.5
-            ]
-        );
+        // Run for a while: waiting all setup functions are run
+        run!(app, 1);
+
+        let entities = get_plane_entities!(app);
+        let house_entity = entities.get(CONFIGURATION.width() + 2).unwrap();
+        let street_entity_1 = entities.get(0).unwrap();
+        let street_entity_2 = entities.get(1).unwrap();
+        let street_entity_3 = entities.get(2).unwrap();
+
+        let house_entity_2 = entities.get(CONFIGURATION.width() + 1).unwrap();
+        let garden_entity = entities.get(CONFIGURATION.width() * 2 + 1).unwrap();
+
+        release_keyboard_key!(app, KeyCode::H);
+        run!(app, 1);
+        select_plane!(app, house_entity);
+        run!(app, 20);
+
+        release_keyboard_key!(app, KeyCode::S);
+        run!(app, 1);
+        select_plane!(app, street_entity_1);
+        run!(app, 1);
+        select_plane!(app, street_entity_2);
+        run!(app, 1);
+        select_plane!(app, street_entity_3);
+        run!(app, 1);
+
+        run!(app, 20);
+
+        // Home is fulfilled
+        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        assert_eq!(palatability_manager.total_populations(), 8);
+
+        release_keyboard_key!(app, KeyCode::H);
+        run!(app, 1);
+        select_plane!(app, house_entity_2);
+        run!(app, 20);
+
+        // Home is fulfilled
+        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        assert_eq!(palatability_manager.total_populations(), 8);
+
+        release_keyboard_key!(app, KeyCode::G);
+        run!(app, 1);
+        select_plane!(app, garden_entity);
+        run!(app, 20);
+
+        // Home is fulfilled
+        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        assert_eq!(palatability_manager.total_populations(), 16);
     }
 
-    #[test]
-    fn test_position_converts() {
-        let positions = vec![
-            Position { x: 0, y: 0 },
-            Position { x: 1, y: 0 },
-            Position { x: 1, y: 1 },
-        ];
-        for position in positions {
-            let t = convert_position_into_bevy_coords(&CONFIGURATION, &position);
-            let p = convert_bevy_coords_into_position(&CONFIGURATION, &t);
-            assert_eq!(position, p);
+    mod helpers {
+
+        macro_rules! run {
+            ($app: ident, $n: expr) => {
+                (0..$n).for_each(|_| {
+                    let world = &mut $app.world;
+                    let schedule = &mut $app.schedule;
+                    let mut game_tick = world.get_resource_mut::<Events<GameTick>>().unwrap();
+
+                    game_tick.send(GameTick(0));
+                    schedule.run_once(world);
+                });
+            };
         }
+
+        macro_rules! release_keyboard_key {
+            ($app: ident, $code: path) => {{
+                let world = &mut $app.world;
+                let mut keyboard_input = world.get_resource_mut::<Events<KeyboardInput>>().unwrap();
+                keyboard_input.send(KeyboardInput {
+                    scan_code: 0,
+                    key_code: Some($code),
+                    state: ElementState::Released,
+                });
+            }};
+        }
+
+        macro_rules! select_plane {
+            ($app: ident, $entity: ident) => {{
+                let world = &mut $app.world;
+                let mut picking_event = world.get_resource_mut::<Events<PickingEvent>>().unwrap();
+                picking_event.send(PickingEvent::Clicked(*$entity));
+            }};
+        }
+
+        macro_rules! create_app {
+            () => {{
+                let mut app = App::new();
+
+                let mut log_settings = LogSettings {
+                    filter: "wgpu=error".to_string(),
+                    level: Level::INFO,
+                };
+                log_settings.filter = format!("{},bevy_mod_raycast=off", log_settings.filter);
+                app.insert_resource(log_settings);
+
+                app.add_plugin(LogPlugin::default());
+                app.add_plugin(CorePlugin::default());
+                app.add_plugin(TransformPlugin::default());
+                app.add_plugin(HierarchyPlugin::default());
+                // app.add_plugin(bevy_diagnostic::DiagnosticsPlugin::default());
+                app.add_plugin(InputPlugin::default());
+                app.add_plugin(WindowPlugin {
+                    add_primary_window: true,
+                    exit_on_close: false,
+                });
+                app.add_plugin(AssetPlugin::default());
+                // app.add_plugin(DebugAssetServerPlugin::default());
+                app.add_plugin(ScenePlugin::default());
+                // app.add_plugin(WinitPlugin::default());
+                app.add_plugin(RenderPlugin::default());
+                app.add_plugin(CorePipelinePlugin::default());
+                app.add_plugin(SpritePlugin::default());
+                app.add_plugin(TextPlugin::default());
+                app.add_plugin(UiPlugin::default());
+                app.add_plugin(PbrPlugin::default());
+                // app.add_plugin(GltfPlugin::default());
+                // app.add_plugin(bevy_audio::AudioPlugin::default());
+                // app.add_plugin(GilrsPlugin::default());
+                // app.add_plugin(bevy_animation::AnimationPlugin::default());
+
+                {
+                    let mut camera = Camera::default();
+                    // let mut camera = app.world.get_resource_mut::<Camera>().unwrap();
+                    camera.target = RenderTarget::Window(WindowId::primary());
+                    app.insert_resource(camera);
+                }
+
+                app.add_plugin(MainPlugin);
+                app
+            }};
+        }
+
+        macro_rules! get_plane_entities {
+            ($app: ident) => {{
+                let world = &mut $app.world;
+                let mut query = world.query_filtered::<Entity, With<PlaneComponent>>();
+                let query = query.iter(world);
+                query.collect::<Vec<_>>()
+            }};
+        }
+
+        pub(crate) use create_app;
+        pub(crate) use get_plane_entities;
+        pub(crate) use release_keyboard_key;
+        pub(crate) use run;
+        pub(crate) use select_plane;
     }
 }

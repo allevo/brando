@@ -47,7 +47,7 @@ pub struct BuildingCreated {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-enum EditMode {
+pub enum EditMode {
     None,
     House,
     Garden,
@@ -276,7 +276,7 @@ fn habit_house(
 }
 
 #[derive(Component, Debug)]
-struct PlaneComponent;
+pub struct PlaneComponent;
 
 fn setup(
     mut commands: Commands,

@@ -12,6 +12,10 @@ impl Configuration {
             self.depth_table as f32 / 2. * self.cube_size,
         )
     }
+
+    pub fn width(&self) -> usize {
+        self.width_table
+    }
 }
 
 pub const CONFIGURATION: Configuration = Configuration {
