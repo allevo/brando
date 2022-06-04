@@ -18,6 +18,14 @@ jobs:
     - name: Install deps
       run: sudo apt-get install -y libasound2-dev libudev-dev
     - uses: actions/checkout@v3
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
       run: cargo build --verbose
     - name: Run tests
