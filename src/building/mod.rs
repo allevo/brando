@@ -1,15 +1,18 @@
 pub mod builder;
+pub mod plugin;
 
 use std::fmt::Display;
 
 use crate::{
-    navigator::Reachable, palatability::HouseSourcePalatabilityDescriptor, position::Position,
+    common::position::Position, navigation::navigator::Reachable,
+    palatability::manager::HouseSourcePalatabilityDescriptor,
 };
 
 pub enum Building {
     House(House),
     Street(Street),
     Garden(Garden),
+    Office(Office),
 }
 impl Building {
     pub fn position(&self) -> Option<Position> {
@@ -17,6 +20,7 @@ impl Building {
             Building::Garden(g) => Some(g.position),
             Building::Street(s) => Some(s.position),
             Building::House(h) => Some(h.position),
+            Building::Office(o) => Some(o.position),
         }
     }
 }
@@ -52,6 +56,9 @@ impl From<&House> for HouseSourcePalatabilityDescriptor {
         }
     }
 }
+pub struct Office {
+    pub position: Position,
+}
 pub struct Street {
     pub position: Position,
 }
@@ -75,6 +82,7 @@ pub enum BuildingType {
     House,
     Street,
     Garden,
+    Office,
 }
 
 pub struct BuildingPrototype {
@@ -102,6 +110,11 @@ pub static GARDEN_PROTOTYPE: BuildingPrototype = BuildingPrototype {
     name: "garden",
     time_for_building: 2,
     building_type: BuildingType::Garden,
+};
+pub static OFFICE_PROTOTYPE: BuildingPrototype = BuildingPrototype {
+    name: "office",
+    time_for_building: 5,
+    building_type: BuildingType::Office,
 };
 
 #[derive(Clone)]
@@ -173,6 +186,19 @@ impl TryInto<Garden> for &mut BuildingInConstruction {
     }
 }
 
+impl TryInto<Office> for &mut BuildingInConstruction {
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<Office, Self::Error> {
+        match self.request.prototype.building_type {
+            BuildingType::Office => Ok(Office {
+                position: self.request.position,
+            }),
+            _ => Err("NO"),
+        }
+    }
+}
+
 impl TryInto<Building> for &mut BuildingInConstruction {
     type Error = &'static str;
 
@@ -181,6 +207,7 @@ impl TryInto<Building> for &mut BuildingInConstruction {
             BuildingType::House => self.try_into().map(Building::House),
             BuildingType::Street => self.try_into().map(Building::Street),
             BuildingType::Garden => self.try_into().map(Building::Garden),
+            BuildingType::Office => self.try_into().map(Building::Office),
         }
     }
 }

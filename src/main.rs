@@ -1,20 +1,19 @@
 #![feature(const_fn_floating_point_arithmetic)]
 
 mod building;
-mod navigator;
+mod common;
+mod navigation;
 mod palatability;
-mod plugin;
-mod position;
 
 use std::collections::HashSet;
 
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_mod_picking::*;
 
-use plugin::{
-    building::BuildingPlugin, navigator::NavigatorPlugin, palatability::PalatabilityPlugin,
-    CONFIGURATION,
-};
+use building::plugin::BuildingPlugin;
+use common::configuration::CONFIGURATION;
+use navigation::plugin::NavigatorPlugin;
+use palatability::plugin::PalatabilityPlugin;
 
 #[derive(Component, Deref, DerefMut)]
 struct GameTimer(Timer);
@@ -25,6 +24,7 @@ struct PbrBundles {
     house: PbrBundle,
     street: PbrBundle,
     garden: PbrBundle,
+    office: PbrBundle,
     in_progress: PbrBundle,
 }
 impl PbrBundles {
@@ -37,81 +37,61 @@ impl PbrBundles {
     pub fn garden(&self) -> PbrBundle {
         self.garden.clone()
     }
+    pub fn office(&self) -> PbrBundle {
+        self.office.clone()
+    }
     pub fn in_progress(&self) -> PbrBundle {
         self.in_progress.clone()
     }
+}
+
+macro_rules! get_colored_plane {
+    ($world: ident, $configuration: ident, $type: tt, $r: literal, $g: literal, $b: literal) => {{
+        let mesh = {
+            let mut meshes = $world
+                .get_resource_mut::<Assets<Mesh>>()
+                .expect("Mesh resource should be already created");
+            meshes.add(Mesh::from(shape::$type {
+                size: $configuration.cube_size,
+            }))
+        };
+        let material = {
+            let mut materials = $world
+                .get_resource_mut::<Assets<StandardMaterial>>()
+                .expect("StandardMaterial should be already created");
+            materials.add(Color::rgb($r as f32 / 255., $g as f32 / 255., $b as f32 / 255.).into())
+        };
+        PbrBundle {
+            mesh,
+            material,
+            transform: Transform::from_xyz(0., 0., 0.),
+            ..default()
+        }
+    }};
+    (plane $world: ident, $configuration: ident, $r: literal, $g: literal, $b: literal) => {
+        get_colored_plane!($world, $configuration, Plane, $r, $g, $b)
+    };
+    (cube $world: ident, $configuration: ident, $r: literal, $g: literal, $b: literal) => {
+        get_colored_plane!($world, $configuration, Cube, $r, $g, $b)
+    };
 }
 
 impl FromWorld for PbrBundles {
     fn from_world(world: &mut World) -> Self {
         let configuration = &CONFIGURATION;
 
-        let (house_mesh, street_mesh, garden_mesh, in_progress_mesh) = {
-            let mut meshes = world
-                .get_resource_mut::<Assets<Mesh>>()
-                .expect("Mesh resource should be already created");
-
-            (
-                meshes.add(Mesh::from(shape::Cube {
-                    size: configuration.cube_size,
-                })),
-                meshes.add(Mesh::from(shape::Plane {
-                    size: configuration.cube_size,
-                })),
-                meshes.add(Mesh::from(shape::Plane {
-                    size: configuration.cube_size,
-                })),
-                meshes.add(Mesh::from(shape::Plane {
-                    size: configuration.cube_size,
-                })),
-            )
-        };
-        let (house_material, street_material, garden_material, in_progress_material) = {
-            let mut materials = world
-                .get_resource_mut::<Assets<StandardMaterial>>()
-                .expect("StandardMaterial should be already created");
-
-            (
-                materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-                materials.add(Color::rgb(0.7, 0.7, 0.7).into()),
-                materials.add(Color::rgb(0.2, 0.7, 0.2).into()),
-                materials.add(Color::rgb(0.8, 0.8, 0.8).into()),
-            )
-        };
-
-        let house = PbrBundle {
-            mesh: house_mesh,
-            material: house_material,
-            transform: Transform::from_xyz(0., 0., 0.),
-            ..default()
-        };
-
-        let street = PbrBundle {
-            mesh: street_mesh,
-            material: street_material,
-            transform: Transform::from_xyz(0., 0., 0.),
-            ..default()
-        };
-
-        let garden = PbrBundle {
-            mesh: garden_mesh,
-            material: garden_material,
-            transform: Transform::from_xyz(0., 0., 0.),
-            ..default()
-        };
-
-        let in_progress = PbrBundle {
-            mesh: in_progress_mesh,
-            material: in_progress_material,
-            transform: Transform::from_xyz(0., 0., 0.),
-            ..default()
-        };
+        let house = get_colored_plane!(cube world, configuration, 150, 150, 150);
+        let street = get_colored_plane!(plane world, configuration, 81, 81, 81);
+        let garden = get_colored_plane!(plane world, configuration, 81, 112, 55);
+        let in_progress = get_colored_plane!(plane world, configuration, 33, 33, 33);
+        let office = get_colored_plane!(plane world, configuration, 31, 125, 219);
 
         PbrBundles {
             house,
             street,
             garden,
             in_progress,
+            office,
         }
     }
 }
@@ -227,9 +207,9 @@ fn setup(mut commands: Commands) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        plugin::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+    use crate::common::{
         position::Position,
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
     };
 
     use super::*;

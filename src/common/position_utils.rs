@@ -1,14 +1,6 @@
-pub mod building;
-mod configuration;
-pub mod navigator;
-pub mod palatability;
-
 use bevy::math::Vec3;
-pub use configuration::CONFIGURATION;
 
-use crate::position::Position;
-
-use self::configuration::Configuration;
+use super::{configuration::Configuration, position::Position};
 
 pub fn convert_bevy_coords_into_position(configuration: &Configuration, coords: &Vec3) -> Position {
     let (half_width, half_depth) = configuration.half();

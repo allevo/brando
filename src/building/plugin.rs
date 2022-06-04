@@ -9,15 +9,20 @@ use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 use crate::{
     building::{
         builder::BuildingBuilder, BuildRequest, Building, BuildingInConstruction, BuildingType,
-        Garden, House, Street, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, STREET_PROTOTYPE,
+        Garden, House, Street, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, OFFICE_PROTOTYPE,
+        STREET_PROTOTYPE,
     },
-    palatability::Palatability,
-    plugin::{convert_bevy_coords_into_position, CONFIGURATION},
-    position::Position,
+    common::{
+        configuration::CONFIGURATION,
+        position::Position,
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+    },
+    navigation::plugin::InhabitantArrivedAtHome,
+    palatability::manager::PalatabilityManager,
     GameTick, PbrBundles,
 };
 
-use super::{convert_position_into_bevy_coords, navigator::InhabitantArrivedAtHome};
+use super::Office;
 
 pub struct BuildingPlugin;
 
@@ -47,6 +52,7 @@ enum EditMode {
     House,
     Garden,
     Street,
+    Office,
 }
 
 fn switch_edit_mode(
@@ -59,6 +65,7 @@ fn switch_edit_mode(
             (ElementState::Released, Some(KeyCode::S)) => Some(EditMode::Street),
             (ElementState::Released, Some(KeyCode::G)) => Some(EditMode::Garden),
             (ElementState::Released, Some(KeyCode::H)) => Some(EditMode::House),
+            (ElementState::Released, Some(KeyCode::O)) => Some(EditMode::Office),
             (ElementState::Released, Some(KeyCode::Escape)) => Some(EditMode::None),
             _ => None,
         })
@@ -105,6 +112,7 @@ fn build_building(
         EditMode::House => &HOUSE_PROTOTYPE,
         EditMode::Garden => &GARDEN_PROTOTYPE,
         EditMode::Street => &STREET_PROTOTYPE,
+        EditMode::Office => &OFFICE_PROTOTYPE,
         EditMode::None => unreachable!("EditMode::None is handled before"),
     };
 
@@ -143,13 +151,17 @@ struct StreetComponent(Street);
 #[derive(Component)]
 struct GardenComponent(Garden);
 #[derive(Component)]
+struct OfficeComponent(Office);
+#[derive(Component)]
 pub struct HouseWaitingForInhabitantsComponent;
+#[derive(Component)]
+pub struct OfficeWaitingForWorkersComponent;
 
 fn make_progress(
     events: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingInConstructionComponent)>,
     brando: Res<BuildingBuilder>,
-    palatability: Res<Palatability>,
+    palatability: Res<PalatabilityManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
     mut building_created_writer: EventWriter<BuildingCreated>,
@@ -204,26 +216,34 @@ fn make_progress(
             BuildingType::House => bundles.house(),
             BuildingType::Garden => bundles.garden(),
             BuildingType::Street => bundles.street(),
+            BuildingType::Office => bundles.office(),
         };
 
-        commands.entity(entity).despawn_descendants();
-
         let mut command = commands.entity(entity);
+        command.despawn_descendants();
         command
             .remove::<BuildingInConstructionComponent>()
             .with_children(|parent| {
                 parent.spawn_bundle(bundle);
             });
 
+        // TODO: rework this part
+        // This part need to be reworked in order to let it scalable
+        // on the BuildingType enumeration growing.
         match building_type {
-            BuildingType::House => command
-                .insert(HouseComponent(building_in_construction.try_into().unwrap()))
-                .insert(HouseWaitingForInhabitantsComponent),
+            BuildingType::House => command.insert_bundle((
+                HouseComponent(building_in_construction.try_into().unwrap()),
+                HouseWaitingForInhabitantsComponent,
+            )),
             BuildingType::Garden => command.insert(GardenComponent(
                 building_in_construction.try_into().unwrap(),
             )),
             BuildingType::Street => command.insert(StreetComponent(
                 building_in_construction.try_into().unwrap(),
+            )),
+            BuildingType::Office => command.insert_bundle((
+                OfficeComponent(building_in_construction.try_into().unwrap()),
+                OfficeWaitingForWorkersComponent,
             )),
         };
 

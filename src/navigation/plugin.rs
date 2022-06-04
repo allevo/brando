@@ -4,12 +4,15 @@ use bevy::prelude::*;
 
 use crate::{
     building::{Building, House},
-    navigator::{NavigationDescriptor, Navigator},
-    position::Position,
+    common::position::Position,
     GameTick,
 };
 
-use super::building::{BuildingCreated, HouseComponent, HouseWaitingForInhabitantsComponent};
+use crate::building::plugin::{
+    BuildingCreated, HouseComponent, HouseWaitingForInhabitantsComponent,
+};
+
+use super::navigator::{NavigationDescriptor, Navigator};
 
 pub struct InhabitantArrivedAtHome {
     pub count: u8,

@@ -1,11 +1,11 @@
-use crate::position::Position;
+use crate::common::position::Position;
 
-pub struct Palatability {
+pub struct PalatabilityManager {
     total_populations: u64,
     // TODO: change approach to store the rendered values
     houses_sources: Vec<HouseSourcePalatabilityDescriptor>,
 }
-impl Palatability {
+impl PalatabilityManager {
     pub fn new() -> Self {
         Self {
             total_populations: 0,
@@ -73,7 +73,7 @@ pub struct HousePalatability {
 impl HousePalatability {
     #[inline]
     pub fn is_positive(&self) -> bool {
-        // we consider 0 as positive palatability
+        // we consider 0 as positive PalatabilityManager
         !self.value.is_negative()
     }
 }

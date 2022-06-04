@@ -2,8 +2,8 @@ use bevy::utils::HashSet;
 
 use crate::building::{BuildRequest, BuildingInConstruction, House, ProgressStatus};
 
-use crate::plugin::navigator::InhabitantArrivedAtHome;
-use crate::position::Position;
+use crate::common::position::Position;
+use crate::navigation::plugin::InhabitantArrivedAtHome;
 
 pub struct BuildingBuilder {
     position_already_used: HashSet<Position>,
@@ -62,8 +62,9 @@ mod tests {
 
     use crate::{
         building::{Garden, Street, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, STREET_PROTOTYPE},
-        navigator::Navigator,
-        palatability::Palatability,
+        common::position::Position,
+        navigation::navigator::Navigator,
+        palatability::manager::PalatabilityManager,
     };
 
     use super::*;
@@ -72,7 +73,7 @@ mod tests {
     fn flow() {
         let mut brando = BuildingBuilder::new();
         let mut navigator = Navigator::new(Position { x: 0, y: 0 });
-        let mut palatability = Palatability::new();
+        let mut palatability = PalatabilityManager::new();
 
         // this should be created on when the user clicks on the map
         let request = BuildRequest {

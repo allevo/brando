@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tracing::info;
 
-use crate::position::Position;
+use crate::common::position::Position;
 
 pub struct Navigator {
     start_point: Position,
