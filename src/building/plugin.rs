@@ -59,7 +59,7 @@ fn switch_edit_mode(
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut edit_mode: ResMut<EditMode>,
 ) {
-    keyboard_input_events
+    if let Some(e) = keyboard_input_events
         .iter()
         .filter_map(|e| match (e.state, e.key_code) {
             (ElementState::Released, Some(KeyCode::S)) => Some(EditMode::Street),
@@ -70,10 +70,10 @@ fn switch_edit_mode(
             _ => None,
         })
         .next()
-        .map(|e| {
-            info!("Switch EditMode to {:?}", e);
-            *edit_mode = e;
-        });
+    {
+        info!("Switch EditMode to {:?}", e);
+        *edit_mode = e;
+    }
 }
 
 #[derive(Component)]

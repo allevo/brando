@@ -117,17 +117,12 @@ mod tests {
             });
         }
         // And convert into streets
-        let street: Vec<Street> = streets_in_construction
+        streets_in_construction
             .into_iter()
             .map(|mut s| (&mut s).try_into().unwrap())
-            .collect();
+            .for_each(|s: Street| navigator.add_node(s.position));
 
         assert_eq!(house.resident_property.current_residents, 0);
-
-        // if the building is a street we need also to update navigator
-        street
-            .into_iter()
-            .for_each(|s| navigator.add_node(s.position));
 
         // In the meantime, under the hood, we need to build the graph behind
         while navigator.rebuild() > 0 {}
@@ -146,7 +141,7 @@ mod tests {
         palatability.add_house_source(&garden);
 
         let house_palatability = palatability.get_house_palatability(&house.position);
-        assert_eq!(house_palatability.is_positive(), true);
+        assert!(house_palatability.is_positive());
 
         // Now, we are ready for asking to the navigator the descriptor
         let mut navigation_descriptor = navigator.get_navigation_descriptor(&house).unwrap();
