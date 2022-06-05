@@ -38,6 +38,7 @@ jobs:
 
 
   build-windows:
+    needs: [build]
     runs-on: windows-latest
 
     steps:
