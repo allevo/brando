@@ -216,38 +216,16 @@ fn setup(mut commands: Commands) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        building::plugin::PlaneComponent, common::configuration::CONFIGURATION,
-        palatability::manager::PalatabilityManager, tests::helpers::*, GameTick, MainPlugin,
+        common::configuration::CONFIGURATION, palatability::manager::PalatabilityManager, GameTick,
+        MainPlugin,
     };
-    use bevy::{
-        asset::AssetPlugin,
-        core::CorePlugin,
-        core_pipeline::CorePipelinePlugin,
-        ecs::event::Events,
-        hierarchy::HierarchyPlugin,
-        input::{keyboard::KeyboardInput, ElementState, InputPlugin},
-        log::{LogPlugin, LogSettings},
-        pbr::PbrPlugin,
-        prelude::{App, Camera, Entity, KeyCode, With},
-        render::{camera::RenderTarget, RenderPlugin},
-        scene::ScenePlugin,
-        sprite::SpritePlugin,
-        text::TextPlugin,
-        transform::TransformPlugin,
-        ui::UiPlugin,
-        window::{WindowId, WindowPlugin},
-    };
-    use bevy_mod_picking::PickingEvent;
-    use tracing::Level;
+    use helpers::*;
 
     #[test]
     fn test_main() {
         let mut app = create_app!();
 
-        // Run for a while: waiting all setup functions are run
-        run!(app, 1);
-
-        let entities = get_plane_entities!(app);
+        let entities = get_entities!(planes app);
         let house_entity = entities.get(position_to_index(1, 2)).unwrap();
         let street_entity_1 = entities.get(position_to_index(0, 0)).unwrap();
         let street_entity_2 = entities.get(position_to_index(0, 1)).unwrap();
@@ -270,7 +248,7 @@ mod tests {
         select_plane!(app, street_entity_3);
         run!(app, 1);
 
-        run!(app, 20);
+        run!(app, 40);
 
         // Home is fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
@@ -288,11 +266,36 @@ mod tests {
         release_keyboard_key!(app, KeyCode::G);
         run!(app, 1);
         select_plane!(app, garden_entity);
-        run!(app, 20);
+        run!(app, 40);
 
         // Homes are fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 16);
+    }
+
+    #[test]
+    fn test_position_is_already_occupated() {
+        let mut app = create_app!();
+
+        let entities = get_entities!(planes app);
+        let position = position_to_index(1, 2);
+        let house_entity = entities.get(position).unwrap();
+
+        release_keyboard_key!(app, KeyCode::H);
+        run!(app, 1);
+        select_plane!(app, house_entity);
+        run!(app, 20);
+
+        let houses = get_entities!(houses app);
+        assert_eq!(houses.len(), 1);
+
+        release_keyboard_key!(app, KeyCode::H);
+        run!(app, 1);
+        select_plane!(app, house_entity);
+        run!(app, 20);
+
+        let houses = get_entities!(houses app);
+        assert_eq!(houses.len(), 1);
     }
 
     fn position_to_index(x: usize, y: usize) -> usize {
@@ -304,6 +307,8 @@ mod tests {
         macro_rules! run {
             ($app: ident, $n: expr) => {
                 (0..$n).for_each(|_| {
+                    use bevy::ecs::event::Events;
+
                     let world = &mut $app.world;
                     let schedule = &mut $app.schedule;
                     let mut game_tick = world.get_resource_mut::<Events<GameTick>>().unwrap();
@@ -316,6 +321,12 @@ mod tests {
 
         macro_rules! release_keyboard_key {
             ($app: ident, $code: path) => {{
+                use bevy::{
+                    ecs::event::Events,
+                    input::{keyboard::KeyboardInput, ElementState},
+                    prelude::KeyCode,
+                };
+
                 let world = &mut $app.world;
                 let mut keyboard_input = world.get_resource_mut::<Events<KeyboardInput>>().unwrap();
                 keyboard_input.send(KeyboardInput {
@@ -328,6 +339,9 @@ mod tests {
 
         macro_rules! select_plane {
             ($app: ident, $entity: ident) => {{
+                use bevy::ecs::event::Events;
+                use bevy_mod_picking::PickingEvent;
+
                 let world = &mut $app.world;
                 let mut picking_event = world.get_resource_mut::<Events<PickingEvent>>().unwrap();
                 picking_event.send(PickingEvent::Clicked(*$entity));
@@ -336,16 +350,35 @@ mod tests {
 
         macro_rules! create_app {
             () => {{
+                use bevy::{
+                    asset::AssetPlugin,
+                    core::CorePlugin,
+                    core_pipeline::CorePipelinePlugin,
+                    hierarchy::HierarchyPlugin,
+                    input::InputPlugin,
+                    log::LogSettings,
+                    pbr::PbrPlugin,
+                    prelude::{App, Camera},
+                    render::{camera::RenderTarget, RenderPlugin},
+                    scene::ScenePlugin,
+                    sprite::SpritePlugin,
+                    text::TextPlugin,
+                    transform::TransformPlugin,
+                    ui::UiPlugin,
+                    window::{WindowId, WindowPlugin},
+                };
+
                 let mut app = App::new();
 
-                let mut log_settings = LogSettings {
-                    filter: "wgpu=error".to_string(),
-                    level: Level::INFO,
-                };
+                app.world.clear_entities();
+                app.world.clear_trackers();
+
+                let mut log_settings = LogSettings::default();
                 log_settings.filter = format!("{},bevy_mod_raycast=off", log_settings.filter);
                 app.insert_resource(log_settings);
 
-                app.add_plugin(LogPlugin::default());
+                // uncomment the following line after https://github.com/bevyengine/bevy/issues/4934
+                // app.add_plugin(LogPlugin::default());
                 app.add_plugin(CorePlugin::default());
                 app.add_plugin(TransformPlugin::default());
                 app.add_plugin(HierarchyPlugin::default());
@@ -378,21 +411,32 @@ mod tests {
                 }
 
                 app.add_plugin(MainPlugin);
+
+                run!(app, 1);
+
                 app
             }};
         }
 
-        macro_rules! get_plane_entities {
-            ($app: ident) => {{
+        macro_rules! get_entities {
+            ($app: ident, $t: path) => {{
+                use bevy::prelude::{Entity, With};
+
                 let world = &mut $app.world;
-                let mut query = world.query_filtered::<Entity, With<PlaneComponent>>();
+                let mut query = world.query_filtered::<Entity, With<$t>>();
                 let query = query.iter(world);
                 query.collect::<Vec<_>>()
+            }};
+            (planes $app: ident) => {{
+                get_entities!($app, crate::building::plugin::PlaneComponent)
+            }};
+            (houses $app: ident) => {{
+                get_entities!($app, crate::building::plugin::HouseComponent)
             }};
         }
 
         pub(crate) use create_app;
-        pub(crate) use get_plane_entities;
+        pub(crate) use get_entities;
         pub(crate) use release_keyboard_key;
         pub(crate) use run;
         pub(crate) use select_plane;

@@ -27,6 +27,7 @@ impl Building {
 
 pub struct ResidentProperty {
     pub current_residents: u8,
+    pub incoming_residents: u8,
     pub max_residents: u8,
 }
 
@@ -34,13 +35,19 @@ pub struct House {
     pub position: Position,
     pub resident_property: ResidentProperty,
 }
-impl From<&House> for Reachable {
-    fn from(house: &House) -> Self {
-        let count =
-            house.resident_property.max_residents - house.resident_property.current_residents;
+impl From<&mut House> for Reachable {
+    fn from(house: &mut House) -> Self {
+        let desired_inhabitants = house.resident_property.max_residents
+            - house.resident_property.current_residents
+            - house.resident_property.incoming_residents;
+        let actual_inhabitants = (desired_inhabitants).min(6);
+
+        let terminates = desired_inhabitants == actual_inhabitants;
+
         Self {
             position: house.position,
-            count,
+            count: actual_inhabitants,
+            terminates,
         }
     }
 }
@@ -153,6 +160,7 @@ impl TryInto<House> for &mut BuildingInConstruction {
                 position: self.request.position,
                 resident_property: ResidentProperty {
                     current_residents: 0,
+                    incoming_residents: 0,
                     max_residents: 8,
                 },
             }),

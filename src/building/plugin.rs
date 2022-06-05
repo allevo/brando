@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use bevy::{
     input::{keyboard::KeyboardInput, ElementState},
@@ -138,12 +138,17 @@ fn build_building(
 }
 
 #[derive(Component)]
-pub struct HouseComponent(House);
+pub struct HouseComponent(pub House);
 impl Deref for HouseComponent {
     type Target = House;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+impl DerefMut for HouseComponent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 #[derive(Component)]

@@ -48,15 +48,23 @@ impl DerefMut for NavigationDescriptorComponent {
 }
 
 fn handle_waiting_for_inhabitants(
+    mut game_events: EventReader<GameTick>,
     mut commands: Commands,
     mut navigator: ResMut<Navigator>,
-    waiting_for_inhabitants_query: Query<
-        (Entity, &HouseComponent),
-        With<HouseWaitingForInhabitantsComponent>,
+    mut waiting_for_inhabitants_query: Query<
+        (Entity, &mut HouseComponent),
+        (
+            With<HouseWaitingForInhabitantsComponent>,
+            Without<NavigationDescriptorComponent>,
+        ),
     >,
 ) {
-    for (entity, house_component) in waiting_for_inhabitants_query.iter() {
-        let house: &House = &*house_component;
+    if game_events.iter().count() == 0 {
+        return;
+    }
+
+    for (entity, mut house_component) in waiting_for_inhabitants_query.iter_mut() {
+        let house: &mut House = &mut *house_component;
         let navigation_descriptor = match navigator.get_navigation_descriptor(house) {
             // TODO consider to have a try not immediately
             // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
@@ -66,15 +74,19 @@ fn handle_waiting_for_inhabitants(
             Some(nd) => nd,
         };
 
+        let house: &mut House = &mut *house_component;
         info!(
-            "path ({}) found for entity id {entity:?}",
-            navigation_descriptor.path.len()
+            "path ({}) found for house (id={entity:?}) at {:?}",
+            navigation_descriptor.path.len(),
+            &house.position,
         );
+        house.resident_property.incoming_residents += navigation_descriptor.count;
 
-        commands
-            .entity(entity)
-            .remove::<HouseWaitingForInhabitantsComponent>()
-            .insert(NavigationDescriptorComponent(navigation_descriptor));
+        let mut command = commands.entity(entity);
+        if navigation_descriptor.terminates {
+            command.remove::<HouseWaitingForInhabitantsComponent>();
+        }
+        command.insert(NavigationDescriptorComponent(navigation_descriptor));
     }
 }
 
@@ -82,14 +94,18 @@ fn move_inhabitants_to_house(
     mut events: EventReader<GameTick>,
     mut commands: Commands,
     navigator: Res<Navigator>,
-    mut waiting_for_inhabitants_query: Query<(Entity, &mut NavigationDescriptorComponent)>,
+    mut waiting_for_inhabitants_query: Query<(
+        Entity,
+        &mut HouseComponent,
+        &mut NavigationDescriptorComponent,
+    )>,
     mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHome>,
 ) {
     if events.iter().count() == 0 {
         return;
     }
 
-    for (entity, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
+    for (entity, mut house_component, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
         let navigation_descriptor: &mut NavigationDescriptor =
             &mut *navigation_descriptor_component;
         navigator.make_progress(navigation_descriptor).unwrap();
@@ -97,6 +113,9 @@ fn move_inhabitants_to_house(
         if !navigation_descriptor.is_completed() {
             continue;
         }
+
+        let house: &mut House = &mut *house_component;
+        house.resident_property.incoming_residents -= navigation_descriptor.count;
 
         info!("navigation_descriptor ends!");
 

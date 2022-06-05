@@ -71,6 +71,7 @@ impl Navigator {
         let descriptor = NavigationDescriptor {
             path,
             count: reachable.count,
+            terminates: reachable.terminates,
         };
 
         info!("Found descriptor {:?}", descriptor);
@@ -131,6 +132,7 @@ impl Navigator {
 pub struct Reachable {
     pub position: Position,
     pub count: u8,
+    pub terminates: bool,
 }
 
 // TODO: avoid "pub" here
@@ -138,6 +140,7 @@ pub struct Reachable {
 pub struct NavigationDescriptor {
     pub path: Vec<Position>,
     pub count: u8,
+    pub terminates: bool,
 }
 
 impl NavigationDescriptor {
