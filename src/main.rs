@@ -310,11 +310,10 @@ mod tests {
                     use bevy::ecs::event::Events;
 
                     let world = &mut $app.world;
-                    let schedule = &mut $app.schedule;
                     let mut game_tick = world.get_resource_mut::<Events<GameTick>>().unwrap();
 
                     game_tick.send(GameTick(0));
-                    schedule.run_once(world);
+                    $app.update();
                 });
             };
         }
