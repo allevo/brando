@@ -24,16 +24,25 @@ pub struct BuildingsConfiguration {
 }
 
 pub struct HouseConfiguration {
+    pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
 pub struct OfficeConfiguration {
+    pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
 pub struct GardenConfiguration {
+    pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
 pub struct StreetConfiguration {
+    pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
+}
+
+pub struct CommonBuildingConfiguration {
+    pub building_name: &'static str,
+    pub time_for_building: u8,
 }
 
 pub struct PalatabilityConfiguration {
@@ -63,6 +72,7 @@ pub const CONFIGURATION: Configuration = Configuration {
 
     buildings: BuildingsConfiguration {
         house: HouseConfiguration {
+            common: CommonBuildingConfiguration { building_name: "house", time_for_building: 10 },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: Some(HouseSourcePalatabilityConfiguration {
                     value: -1,
@@ -74,6 +84,7 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         office: OfficeConfiguration {
+            common: CommonBuildingConfiguration { building_name: "office", time_for_building: 5 },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: None,
                 office_source: Some(OfficeSourcePalatabilityConfiguration {
@@ -85,6 +96,7 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         garden: GardenConfiguration {
+            common: CommonBuildingConfiguration { building_name: "garden", time_for_building: 2 },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: Some(HouseSourcePalatabilityConfiguration {
                     value: 10,
@@ -101,6 +113,7 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         street: StreetConfiguration {
+            common: CommonBuildingConfiguration { building_name: "street", time_for_building: 2 },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: None,
                 office_source: None,

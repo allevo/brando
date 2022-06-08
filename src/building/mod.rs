@@ -3,7 +3,7 @@ pub mod plugin;
 
 use std::fmt::Display;
 
-use crate::{common::position::Position, navigation::navigator::Reachable};
+use crate::{common::{position::Position, configuration::CONFIGURATION}, navigation::navigator::Reachable};
 
 pub enum Building {
     House(House),
@@ -79,23 +79,23 @@ impl Display for BuildingPrototype {
 }
 
 pub static HOUSE_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: "house",
-    time_for_building: 10,
+    name: CONFIGURATION.buildings.house.common.building_name,
+    time_for_building: CONFIGURATION.buildings.house.common.time_for_building,
     building_type: BuildingType::House,
 };
 pub static STREET_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: "street",
-    time_for_building: 2,
+    name: CONFIGURATION.buildings.street.common.building_name,
+    time_for_building: CONFIGURATION.buildings.street.common.time_for_building,
     building_type: BuildingType::Street,
 };
 pub static GARDEN_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: "garden",
-    time_for_building: 2,
+    name: CONFIGURATION.buildings.garden.common.building_name,
+    time_for_building: CONFIGURATION.buildings.garden.common.time_for_building,
     building_type: BuildingType::Garden,
 };
 pub static OFFICE_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: "office",
-    time_for_building: 5,
+    name: CONFIGURATION.buildings.office.common.building_name,
+    time_for_building: CONFIGURATION.buildings.office.common.time_for_building,
     building_type: BuildingType::Office,
 };
 
