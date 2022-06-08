@@ -31,6 +31,7 @@ pub struct BuildingsConfiguration {
 }
 
 pub struct HouseConfiguration {
+    pub max_residents: u8,
     pub max_inhabitant_per_travel: u8,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
@@ -83,6 +84,7 @@ pub const CONFIGURATION: Configuration = Configuration {
 
     buildings: BuildingsConfiguration {
         house: HouseConfiguration {
+            max_residents: 8,
             max_inhabitant_per_travel: 6,
             common: CommonBuildingConfiguration {
                 building_name: "house",

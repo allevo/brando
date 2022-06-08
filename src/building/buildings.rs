@@ -21,7 +21,6 @@ impl Building {
 
 pub struct ResidentProperty {
     pub current_residents: u8,
-    pub incoming_residents: u8,
     pub max_residents: u8,
 }
 
@@ -116,8 +115,7 @@ impl TryInto<House> for &mut BuildingInConstruction {
                 position: self.request.position,
                 resident_property: ResidentProperty {
                     current_residents: 0,
-                    incoming_residents: 0,
-                    max_residents: 8,
+                    max_residents: CONFIGURATION.buildings.house.max_residents,
                 },
             }),
             _ => Err("NO"),
