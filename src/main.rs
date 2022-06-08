@@ -217,8 +217,9 @@ fn setup(mut commands: Commands) {
 mod tests {
     use crate::{
         common::configuration::CONFIGURATION, palatability::manager::PalatabilityManager, GameTick,
-        MainPlugin,
+        MainPlugin, building::House,
     };
+    use bevy::prelude::Entity;
     use helpers::*;
 
     #[test]
@@ -271,6 +272,13 @@ mod tests {
         // Homes are fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 16);
+
+        // Check houses
+        let houses: Vec<(Entity, &crate::building::plugin::HouseComponent)> = get_entities!(app, crate::building::plugin::HouseComponent, (Entity, &crate::building::plugin::HouseComponent));
+        let house: &House = &houses.get(0).unwrap().1.0;
+        assert_eq!(house.resident_property.current_residents, house.resident_property.max_residents);
+        let house: &House = &houses.get(1).unwrap().1.0;
+        assert_eq!(house.resident_property.current_residents, house.resident_property.max_residents);
     }
 
     #[test]
@@ -419,13 +427,18 @@ mod tests {
         }
 
         macro_rules! get_entities {
-            ($app: ident, $t: path) => {{
-                use bevy::prelude::{Entity, With};
+            ($app: ident, $t: path, $q: tt) => {{
+                use bevy::prelude::With;
 
                 let world = &mut $app.world;
-                let mut query = world.query_filtered::<Entity, With<$t>>();
+                let mut query = world.query_filtered::<$q, With<$t>>();
                 let query = query.iter(world);
-                query.collect::<Vec<_>>()
+                query.collect::<Vec<$q>>()
+            }};
+            ($app: ident, $t: path) => {{
+                use bevy::prelude::Entity;
+
+                get_entities!($app, $t, Entity)
             }};
             (planes $app: ident) => {{
                 get_entities!($app, crate::building::plugin::PlaneComponent)
