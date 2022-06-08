@@ -5,7 +5,6 @@ use std::fmt::Display;
 
 use crate::{
     common::position::Position, navigation::navigator::Reachable,
-    palatability::manager::HouseSourcePalatabilityDescriptor,
 };
 
 pub enum Building {
@@ -52,17 +51,7 @@ impl From<&mut House> for Reachable {
     }
 }
 
-impl From<&House> for HouseSourcePalatabilityDescriptor {
-    fn from(house: &House) -> Self {
-        Self {
-            origin: house.position,
-            value: -1,
-            max_horizontal_distribution_distance: 2,
-            max_linear_distribution_distance: 1,
-            linear_factor: 0,
-        }
-    }
-}
+
 pub struct Office {
     pub position: Position,
 }
@@ -71,17 +60,6 @@ pub struct Street {
 }
 pub struct Garden {
     pub position: Position,
-}
-impl From<&Garden> for HouseSourcePalatabilityDescriptor {
-    fn from(garden: &Garden) -> Self {
-        Self {
-            origin: garden.position,
-            value: 10,
-            max_horizontal_distribution_distance: 3,
-            max_linear_distribution_distance: 10,
-            linear_factor: 2,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

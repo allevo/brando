@@ -196,7 +196,18 @@ fn make_progress(
             // Probably this is not good at all: we can put a dedicated component to the entity
             // in order to deselect it avoiding the reprocessing.
             if !p.is_positive() {
-                debug!("insufficient palatability at ({position:?})");
+                debug!("house palatability: insufficient at ({position:?})");
+                continue;
+            }
+        }
+        if building.0.request.prototype.building_type == BuildingType::Office {
+            let p = palatability.get_office_palatability(position);
+            // TODO: tag this entity in order to retry later
+            // If an house hasn't enough palatability, we retry again and again
+            // Probably this is not good at all: we can put a dedicated component to the entity
+            // in order to deselect it avoiding the reprocessing.
+            if !p.is_positive() {
+                debug!("office palatability: insufficient at ({position:?})");
                 continue;
             }
         }

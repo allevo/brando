@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::palatability::manager::HouseSourcePalatabilityDescriptor;
-use crate::{building::Building, navigation::plugin::InhabitantArrivedAtHome};
+use crate::palatability::manager::{HouseSourcePalatabilityDescriptor, OfficeSourcePalatabilityDescriptor, ToHouseSourcePalatabilityDescriptor, ToOfficeSourcePalatabilityDescriptor};
+use crate::{navigation::plugin::InhabitantArrivedAtHome};
 
 use crate::building::plugin::BuildingCreated;
 
@@ -24,16 +24,13 @@ fn increment_house_palatability(
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     for building_created in building_created_reader.iter() {
-        let descriptor: HouseSourcePalatabilityDescriptor = match &building_created.building {
-            Building::Garden(g) => g.into(),
-            Building::House(h) => h.into(),
-            Building::Street(_) => continue,
-            // The offices should raise the house palatability or not?
-            Building::Office(_) => continue,
-        };
-
+        let descriptor: Option<HouseSourcePalatabilityDescriptor> = building_created.building.to_house_source_palatability();
         info!("added as house palatability source");
         palatability.add_house_source(descriptor);
+
+        let descriptor: Option<OfficeSourcePalatabilityDescriptor> = building_created.building.to_office_source_palatability();
+        info!("added as house palatability source");
+        palatability.add_office_source(descriptor);
     }
 }
 
