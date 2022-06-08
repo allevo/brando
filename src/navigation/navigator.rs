@@ -1,8 +1,14 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use tracing::info;
 
-use crate::common::position::Position;
+use crate::{
+    building::House,
+    common::{configuration::Configuration, position::Position},
+};
 
 pub struct Navigator {
     start_point: Position,
@@ -24,14 +30,10 @@ impl Navigator {
         self.positions_to_add.insert(position);
     }
 
-    pub fn get_navigation_descriptor(
-        &mut self,
-        end: impl Into<Reachable>,
-    ) -> Option<NavigationDescriptor> {
+    pub fn get_navigation_descriptor(&self, end: &impl Reachable) -> Option<NavigationDescriptor> {
         use pathfinding::prelude::astar;
 
-        let reachable: Reachable = end.into();
-        let end = reachable.position;
+        let end = end.to_position();
         let neighbors: HashSet<_> = end.neighbors().collect();
 
         let result = astar(
@@ -68,11 +70,7 @@ impl Navigator {
 
         // We want to reverse the vector in order to use "pop" method on "make_progress"
         let path = r.0.into_iter().rev().collect();
-        let descriptor = NavigationDescriptor {
-            path,
-            count: reachable.count,
-            terminates: reachable.terminates,
-        };
+        let descriptor = NavigationDescriptor { path };
 
         info!("Found descriptor {:?}", descriptor);
 
@@ -120,31 +118,114 @@ impl Navigator {
         addressed_positions_count
     }
 
-    pub fn make_progress(
-        &self,
-        navigator_descriptor: &mut NavigationDescriptor,
-    ) -> Result<(), &'static str> {
+    pub fn make_progress(&self, navigator_descriptor: &mut NavigationDescriptor) {
         navigator_descriptor.path.pop();
+    }
 
-        Ok(())
+    pub fn calculate_delta(&self, requested: u8, configuration: &Configuration) -> u8 {
+        configuration
+            .buildings
+            .house
+            .max_inhabitant_per_travel
+            .min(requested)
     }
 }
-pub struct Reachable {
-    pub position: Position,
-    pub count: u8,
-    pub terminates: bool,
+
+pub trait Reachable {
+    // TODO: this probably is wrong
+    // In the future we might have building that has more than one position
+    // (ie occupant more that 1 square)
+    // For the time being KISS
+    fn to_position(&self) -> Position;
 }
 
-// TODO: avoid "pub" here
-#[derive(Debug)]
+impl Reachable for House {
+    fn to_position(&self) -> Position {
+        self.position
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct NavigationDescriptor {
-    pub path: Vec<Position>,
-    pub count: u8,
-    pub terminates: bool,
+    path: Vec<Position>,
 }
 
 impl NavigationDescriptor {
     pub fn is_completed(&self) -> bool {
         self.path.is_empty()
+    }
+}
+
+impl Display for NavigationDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "path length {}", self.path.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::common::configuration::CONFIGURATION;
+
+    use super::*;
+
+    struct Foo(Position);
+    impl Reachable for Foo {
+        fn to_position(&self) -> Position {
+            self.0
+        }
+    }
+
+    #[test]
+    fn test_navigate_ok() {
+        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+        navigator.add_node(Position { x: 1, y: 0 });
+        navigator.add_node(Position { x: 2, y: 0 });
+        navigator.add_node(Position { x: 3, y: 0 });
+
+        navigator.rebuild();
+
+        let mut desc = navigator
+            .get_navigation_descriptor(&Foo(Position { x: 3, y: 0 }))
+            .unwrap();
+
+        assert!(!desc.is_completed());
+
+        navigator.make_progress(&mut desc);
+        assert!(!desc.is_completed());
+        navigator.make_progress(&mut desc);
+        assert!(!desc.is_completed());
+        navigator.make_progress(&mut desc);
+        assert!(!desc.is_completed());
+        navigator.make_progress(&mut desc);
+        assert!(desc.is_completed());
+
+        navigator.make_progress(&mut desc);
+        assert!(desc.is_completed());
+    }
+
+    #[test]
+    fn test_navigate_ko() {
+        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+        navigator.add_node(Position { x: 1, y: 0 });
+        navigator.add_node(Position { x: 2, y: 0 });
+        navigator.add_node(Position { x: 3, y: 0 });
+
+        navigator.rebuild();
+
+        let desc = navigator.get_navigation_descriptor(&Foo(Position { x: 42, y: 0 }));
+
+        assert_eq!(desc, None);
+    }
+
+    #[test]
+    fn test_calculate_delta() {
+        let navigator = Navigator::new(Position { x: 0, y: 0 });
+
+        let delta = navigator.calculate_delta(5, &CONFIGURATION);
+        assert_eq!(delta, 5);
+        let delta = navigator.calculate_delta(6, &CONFIGURATION);
+        assert_eq!(delta, 6);
+        let delta = navigator.calculate_delta(10, &CONFIGURATION);
+        assert_eq!(delta, 6);
     }
 }

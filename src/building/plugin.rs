@@ -158,7 +158,7 @@ struct GardenComponent(Garden);
 #[derive(Component)]
 struct OfficeComponent(Office);
 #[derive(Component)]
-pub struct HouseWaitingForInhabitantsComponent;
+pub struct HouseWaitingForInhabitantsComponent(pub u8);
 #[derive(Component)]
 pub struct OfficeWaitingForWorkersComponent;
 
@@ -247,10 +247,14 @@ fn make_progress(
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
         match building_type {
-            BuildingType::House => command.insert_bundle((
-                HouseComponent(building_in_construction.try_into().unwrap()),
-                HouseWaitingForInhabitantsComponent,
-            )),
+            BuildingType::House => {
+                let house: House = building_in_construction.try_into().unwrap();
+                let desired_residents = house.resident_property.max_residents;
+                command.insert_bundle((
+                    HouseComponent(house),
+                    HouseWaitingForInhabitantsComponent(desired_residents),
+                ))
+            }
             BuildingType::Garden => command.insert(GardenComponent(
                 building_in_construction.try_into().unwrap(),
             )),

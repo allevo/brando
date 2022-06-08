@@ -356,6 +356,7 @@ mod tests {
                     hierarchy::HierarchyPlugin,
                     input::InputPlugin,
                     log::LogSettings,
+                    // log::LogPlugin,
                     pbr::PbrPlugin,
                     prelude::{App, Camera},
                     render::{camera::RenderTarget, RenderPlugin},

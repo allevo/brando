@@ -1,10 +1,8 @@
-use std::ops::{Deref, DerefMut};
-
 use bevy::prelude::*;
 
 use crate::{
     building::{Building, House},
-    common::position::Position,
+    common::{configuration::CONFIGURATION, position::Position},
     GameTick,
 };
 
@@ -33,38 +31,35 @@ impl Plugin for NavigatorPlugin {
 }
 
 #[derive(Component)]
-struct NavigationDescriptorComponent(NavigationDescriptor);
-impl Deref for NavigationDescriptorComponent {
-    type Target = NavigationDescriptor;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for NavigationDescriptorComponent {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+struct NavigationDescriptorComponent(NavigationDescriptor, u8);
 
 fn handle_waiting_for_inhabitants(
     mut game_events: EventReader<GameTick>,
     mut commands: Commands,
-    mut navigator: ResMut<Navigator>,
+    navigator: Res<Navigator>,
     mut waiting_for_inhabitants_query: Query<
-        (Entity, &mut HouseComponent),
         (
-            With<HouseWaitingForInhabitantsComponent>,
-            Without<NavigationDescriptorComponent>,
+            Entity,
+            &HouseComponent,
+            &mut HouseWaitingForInhabitantsComponent,
         ),
+        (Without<NavigationDescriptorComponent>,),
     >,
 ) {
     if game_events.iter().count() == 0 {
         return;
     }
 
-    for (entity, mut house_component) in waiting_for_inhabitants_query.iter_mut() {
-        let house: &mut House = &mut *house_component;
+    for (entity, house_component, mut waiting_for_inhabitants) in
+        waiting_for_inhabitants_query.iter_mut()
+    {
+        // This never happen or happen only for a short time (1 cycle)
+        if waiting_for_inhabitants.0 == 0 {
+            warn!("waiting_for_inhabitants is 0: skipped");
+            continue;
+        }
+
+        let house: &House = &*house_component;
         let navigation_descriptor = match navigator.get_navigation_descriptor(house) {
             // TODO consider to have a try not immediately
             // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
@@ -74,50 +69,43 @@ fn handle_waiting_for_inhabitants(
             Some(nd) => nd,
         };
 
-        let house: &mut House = &mut *house_component;
         info!(
-            "path ({}) found for house (id={entity:?}) at {:?}",
-            navigation_descriptor.path.len(),
+            "path ({navigation_descriptor}) found for house (id={entity:?}) at {:?}",
             &house.position,
         );
-        house.resident_property.incoming_residents += navigation_descriptor.count;
+        let delta = navigator.calculate_delta(waiting_for_inhabitants.0, &CONFIGURATION);
+        waiting_for_inhabitants.0 -= delta;
 
         let mut command = commands.entity(entity);
-        if navigation_descriptor.terminates {
+        if waiting_for_inhabitants.0 == 0 {
             command.remove::<HouseWaitingForInhabitantsComponent>();
         }
-        command.insert(NavigationDescriptorComponent(navigation_descriptor));
+        command.insert(NavigationDescriptorComponent(navigation_descriptor, delta));
     }
 }
 
 fn move_inhabitants_to_house(
-    mut events: EventReader<GameTick>,
+    mut game_tick: EventReader<GameTick>,
     mut commands: Commands,
     navigator: Res<Navigator>,
-    mut waiting_for_inhabitants_query: Query<(
-        Entity,
-        &mut HouseComponent,
-        &mut NavigationDescriptorComponent,
-    )>,
+    mut waiting_for_inhabitants_query: Query<
+        (Entity, &mut NavigationDescriptorComponent),
+        With<HouseComponent>,
+    >,
     mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHome>,
 ) {
-    if events.iter().count() == 0 {
+    if game_tick.iter().count() == 0 {
         return;
     }
 
-    for (entity, mut house_component, mut navigation_descriptor_component) in
-        waiting_for_inhabitants_query.iter_mut()
-    {
+    for (entity, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
         let navigation_descriptor: &mut NavigationDescriptor =
-            &mut *navigation_descriptor_component;
-        navigator.make_progress(navigation_descriptor).unwrap();
+            &mut navigation_descriptor_component.0;
+        navigator.make_progress(navigation_descriptor);
 
         if !navigation_descriptor.is_completed() {
             continue;
         }
-
-        let house: &mut House = &mut *house_component;
-        house.resident_property.incoming_residents -= navigation_descriptor.count;
 
         info!("navigation_descriptor ends!");
 
@@ -126,7 +114,7 @@ fn move_inhabitants_to_house(
             .remove::<NavigationDescriptorComponent>();
 
         inhabitant_arrived_writer.send(InhabitantArrivedAtHome {
-            count: navigation_descriptor.count,
+            count: navigation_descriptor_component.1,
             entity,
         });
     }

@@ -1,7 +1,6 @@
-
 use std::fmt::Display;
 
-use crate::{common::{position::Position, configuration::CONFIGURATION}, navigation::navigator::Reachable};
+use crate::common::{configuration::CONFIGURATION, position::Position};
 
 pub enum Building {
     House(House),
@@ -30,22 +29,6 @@ pub struct House {
     pub position: Position,
     pub resident_property: ResidentProperty,
 }
-impl From<&mut House> for Reachable {
-    fn from(house: &mut House) -> Self {
-        let desired_inhabitants = house.resident_property.max_residents
-            - house.resident_property.current_residents
-            - house.resident_property.incoming_residents;
-        let actual_inhabitants = (desired_inhabitants).min(6);
-
-        let terminates = desired_inhabitants == actual_inhabitants;
-
-        Self {
-            position: house.position,
-            count: actual_inhabitants,
-            terminates,
-        }
-    }
-}
 
 pub struct Office {
     pub position: Position,
@@ -57,7 +40,7 @@ pub struct Garden {
     pub position: Position,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildingType {
     House,
     Street,

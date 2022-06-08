@@ -8,7 +8,6 @@ pub struct Configuration {
     pub buildings: BuildingsConfiguration,
 }
 
-
 impl Configuration {
     #[inline]
     pub const fn half(&self) -> (f32, f32) {
@@ -32,6 +31,7 @@ pub struct BuildingsConfiguration {
 }
 
 pub struct HouseConfiguration {
+    pub max_inhabitant_per_travel: u8,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
@@ -83,7 +83,11 @@ pub const CONFIGURATION: Configuration = Configuration {
 
     buildings: BuildingsConfiguration {
         house: HouseConfiguration {
-            common: CommonBuildingConfiguration { building_name: "house", time_for_building: 10 },
+            max_inhabitant_per_travel: 6,
+            common: CommonBuildingConfiguration {
+                building_name: "house",
+                time_for_building: 10,
+            },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: Some(HouseSourcePalatabilityConfiguration {
                     value: -1,
@@ -95,7 +99,10 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         office: OfficeConfiguration {
-            common: CommonBuildingConfiguration { building_name: "office", time_for_building: 5 },
+            common: CommonBuildingConfiguration {
+                building_name: "office",
+                time_for_building: 5,
+            },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: None,
                 office_source: Some(OfficeSourcePalatabilityConfiguration {
@@ -107,7 +114,10 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         garden: GardenConfiguration {
-            common: CommonBuildingConfiguration { building_name: "garden", time_for_building: 2 },
+            common: CommonBuildingConfiguration {
+                building_name: "garden",
+                time_for_building: 2,
+            },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: Some(HouseSourcePalatabilityConfiguration {
                     value: 10,
@@ -124,7 +134,10 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         street: StreetConfiguration {
-            common: CommonBuildingConfiguration { building_name: "street", time_for_building: 2 },
+            common: CommonBuildingConfiguration {
+                building_name: "street",
+                time_for_building: 2,
+            },
             palatability_configuration: PalatabilityConfiguration {
                 house_source: None,
                 office_source: None,
