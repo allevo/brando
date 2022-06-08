@@ -105,7 +105,9 @@ fn move_inhabitants_to_house(
         return;
     }
 
-    for (entity, mut house_component, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
+    for (entity, mut house_component, mut navigation_descriptor_component) in
+        waiting_for_inhabitants_query.iter_mut()
+    {
         let navigation_descriptor: &mut NavigationDescriptor =
             &mut *navigation_descriptor_component;
         navigator.make_progress(navigation_descriptor).unwrap();

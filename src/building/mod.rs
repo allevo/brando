@@ -3,9 +3,7 @@ pub mod plugin;
 
 use std::fmt::Display;
 
-use crate::{
-    common::position::Position, navigation::navigator::Reachable,
-};
+use crate::{common::position::Position, navigation::navigator::Reachable};
 
 pub enum Building {
     House(House),
@@ -50,7 +48,6 @@ impl From<&mut House> for Reachable {
         }
     }
 }
-
 
 pub struct Office {
     pub position: Position,

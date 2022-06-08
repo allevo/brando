@@ -1,4 +1,9 @@
-use crate::{common::position::Position, building::{Building, House, Garden, Office}};
+use tracing::info;
+
+use crate::{
+    building::{Building, Garden, House, Office, Street},
+    common::position::Position,
+};
 
 pub struct PalatabilityManager {
     total_populations: u64,
@@ -16,19 +21,21 @@ impl PalatabilityManager {
         }
     }
 
-    pub fn add_house_source(&mut self, source: impl Into<Option<HouseSourcePalatabilityDescriptor>>) {
-        let source = match source.into() {
+    pub fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
+        let source = match source.to_house_source_palatability() {
             None => return,
             Some(source) => source,
         };
+        info!("added as house palatability source");
         self.houses_sources.push(source);
     }
-    
-    pub fn add_office_source(&mut self, source: impl Into<Option<OfficeSourcePalatabilityDescriptor>>) {
-        let source = match source.into() {
+
+    pub fn add_office_source(&mut self, source: &impl ToOfficeSourcePalatabilityDescriptor) {
+        let source = match source.to_office_source_palatability() {
             None => return,
             Some(source) => source,
         };
+        info!("added as house palatability source");
         self.office_sources.push(source);
     }
 
@@ -157,64 +164,72 @@ impl ToHouseSourcePalatabilityDescriptor for Building {
         match self {
             Building::Garden(g) => g.to_house_source_palatability(),
             Building::House(h) => h.to_house_source_palatability(),
-            Building::Street(_) => None,
-            Building::Office(_) => None,
+            Building::Street(s) => s.to_house_source_palatability(),
+            Building::Office(o) => o.to_house_source_palatability(),
         }
-    }
-}
-
-impl ToHouseSourcePalatabilityDescriptor for House {
-    fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor> {
-        Some(HouseSourcePalatabilityDescriptor {
-            origin: self.position,
-            value: -1,
-            max_horizontal_distribution_distance: 2,
-            max_linear_distribution_distance: 1,
-            linear_factor: 0,
-        })
-    }
-}
-impl ToHouseSourcePalatabilityDescriptor for Garden {
-    fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor> {
-        Some(HouseSourcePalatabilityDescriptor {
-            origin: self.position,
-            value: 10,
-            max_horizontal_distribution_distance: 3,
-            max_linear_distribution_distance: 10,
-            linear_factor: 2,
-        })
     }
 }
 
 impl ToOfficeSourcePalatabilityDescriptor for Building {
     fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
         match self {
-            Building::Garden(_) => None,
-            Building::House(_) => None,
-            Building::Street(_) => None,
-            Building::Office(_) => None,
+            Building::Garden(g) => g.to_office_source_palatability(),
+            Building::House(h) => h.to_office_source_palatability(),
+            Building::Street(s) => s.to_office_source_palatability(),
+            Building::Office(o) => o.to_office_source_palatability(),
         }
     }
 }
-impl ToOfficeSourcePalatabilityDescriptor for Garden {
-    fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
-        Some(OfficeSourcePalatabilityDescriptor {
-            origin: self.position,
-            value: 10,
-            max_horizontal_distribution_distance: 3,
-            max_linear_distribution_distance: 10,
-            linear_factor: 2,
-        })
-    }
+
+macro_rules! impl_to_source_palatability_descriptor {
+    ($cl: ty, $name: tt) => {
+        impl ToHouseSourcePalatabilityDescriptor for $cl {
+            fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor> {
+                use crate::common::configuration::CONFIGURATION;
+
+                let c = &CONFIGURATION
+                    .buildings
+                    .$name
+                    .palatability_configuration
+                    .house_source;
+                let e = match c {
+                    None => return None,
+                    Some(e) => e,
+                };
+                Some(HouseSourcePalatabilityDescriptor {
+                    origin: self.position,
+                    value: e.value,
+                    max_horizontal_distribution_distance: e.max_horizontal_distribution_distance,
+                    max_linear_distribution_distance: e.max_linear_distribution_distance,
+                    linear_factor: e.linear_factor,
+                })
+            }
+        }
+        impl ToOfficeSourcePalatabilityDescriptor for $cl {
+            fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
+                use crate::common::configuration::CONFIGURATION;
+
+                let c = &CONFIGURATION
+                    .buildings
+                    .$name
+                    .palatability_configuration
+                    .office_source;
+                let e = match c {
+                    None => return None,
+                    Some(e) => e,
+                };
+                Some(OfficeSourcePalatabilityDescriptor {
+                    origin: self.position,
+                    value: e.value,
+                    max_horizontal_distribution_distance: e.max_horizontal_distribution_distance,
+                    max_linear_distribution_distance: e.max_linear_distribution_distance,
+                    linear_factor: e.linear_factor,
+                })
+            }
+        }
+    };
 }
-impl ToOfficeSourcePalatabilityDescriptor for Office {
-    fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
-        Some(OfficeSourcePalatabilityDescriptor {
-            origin: self.position,
-            value: 1,
-            max_horizontal_distribution_distance: 3,
-            max_linear_distribution_distance: 0,
-            linear_factor: 0,
-        })
-    }
-}
+impl_to_source_palatability_descriptor!(House, house);
+impl_to_source_palatability_descriptor!(Garden, garden);
+impl_to_source_palatability_descriptor!(Office, office);
+impl_to_source_palatability_descriptor!(Street, street);
