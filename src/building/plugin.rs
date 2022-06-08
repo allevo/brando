@@ -299,8 +299,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let grid_positions: Vec<_> = (0..CONFIGURATION.width_table)
-        .flat_map(|x| (0..CONFIGURATION.depth_table).map(move |y| (x as i64, y as i64)))
+    let grid_positions: Vec<_> = (0..CONFIGURATION.game.width_table)
+        .flat_map(|x| (0..CONFIGURATION.game.depth_table).map(move |y| (x as i64, y as i64)))
         .map(|(x, y)| convert_position_into_bevy_coords(&CONFIGURATION, &Position { x, y }))
         .collect();
 

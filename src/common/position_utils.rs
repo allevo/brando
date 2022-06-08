@@ -29,12 +29,12 @@ mod tests {
 
     #[test]
     fn calculate_plate_positions() {
-        let half_width = CONFIGURATION.width_table as f32 / 2. * CONFIGURATION.cube_size;
-        let half_depth = CONFIGURATION.depth_table as f32 / 2. * CONFIGURATION.cube_size;
-        let x_positions = (0..CONFIGURATION.width_table)
+        let half_width = CONFIGURATION.game.width_table as f32 / 2. * CONFIGURATION.cube_size;
+        let half_depth = CONFIGURATION.game.depth_table as f32 / 2. * CONFIGURATION.cube_size;
+        let x_positions = (0..CONFIGURATION.game.width_table)
             .map(|i| i as f32 * CONFIGURATION.cube_size - half_width)
             .collect::<Vec<f32>>();
-        let z_positions = (0..CONFIGURATION.depth_table)
+        let z_positions = (0..CONFIGURATION.game.depth_table)
             .map(|i| i as f32 * CONFIGURATION.cube_size - half_depth)
             .collect::<Vec<f32>>();
 

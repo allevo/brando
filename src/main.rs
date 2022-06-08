@@ -299,7 +299,7 @@ mod tests {
     }
 
     fn position_to_index(x: usize, y: usize) -> usize {
-        CONFIGURATION.width_table * x + y
+        CONFIGURATION.game.width_table * x + y
     }
 
     mod helpers {
