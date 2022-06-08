@@ -13,12 +13,12 @@ impl Plugin for PalatabilityPlugin {
         let palatability = PalatabilityManager::new();
 
         app.insert_resource(palatability)
-            .add_system_to_stage(CoreStage::Last, increment_house_palatability)
+            .add_system_to_stage(CoreStage::Last, increment_palatabilities)
             .add_system_to_stage(CoreStage::PostUpdate, habit_house);
     }
 }
 
-fn increment_house_palatability(
+fn increment_palatabilities(
     mut building_created_reader: EventReader<BuildingCreated>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
