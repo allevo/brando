@@ -205,6 +205,19 @@ mod tests {
     }
 
     #[test]
+    fn test_build() {
+        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+        navigator.add_node(Position { x: 1, y: 0 });
+        navigator.add_node(Position { x: 2, y: 0 });
+        navigator.add_node(Position { x: 3, y: 0 });
+        navigator.add_node(Position { x: 4, y: 4 });
+
+        let resolved = navigator.rebuild();
+
+        assert_eq!(resolved, 3);
+    }
+
+    #[test]
     fn test_calculate_delta() {
         let navigator = Navigator::new(Position { x: 0, y: 0 });
 
