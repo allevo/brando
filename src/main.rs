@@ -216,8 +216,8 @@ fn setup(mut commands: Commands) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::configuration::CONFIGURATION, palatability::manager::PalatabilityManager, GameTick,
-        MainPlugin, building::House,
+        building::House, common::configuration::CONFIGURATION,
+        palatability::manager::PalatabilityManager, GameTick, MainPlugin,
     };
     use bevy::prelude::Entity;
     use helpers::*;
@@ -274,11 +274,21 @@ mod tests {
         assert_eq!(palatability_manager.total_populations(), 16);
 
         // Check houses
-        let houses: Vec<(Entity, &crate::building::plugin::HouseComponent)> = get_entities!(app, crate::building::plugin::HouseComponent, (Entity, &crate::building::plugin::HouseComponent));
-        let house: &House = &houses.get(0).unwrap().1.0;
-        assert_eq!(house.resident_property.current_residents, house.resident_property.max_residents);
-        let house: &House = &houses.get(1).unwrap().1.0;
-        assert_eq!(house.resident_property.current_residents, house.resident_property.max_residents);
+        let houses: Vec<(Entity, &crate::building::plugin::HouseComponent)> = get_entities!(
+            app,
+            crate::building::plugin::HouseComponent,
+            (Entity, &crate::building::plugin::HouseComponent)
+        );
+        let house: &House = &houses.get(0).unwrap().1 .0;
+        assert_eq!(
+            house.resident_property.current_residents,
+            house.resident_property.max_residents
+        );
+        let house: &House = &houses.get(1).unwrap().1 .0;
+        assert_eq!(
+            house.resident_property.current_residents,
+            house.resident_property.max_residents
+        );
     }
 
     #[test]

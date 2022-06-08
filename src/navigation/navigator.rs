@@ -78,44 +78,31 @@ impl Navigator {
     }
 
     pub fn rebuild(&mut self) -> usize {
-        // TODO: order positions_to_add
-        // The optimization here is related to points that are not connected to the "good" graph part
-        // What happen if the user creates multiple nodes and arcs without connecting to the `start_point`
-        // and connect to it later?
-        // In that situation `positions_to_add` contains a points that are connected among them but not to
-        // `start_point`. When the user adds the link between the `start_point` with a point inside `positions_to_add`,
-        // the loop below processes just one "point".
-        // As consequence of that, "optmize" should be called multiple times and every time add only a few of the points.
-        // The optimization that can be done here is to order `position_to_add` in order to process multiple points with
-        // just one invocation of `rebuild`.
         let positions_to_add = std::mem::take(&mut self.positions_to_add);
+        let tot = positions_to_add.len();
 
-        let mut addressed_positions = HashSet::new();
         for position in &positions_to_add {
-            let neighbors = position.neighbors();
-            for neighbor in neighbors {
-                if !self.nodes.contains_key(&neighbor) {
-                    continue;
-                }
+            let linked_nodes: Vec<_> = position
+                .neighbors()
+                .filter(|n| positions_to_add.contains(n) || self.nodes.contains_key(n))
+                .collect();
 
-                // Double reference. For the time being the street and double versed.
-                // This makes undirected graph
-                self.nodes.entry(neighbor).or_default().insert(*position);
-                self.nodes.entry(*position).or_default().insert(neighbor);
+            if linked_nodes.is_empty() {
+                self.positions_to_add.insert(*position);
+                continue;
+            }
 
-                addressed_positions.insert(*position);
+            self.nodes
+                .entry(*position)
+                .or_default()
+                .extend(linked_nodes.clone());
+
+            for node in linked_nodes {
+                self.nodes.entry(node).or_default().insert(*position);
             }
         }
 
-        let addressed_positions_count = addressed_positions.len();
-
-        self.positions_to_add.extend(
-            positions_to_add
-                .into_iter()
-                .filter(|p| !addressed_positions.contains(p)),
-        );
-
-        addressed_positions_count
+        tot - self.positions_to_add.len()
     }
 
     pub fn make_progress(&self, navigator_descriptor: &mut NavigationDescriptor) {
