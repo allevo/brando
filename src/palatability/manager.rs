@@ -8,8 +8,10 @@ use crate::{
 pub struct PalatabilityManager {
     total_populations: u64,
     // TODO: change approach to store the rendered values
+    // We can consider also an async update:
+    // - collects all the sources into a dedicated collection
+    // - process little by little the palatability adding into a concrete view
     houses_sources: Vec<HouseSourcePalatabilityDescriptor>,
-    // TODO: change approach to store the rendered values
     office_sources: Vec<OfficeSourcePalatabilityDescriptor>,
 }
 impl PalatabilityManager {
@@ -21,7 +23,7 @@ impl PalatabilityManager {
         }
     }
 
-    pub fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
+    pub(super) fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
         let source = match source.to_house_source_palatability() {
             None => return,
             Some(source) => source,
@@ -30,7 +32,7 @@ impl PalatabilityManager {
         self.houses_sources.push(source);
     }
 
-    pub fn add_office_source(&mut self, source: &impl ToOfficeSourcePalatabilityDescriptor) {
+    pub(super) fn add_office_source(&mut self, source: &impl ToOfficeSourcePalatabilityDescriptor) {
         let source = match source.to_office_source_palatability() {
             None => return,
             Some(source) => source,
@@ -57,7 +59,7 @@ impl PalatabilityManager {
         OfficePalatability { value }
     }
 
-    pub fn increment_populations(&mut self, delta: i32) {
+    pub(super) fn increment_populations(&mut self, delta: i32) {
         self.total_populations = (self.total_populations as i128 + delta as i128).max(0) as u64;
     }
 

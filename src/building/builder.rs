@@ -10,13 +10,13 @@ pub struct BuildingBuilder {
 }
 
 impl BuildingBuilder {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             position_already_used: Default::default(),
         }
     }
 
-    pub fn create_building(
+    pub(super) fn create_building(
         &mut self,
         request: BuildRequest,
     ) -> Result<BuildingInConstruction, &'static str> {
@@ -35,7 +35,7 @@ impl BuildingBuilder {
         })
     }
 
-    pub fn make_progress(
+    pub(super) fn make_progress(
         &self,
         in_progress: &mut BuildingInConstruction,
     ) -> Result<bool, &'static str> {
@@ -45,7 +45,7 @@ impl BuildingBuilder {
         Ok(in_progress.progress_status.is_completed())
     }
 
-    pub fn go_to_live_home(
+    pub(super) fn go_to_live_home(
         &self,
         house: &mut House,
         arrived: &InhabitantArrivedAtHome,

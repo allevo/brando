@@ -16,7 +16,7 @@ pub struct Navigator {
     nodes: HashMap<Position, HashSet<Position>>,
 }
 impl Navigator {
-    pub fn new(start_point: Position) -> Self {
+    pub(super) fn new(start_point: Position) -> Self {
         let mut nodes: HashMap<Position, HashSet<Position>> = Default::default();
         nodes.entry(start_point).or_default();
         Self {
@@ -26,7 +26,7 @@ impl Navigator {
         }
     }
 
-    pub fn add_node(&mut self, position: Position) {
+    pub(super) fn add_node(&mut self, position: Position) {
         self.positions_to_add.insert(position);
     }
 
@@ -77,7 +77,7 @@ impl Navigator {
         Some(descriptor)
     }
 
-    pub fn rebuild(&mut self) -> usize {
+    pub(super) fn rebuild(&mut self) -> usize {
         let positions_to_add = std::mem::take(&mut self.positions_to_add);
         let tot = positions_to_add.len();
 
@@ -105,11 +105,11 @@ impl Navigator {
         tot - self.positions_to_add.len()
     }
 
-    pub fn make_progress(&self, navigator_descriptor: &mut NavigationDescriptor) {
+    pub(super) fn make_progress(&self, navigator_descriptor: &mut NavigationDescriptor) {
         navigator_descriptor.path.pop();
     }
 
-    pub fn calculate_delta(&self, requested: u8, configuration: &Configuration) -> u8 {
+    pub(super) fn calculate_delta(&self, requested: u8, configuration: &Configuration) -> u8 {
         configuration
             .buildings
             .house
