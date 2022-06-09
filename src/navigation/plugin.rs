@@ -77,9 +77,6 @@ fn handle_waiting_for_inhabitants(
         waiting_for_inhabitants.0 -= delta;
 
         let mut command = commands.entity(entity);
-        if waiting_for_inhabitants.0 == 0 {
-            command.remove::<HouseWaitingForInhabitantsComponent>();
-        }
         command.insert(NavigationDescriptorComponent(navigation_descriptor, delta));
     }
 }

@@ -22,7 +22,7 @@ use crate::{
     GameTick, PbrBundles,
 };
 
-use super::Office;
+use super::{Office, ResidentProperty};
 
 pub struct BuildingPlugin;
 
@@ -276,7 +276,8 @@ fn make_progress(
 }
 
 fn habit_house(
-    mut houses: Query<&mut HouseComponent>,
+    mut commands: Commands,
+    mut houses: Query<&mut HouseComponent, With<HouseWaitingForInhabitantsComponent>>,
     brando: Res<BuildingBuilder>,
     mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHome>,
 ) {
@@ -292,6 +293,12 @@ fn habit_house(
         brando
             .go_to_live_home(&mut hc.0, arrived)
             .expect("error on updating house property");
+
+        let a: &ResidentProperty = &hc.0.resident_property;
+        if a.current_residents == a.max_residents {
+            let mut command = commands.entity(arrived.entity);
+            command.remove::<HouseWaitingForInhabitantsComponent>();
+        }
     }
 }
 

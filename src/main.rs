@@ -374,7 +374,6 @@ mod tests {
                     hierarchy::HierarchyPlugin,
                     input::InputPlugin,
                     log::LogSettings,
-                    // log::LogPlugin,
                     pbr::PbrPlugin,
                     prelude::{App, Camera},
                     render::{camera::RenderTarget, RenderPlugin},
@@ -383,8 +382,21 @@ mod tests {
                     text::TextPlugin,
                     transform::TransformPlugin,
                     ui::UiPlugin,
+                    utils::tracing::subscriber::set_global_default,
                     window::{WindowId, WindowPlugin},
                 };
+                use tracing_log::LogTracer;
+                use tracing_subscriber::{prelude::*, registry::Registry, EnvFilter};
+
+                if LogTracer::init().is_ok() {
+                    let filter_layer = EnvFilter::try_from_default_env()
+                        .or_else(|_| EnvFilter::try_new("OFF,brando=INFO"))
+                        .unwrap();
+                    let subscriber = Registry::default().with(filter_layer);
+                    let fmt_layer = tracing_subscriber::fmt::Layer::default();
+                    let subscriber = subscriber.with(fmt_layer);
+                    set_global_default(subscriber).unwrap();
+                }
 
                 let mut app = App::new();
 
@@ -395,8 +407,6 @@ mod tests {
                 log_settings.filter = format!("{},bevy_mod_raycast=off", log_settings.filter);
                 app.insert_resource(log_settings);
 
-                // uncomment the following line after https://github.com/bevyengine/bevy/issues/4934
-                // app.add_plugin(LogPlugin::default());
                 app.add_plugin(CorePlugin::default());
                 app.add_plugin(TransformPlugin::default());
                 app.add_plugin(HierarchyPlugin::default());
