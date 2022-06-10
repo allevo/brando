@@ -30,10 +30,9 @@ impl Navigator {
         self.positions_to_add.insert(position);
     }
 
-    pub fn get_navigation_descriptor(&self, end: &impl Reachable) -> Option<NavigationDescriptor> {
+    pub fn get_navigation_descriptor(&self, end: Position) -> Option<NavigationDescriptor> {
         use pathfinding::prelude::astar;
 
-        let end = end.to_position();
         let neighbors: HashSet<_> = end.neighbors().collect();
 
         let result = astar(
@@ -172,7 +171,7 @@ mod tests {
         navigator.rebuild();
 
         let mut desc = navigator
-            .get_navigation_descriptor(&Foo(Position { x: 3, y: 0 }))
+            .get_navigation_descriptor(Position { x: 3, y: 0 })
             .unwrap();
 
         assert!(!desc.is_completed());
@@ -199,7 +198,7 @@ mod tests {
 
         navigator.rebuild();
 
-        let desc = navigator.get_navigation_descriptor(&Foo(Position { x: 42, y: 0 }));
+        let desc = navigator.get_navigation_descriptor(Position { x: 42, y: 0 });
 
         assert_eq!(desc, None);
     }

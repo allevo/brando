@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use bevy::{
     input::{keyboard::KeyboardInput, ElementState},
     prelude::*,
@@ -9,20 +7,24 @@ use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 use crate::{
     building::{
         builder::BuildingBuilder, BuildRequest, Building, BuildingInConstruction, BuildingType,
-        Garden, House, Street, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, OFFICE_PROTOTYPE,
-        STREET_PROTOTYPE,
+        House, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, OFFICE_PROTOTYPE, STREET_PROTOTYPE,
     },
     common::{
         configuration::CONFIGURATION,
         position::Position,
         position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
     },
-    navigation::plugin::InhabitantArrivedAtHome,
+    navigation::plugin::events::InhabitantArrivedAtHomeEvent,
     palatability::manager::PalatabilityManager,
     GameTick, PbrBundles,
 };
 
-use super::{Office, ResidentProperty};
+#[cfg(test)]
+pub use components::*;
+#[cfg(not(test))]
+use components::*;
+
+pub use events::*;
 
 pub struct BuildingPlugin;
 
@@ -31,7 +33,7 @@ impl Plugin for BuildingPlugin {
         let brando = BuildingBuilder::new();
         app.insert_resource(EditMode::None)
             .insert_resource(brando)
-            .add_event::<BuildingCreated>()
+            .add_event::<BuildingCreatedEvent>()
             .add_plugins(DefaultPickingPlugins)
             .add_system_to_stage(CoreStage::PostUpdate, build_building)
             .add_startup_system(setup)
@@ -41,13 +43,8 @@ impl Plugin for BuildingPlugin {
     }
 }
 
-#[derive(Component)]
-pub struct BuildingCreated {
-    pub building: Building,
-}
-
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub enum EditMode {
+enum EditMode {
     None,
     House,
     Garden,
@@ -75,9 +72,6 @@ fn switch_edit_mode(
         *edit_mode = e;
     }
 }
-
-#[derive(Component)]
-struct BuildingInConstructionComponent(BuildingInConstruction);
 
 fn build_building(
     mut events: EventReader<PickingEvent>,
@@ -137,31 +131,6 @@ fn build_building(
         });
 }
 
-#[derive(Component)]
-pub struct HouseComponent(pub House);
-impl Deref for HouseComponent {
-    type Target = House;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for HouseComponent {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-#[derive(Component)]
-struct StreetComponent(Street);
-#[derive(Component)]
-struct GardenComponent(Garden);
-#[derive(Component)]
-struct OfficeComponent(Office);
-#[derive(Component)]
-pub struct HouseWaitingForInhabitantsComponent(pub u8);
-#[derive(Component)]
-pub struct OfficeWaitingForWorkersComponent;
-
 fn make_progress(
     events: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingInConstructionComponent)>,
@@ -169,7 +138,7 @@ fn make_progress(
     palatability: Res<PalatabilityManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
-    mut building_created_writer: EventWriter<BuildingCreated>,
+    mut building_created_writer: EventWriter<BuildingCreatedEvent>,
 ) {
     // TODO: split the following logic among frames
     // truly this could be not so performant if buildings_in_progress contains a lot of elements
@@ -246,40 +215,48 @@ fn make_progress(
         // TODO: rework this part
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
-        match building_type {
+        let entity = match building_type {
             BuildingType::House => {
                 let house: House = building_in_construction.try_into().unwrap();
-                let desired_residents = house.resident_property.max_residents;
-                command.insert_bundle((
-                    HouseComponent(house),
-                    HouseWaitingForInhabitantsComponent(desired_residents),
-                ))
+                // let desired_residents = house.resident_property.max_residents;
+                // let position = house.position.clone();
+                command
+                    .insert_bundle((
+                        HouseComponent(house),
+                        // HouseWaitingForInhabitantsComponent(desired_residents, position),
+                    ))
+                    .id()
             }
-            BuildingType::Garden => command.insert(GardenComponent(
-                building_in_construction.try_into().unwrap(),
-            )),
-            BuildingType::Street => command.insert(StreetComponent(
-                building_in_construction.try_into().unwrap(),
-            )),
-            BuildingType::Office => command.insert_bundle((
-                OfficeComponent(building_in_construction.try_into().unwrap()),
-                OfficeWaitingForWorkersComponent,
-            )),
+            BuildingType::Garden => command
+                .insert(GardenComponent(
+                    building_in_construction.try_into().unwrap(),
+                ))
+                .id(),
+            BuildingType::Street => command
+                .insert(StreetComponent(
+                    building_in_construction.try_into().unwrap(),
+                ))
+                .id(),
+            BuildingType::Office => command
+                .insert_bundle((
+                    OfficeComponent(building_in_construction.try_into().unwrap()),
+                    // OfficeWaitingForWorkersComponent,
+                ))
+                .id(),
         };
 
         let building: Building = building_in_construction
             .try_into()
             .expect("Something goes wrong on building creation");
 
-        building_created_writer.send(BuildingCreated { building });
+        building_created_writer.send(BuildingCreatedEvent { building, entity });
     }
 }
 
 fn habit_house(
-    mut commands: Commands,
-    mut houses: Query<&mut HouseComponent, With<HouseWaitingForInhabitantsComponent>>,
+    mut houses: Query<&mut HouseComponent>,
     brando: Res<BuildingBuilder>,
-    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHome>,
+    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHomeEvent>,
 ) {
     for arrived in inhabitant_arrived_writer.iter() {
         let mut hc = match houses.get_mut(arrived.entity) {
@@ -291,19 +268,10 @@ fn habit_house(
         };
 
         brando
-            .go_to_live_home(&mut hc.0, arrived)
+            .go_to_live_home(&mut hc.0, arrived.count)
             .expect("error on updating house property");
-
-        let a: &ResidentProperty = &hc.0.resident_property;
-        if a.current_residents == a.max_residents {
-            let mut command = commands.entity(arrived.entity);
-            command.remove::<HouseWaitingForInhabitantsComponent>();
-        }
     }
 }
-
-#[derive(Component, Debug)]
-pub struct PlaneComponent;
 
 fn setup(
     mut commands: Commands,
@@ -329,4 +297,37 @@ fn setup(
             .insert(PlaneComponent)
             .insert_bundle(PickableBundle::default());
     }
+}
+
+mod events {
+    use crate::building::Building;
+    use bevy::prelude::{Component, Entity};
+
+    #[derive(Component)]
+    pub struct BuildingCreatedEvent {
+        pub building: Building,
+        pub entity: Entity,
+    }
+}
+
+mod components {
+    use bevy::prelude::Component;
+
+    use crate::building::{BuildingInConstruction, Garden, House, Office, Street};
+
+    #[derive(Component, Debug)]
+    pub struct PlaneComponent;
+
+    #[derive(Component)]
+    pub struct HouseComponent(pub House);
+
+    #[derive(Component)]
+    pub struct StreetComponent(pub Street);
+    #[derive(Component)]
+    pub struct GardenComponent(pub Garden);
+    #[derive(Component)]
+    pub struct OfficeComponent(pub Office);
+
+    #[derive(Component)]
+    pub struct BuildingInConstructionComponent(pub BuildingInConstruction);
 }

@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
-use crate::navigation::plugin::InhabitantArrivedAtHome;
+use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
 
-use crate::building::plugin::BuildingCreated;
+use crate::building::plugin::BuildingCreatedEvent;
 
 use super::manager::PalatabilityManager;
 
@@ -19,7 +19,7 @@ impl Plugin for PalatabilityPlugin {
 }
 
 fn increment_palatabilities(
-    mut building_created_reader: EventReader<BuildingCreated>,
+    mut building_created_reader: EventReader<BuildingCreatedEvent>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     for building_created in building_created_reader.iter() {
@@ -29,7 +29,7 @@ fn increment_palatabilities(
 }
 
 fn habit_house(
-    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHome>,
+    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHomeEvent>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     let count: u8 = inhabitant_arrived_writer.iter().map(|a| a.count).sum();

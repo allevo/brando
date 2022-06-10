@@ -1,21 +1,22 @@
 use bevy::prelude::*;
 
 use crate::{
-    building::{Building, House},
+    building::Building,
     common::{configuration::CONFIGURATION, position::Position},
     GameTick,
 };
 
-use crate::building::plugin::{
-    BuildingCreated, HouseComponent, HouseWaitingForInhabitantsComponent,
-};
+use crate::building::plugin::BuildingCreatedEvent;
 
 use super::navigator::{NavigationDescriptor, Navigator};
 
-pub struct InhabitantArrivedAtHome {
-    pub count: u8,
-    pub entity: Entity,
-}
+#[cfg(test)]
+pub use components::*;
+
+#[cfg(not(test))]
+use components::*;
+
+use events::*;
 
 pub struct NavigatorPlugin;
 
@@ -23,26 +24,43 @@ impl Plugin for NavigatorPlugin {
     fn build(&self, app: &mut App) {
         let navigator = Navigator::new(Position { x: 0, y: 0 });
         app.insert_resource(navigator)
-            .add_event::<InhabitantArrivedAtHome>()
+            .add_event::<InhabitantArrivedAtHomeEvent>()
+            .add_system(new_building_created)
             .add_system_to_stage(CoreStage::Last, add_node)
             .add_system_to_stage(CoreStage::PreUpdate, handle_waiting_for_inhabitants)
             .add_system_to_stage(CoreStage::PreUpdate, move_inhabitants_to_house);
     }
 }
 
-#[derive(Component)]
-struct NavigationDescriptorComponent(NavigationDescriptor, u8);
+fn new_building_created(
+    mut building_created_reader: EventReader<BuildingCreatedEvent>,
+    mut commands: Commands,
+) {
+    for created_building in building_created_reader.iter() {
+        match &created_building.building {
+            Building::House(house) => {
+                let desired_residents = house.resident_property.max_residents;
+                let position = house.position;
+
+                let mut command = commands.entity(created_building.entity);
+                command.insert(HouseWaitingForInhabitantsComponent {
+                    count: desired_residents,
+                    position,
+                });
+            }
+            Building::Office(_o) => {}
+            Building::Garden(_g) => {}
+            Building::Street(_s) => {}
+        }
+    }
+}
 
 fn handle_waiting_for_inhabitants(
     mut game_events: EventReader<GameTick>,
     mut commands: Commands,
     navigator: Res<Navigator>,
     mut waiting_for_inhabitants_query: Query<
-        (
-            Entity,
-            &HouseComponent,
-            &mut HouseWaitingForInhabitantsComponent,
-        ),
+        (Entity, &mut HouseWaitingForInhabitantsComponent),
         (Without<NavigationDescriptorComponent>,),
     >,
 ) {
@@ -50,17 +68,15 @@ fn handle_waiting_for_inhabitants(
         return;
     }
 
-    for (entity, house_component, mut waiting_for_inhabitants) in
-        waiting_for_inhabitants_query.iter_mut()
-    {
-        // This never happen or happen only for a short time (1 cycle)
-        if waiting_for_inhabitants.0 == 0 {
-            warn!("waiting_for_inhabitants is 0: skipped");
+    for (entity, mut waiting_for_inhabitants) in waiting_for_inhabitants_query.iter_mut() {
+        if waiting_for_inhabitants.count == 0 {
+            let mut command = commands.entity(entity);
+            command.remove::<HouseWaitingForInhabitantsComponent>();
             continue;
         }
 
-        let house: &House = &*house_component;
-        let navigation_descriptor = match navigator.get_navigation_descriptor(house) {
+        let position = waiting_for_inhabitants.position;
+        let navigation_descriptor = match navigator.get_navigation_descriptor(position) {
             // TODO consider to have a try not immediately
             // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
             // every frame. So probably the best thing todo is to remove the component,
@@ -69,12 +85,11 @@ fn handle_waiting_for_inhabitants(
             Some(nd) => nd,
         };
 
-        info!(
-            "path ({navigation_descriptor}) found for house (id={entity:?}) at {:?}",
-            &house.position,
-        );
-        let delta = navigator.calculate_delta(waiting_for_inhabitants.0, &CONFIGURATION);
-        waiting_for_inhabitants.0 -= delta;
+        let delta = navigator.calculate_delta(waiting_for_inhabitants.count, &CONFIGURATION);
+
+        info!("path ({navigation_descriptor}) found for house (id={entity:?}) at {position:?} for {delta} people");
+
+        waiting_for_inhabitants.count -= delta;
 
         let mut command = commands.entity(entity);
         command.insert(NavigationDescriptorComponent(navigation_descriptor, delta));
@@ -85,11 +100,8 @@ fn move_inhabitants_to_house(
     mut game_tick: EventReader<GameTick>,
     mut commands: Commands,
     navigator: Res<Navigator>,
-    mut waiting_for_inhabitants_query: Query<
-        (Entity, &mut NavigationDescriptorComponent),
-        With<HouseComponent>,
-    >,
-    mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHome>,
+    mut waiting_for_inhabitants_query: Query<(Entity, &mut NavigationDescriptorComponent)>,
+    mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHomeEvent>,
 ) {
     if game_tick.iter().count() == 0 {
         return;
@@ -110,7 +122,7 @@ fn move_inhabitants_to_house(
             .entity(entity)
             .remove::<NavigationDescriptorComponent>();
 
-        inhabitant_arrived_writer.send(InhabitantArrivedAtHome {
+        inhabitant_arrived_writer.send(InhabitantArrivedAtHomeEvent {
             count: navigation_descriptor_component.1,
             entity,
         });
@@ -119,7 +131,7 @@ fn move_inhabitants_to_house(
 
 fn add_node(
     mut navigator: ResMut<Navigator>,
-    mut building_created_reader: EventReader<BuildingCreated>,
+    mut building_created_reader: EventReader<BuildingCreatedEvent>,
 ) {
     let streets_created = building_created_reader
         .iter()
@@ -138,4 +150,31 @@ fn add_node(
     // probably this place is not so convenient and also not so convenient rebuild
     // every time the graph.
     navigator.rebuild();
+}
+
+pub mod events {
+    use bevy::prelude::Entity;
+
+    pub struct InhabitantArrivedAtHomeEvent {
+        pub count: u8,
+        pub entity: Entity,
+    }
+}
+
+mod components {
+    use bevy::prelude::Component;
+
+    use crate::{common::position::Position, navigation::navigator::NavigationDescriptor};
+
+    #[derive(Component)]
+    pub struct HouseWaitingForInhabitantsComponent {
+        pub count: u8,
+        pub position: Position,
+    }
+
+    #[derive(Component)]
+    pub struct OfficeWaitingForWorkersComponent;
+
+    #[derive(Component)]
+    pub struct NavigationDescriptorComponent(pub NavigationDescriptor, pub u8);
 }

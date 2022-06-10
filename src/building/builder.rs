@@ -1,9 +1,7 @@
 use bevy::utils::HashSet;
 
 use crate::building::{BuildRequest, BuildingInConstruction, House, ProgressStatus};
-
 use crate::common::position::Position;
-use crate::navigation::plugin::InhabitantArrivedAtHome;
 
 pub struct BuildingBuilder {
     position_already_used: HashSet<Position>,
@@ -48,9 +46,9 @@ impl BuildingBuilder {
     pub(super) fn go_to_live_home(
         &self,
         house: &mut House,
-        arrived: &InhabitantArrivedAtHome,
+        arrived: u8,
     ) -> Result<(), &'static str> {
-        house.resident_property.current_residents += arrived.count;
+        house.resident_property.current_residents += arrived;
 
         Ok(())
     }
