@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     building::Building,
     common::{configuration::CONFIGURATION, position::Position},
+    palatability::plugin::MoreInhabitantsNeeded,
     GameTick,
 };
 
@@ -18,6 +19,11 @@ use components::*;
 
 use events::*;
 
+#[derive(Default)]
+struct WaitingForStorage {
+    house: Vec<Entity>,
+}
+
 pub struct NavigatorPlugin;
 
 impl Plugin for NavigatorPlugin {
@@ -25,7 +31,10 @@ impl Plugin for NavigatorPlugin {
         let navigator = Navigator::new(Position { x: 0, y: 0 });
         app.insert_resource(navigator)
             .add_event::<InhabitantArrivedAtHomeEvent>()
+            // Probably we would like to create Vecs with already-preallocated capacity
+            .insert_resource(WaitingForStorage::default())
             .add_system(new_building_created)
+            .add_system(spawn_inhabitants)
             .add_system_to_stage(CoreStage::Last, add_node)
             .add_system_to_stage(CoreStage::PreUpdate, handle_waiting_for_inhabitants)
             .add_system_to_stage(CoreStage::PreUpdate, move_inhabitants_to_house);
@@ -48,7 +57,11 @@ fn new_building_created(
                     position,
                 });
             }
-            Building::Office(_o) => {}
+            Building::Office(office) => {
+                let position = office.position;
+                let mut command = commands.entity(created_building.entity);
+                command.insert(OfficeWaitingForWorkersComponent { position });
+            }
             Building::Garden(_g) => {}
             Building::Street(_s) => {}
         }
@@ -59,6 +72,7 @@ fn handle_waiting_for_inhabitants(
     mut game_events: EventReader<GameTick>,
     mut commands: Commands,
     navigator: Res<Navigator>,
+    mut waiting_for_storage: ResMut<WaitingForStorage>,
     mut waiting_for_inhabitants_query: Query<
         (Entity, &mut HouseWaitingForInhabitantsComponent),
         (Without<NavigationDescriptorComponent>,),
@@ -85,14 +99,36 @@ fn handle_waiting_for_inhabitants(
             Some(nd) => nd,
         };
 
-        let delta = navigator.calculate_delta(waiting_for_inhabitants.count, &CONFIGURATION);
+        // Delta cannot be negative (and probably neither zero)
+        // We would like to force it to be `u8` forcing the type here
+        // We need also be carefull about how much inhabitant we have available here!!
+        let delta: u8 = navigator
+            .calculate_delta(waiting_for_inhabitants.count, &CONFIGURATION)
+            .min(waiting_for_storage.house.len() as u8);
+        if delta == 0 {
+            warn!("The calculated delta is 0: skipped");
+            continue;
+        }
 
         info!("path ({navigation_descriptor}) found for house (id={entity:?}) at {position:?} for {delta} people");
 
         waiting_for_inhabitants.count -= delta;
 
+        // Consume inhabitants
+        let inhabitants_to_move: Vec<_> =
+            waiting_for_storage.house.drain(0..delta as usize).collect();
+        for inhabitant_to_move in &inhabitants_to_move {
+            commands
+                .entity(*inhabitant_to_move)
+                .remove::<WaitingForHomeComponent>();
+        }
+
         let mut command = commands.entity(entity);
-        command.insert(NavigationDescriptorComponent(navigation_descriptor, delta));
+        command.insert(NavigationDescriptorComponent(
+            navigation_descriptor,
+            delta,
+            inhabitants_to_move,
+        ));
     }
 }
 
@@ -110,6 +146,8 @@ fn move_inhabitants_to_house(
     for (entity, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
         let navigation_descriptor: &mut NavigationDescriptor =
             &mut navigation_descriptor_component.0;
+
+        // TODO Move inhabitants also
         navigator.make_progress(navigation_descriptor);
 
         if !navigation_descriptor.is_completed() {
@@ -126,6 +164,10 @@ fn move_inhabitants_to_house(
             count: navigation_descriptor_component.1,
             entity,
         });
+
+        for inhabitant in &navigation_descriptor_component.2 {
+            commands.entity(*inhabitant).insert(WaitingForWorkComponent);
+        }
     }
 }
 
@@ -152,6 +194,36 @@ fn add_node(
     navigator.rebuild();
 }
 
+fn spawn_inhabitants(
+    mut commands: Commands,
+    mut waiting_for_storage: ResMut<WaitingForStorage>,
+    mut more_inhabitants_needed_reader: EventReader<MoreInhabitantsNeeded>,
+) {
+    let total: u32 = more_inhabitants_needed_reader
+        .iter()
+        .map(|e| e.count as u32)
+        .sum();
+    if total == 0 {
+        return;
+    }
+
+    for _ in 0..total {
+        let entity = commands
+            .spawn()
+            .insert(InhabitantComponent {
+                position: Position { x: 0, y: 0 },
+            })
+            .insert(WaitingForHomeComponent)
+            .id();
+        waiting_for_storage.house.push(entity);
+    }
+
+    info!(
+        "waiting for house {} (newer: {total})",
+        waiting_for_storage.house.len()
+    );
+}
+
 pub mod events {
     use bevy::prelude::Entity;
 
@@ -162,7 +234,7 @@ pub mod events {
 }
 
 mod components {
-    use bevy::prelude::Component;
+    use bevy::prelude::{Component, Entity};
 
     use crate::{common::position::Position, navigation::navigator::NavigationDescriptor};
 
@@ -173,8 +245,20 @@ mod components {
     }
 
     #[derive(Component)]
-    pub struct OfficeWaitingForWorkersComponent;
+    pub struct OfficeWaitingForWorkersComponent {
+        pub position: Position,
+    }
 
     #[derive(Component)]
-    pub struct NavigationDescriptorComponent(pub NavigationDescriptor, pub u8);
+    pub struct NavigationDescriptorComponent(pub NavigationDescriptor, pub u8, pub Vec<Entity>);
+
+    #[derive(Component)]
+    pub struct InhabitantComponent {
+        pub position: Position,
+    }
+
+    #[derive(Component)]
+    pub struct WaitingForHomeComponent;
+    #[derive(Component)]
+    pub struct WaitingForWorkComponent;
 }

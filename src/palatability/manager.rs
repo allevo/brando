@@ -5,8 +5,12 @@ use crate::{
     common::position::Position,
 };
 
+#[derive(Default)]
 pub struct PalatabilityManager {
     total_populations: u64,
+    unemployed_inhabitants: u64,
+    vacant_inhabitants: u64,
+    vacant_work: u64,
     // TODO: change approach to store the rendered values
     // We can consider also an async update:
     // - collects all the sources into a dedicated collection
@@ -16,11 +20,7 @@ pub struct PalatabilityManager {
 }
 impl PalatabilityManager {
     pub fn new() -> Self {
-        Self {
-            total_populations: 0,
-            houses_sources: vec![],
-            office_sources: vec![],
-        }
+        Self::default()
     }
 
     pub(super) fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
@@ -59,12 +59,44 @@ impl PalatabilityManager {
         OfficePalatability { value }
     }
 
-    pub(super) fn increment_populations(&mut self, delta: i32) {
-        self.total_populations = (self.total_populations as i128 + delta as i128).max(0) as u64;
+    pub(super) fn increment_unemployed_inhabitants(&mut self, delta: i32) {
+        self.unemployed_inhabitants =
+            (self.unemployed_inhabitants as i128 + delta as i128).max(0) as u64;
+    }
+
+    pub(super) fn increment_vacant_work(&mut self, delta: i32) {
+        self.vacant_work = (self.vacant_work as i128 + delta as i128).max(0) as u64;
+    }
+
+    pub(super) fn increment_vacant_inhabitants(&mut self, delta: i32) {
+        self.vacant_inhabitants = (self.vacant_inhabitants as i128 + delta as i128).max(0) as u64;
+    }
+
+    pub(super) fn get_inhabitants_to_spawn_and_increment_populations(&mut self) -> u8 {
+        let c: u8 = self.vacant_inhabitants.min(u8::MAX as u64) as u8;
+        self.vacant_inhabitants = 0;
+        self.total_populations += c as u64;
+
+        c
     }
 
     pub fn total_populations(&self) -> u64 {
         self.total_populations
+    }
+    
+    #[allow(dead_code)]
+    pub fn unemployed_inhabitants(&self) -> u64 {
+        self.unemployed_inhabitants
+    }
+    
+    #[allow(dead_code)]
+    pub fn vacant_work(&self) -> u64 {
+        self.vacant_work
+    }
+    
+    #[allow(dead_code)]
+    pub fn vacant_inhabitants(&self) -> u64 {
+        self.vacant_inhabitants
     }
 }
 

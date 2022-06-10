@@ -104,8 +104,11 @@ impl Navigator {
         tot - self.positions_to_add.len()
     }
 
-    pub(super) fn make_progress(&self, navigator_descriptor: &mut NavigationDescriptor) {
-        navigator_descriptor.path.pop();
+    pub(super) fn make_progress(
+        &self,
+        navigator_descriptor: &mut NavigationDescriptor,
+    ) -> Option<Position> {
+        navigator_descriptor.path.pop()
     }
 
     pub(super) fn calculate_delta(&self, requested: u8, configuration: &Configuration) -> u8 {

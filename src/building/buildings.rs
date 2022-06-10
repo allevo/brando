@@ -29,8 +29,14 @@ pub struct House {
     pub resident_property: ResidentProperty,
 }
 
+pub struct WorkProperty {
+    pub current_worker: u8,
+    pub max_worker: u8,
+}
+
 pub struct Office {
     pub position: Position,
+    pub work_property: WorkProperty,
 }
 pub struct Street {
     pub position: Position,
@@ -155,6 +161,10 @@ impl TryInto<Office> for &mut BuildingInConstruction {
         match self.request.prototype.building_type {
             BuildingType::Office => Ok(Office {
                 position: self.request.position,
+                work_property: WorkProperty {
+                    current_worker: 0,
+                    max_worker: CONFIGURATION.buildings.office.max_worker,
+                },
             }),
             _ => Err("NO"),
         }

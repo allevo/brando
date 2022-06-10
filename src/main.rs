@@ -289,10 +289,17 @@ mod tests {
             house.resident_property.current_residents,
             house.resident_property.max_residents
         );
+
+        run!(app, 10);
+
+        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        assert_eq!(16, palatability_manager.unemployed_inhabitants());
+        assert_eq!(0, palatability_manager.vacant_work());
+        assert_eq!(0, palatability_manager.vacant_inhabitants());
     }
 
     #[test]
-    fn test_position_is_already_occupated() {
+    fn test_position_is_already_occupied() {
         let mut app = create_app!();
 
         let entities = get_entities!(planes app);

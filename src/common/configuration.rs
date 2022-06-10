@@ -37,6 +37,7 @@ pub struct HouseConfiguration {
     pub palatability_configuration: PalatabilityConfiguration,
 }
 pub struct OfficeConfiguration {
+    pub max_worker: u8,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
@@ -101,6 +102,7 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
         },
         office: OfficeConfiguration {
+            max_worker: 6,
             common: CommonBuildingConfiguration {
                 building_name: "office",
                 time_for_building: 5,
