@@ -52,6 +52,7 @@ enum EditMode {
     Office,
 }
 
+/// Allow the user to switch edit mode base on the keyboard key
 fn switch_edit_mode(
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut edit_mode: ResMut<EditMode>,
@@ -73,6 +74,7 @@ fn switch_edit_mode(
     }
 }
 
+/// Spawn entity with `BuildingInConstructionComponent`
 fn build_building(
     mut events: EventReader<PickingEvent>,
     planes: Query<&Transform, With<PlaneComponent>>,
@@ -131,6 +133,10 @@ fn build_building(
         });
 }
 
+/// Make BuildingInConstruction progress:
+/// - if the building is not constructored yet, stop
+/// - otherwise place the building
+/// NB: the progress is made if and only if there's sufficient palatability
 fn make_progress(
     events: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingInConstructionComponent)>,
@@ -253,12 +259,13 @@ fn make_progress(
     }
 }
 
+/// marks the house as inhabited
 fn habit_house(
     mut houses: Query<&mut HouseComponent>,
     brando: Res<BuildingBuilder>,
-    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHomeEvent>,
+    mut inhabitant_arrived_reader: EventReader<InhabitantArrivedAtHomeEvent>,
 ) {
-    for arrived in inhabitant_arrived_writer.iter() {
+    for arrived in inhabitant_arrived_reader.iter() {
         let mut hc = match houses.get_mut(arrived.entity) {
             Ok(c) => c,
             Err(e) => {

@@ -83,17 +83,17 @@ impl PalatabilityManager {
     pub fn total_populations(&self) -> u64 {
         self.total_populations
     }
-    
+
     #[allow(dead_code)]
     pub fn unemployed_inhabitants(&self) -> u64 {
         self.unemployed_inhabitants
     }
-    
+
     #[allow(dead_code)]
     pub fn vacant_work(&self) -> u64 {
         self.vacant_work
     }
-    
+
     #[allow(dead_code)]
     pub fn vacant_inhabitants(&self) -> u64 {
         self.vacant_inhabitants

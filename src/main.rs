@@ -120,6 +120,7 @@ impl Plugin for MainPlugin {
     }
 }
 
+/// Send game tick: realtime is just an interpolation of discrete time
 fn tick(
     time: Res<Time>,
     mut game_timers: Query<&mut GameTimer>,
@@ -135,6 +136,7 @@ fn tick(
     my_events.send(GameTick(game_timers.0.times_finished()));
 }
 
+/// Allow to move the camera
 fn move_camera_on_keyboard_input(
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut cameras: Query<&mut Transform, With<CameraComponent>>,
@@ -299,6 +301,26 @@ mod tests {
     }
 
     #[test]
+    fn test_foo() {
+        let mut app = create_app!(
+            r#"
+s
+sg
+sh"#,
+            8
+        );
+
+        let entities = get_entities!(planes app);
+        run!(app, 10);
+
+        let office_entity = entities.get(position_to_index(3, 0)).unwrap();
+        release_keyboard_key!(app, KeyCode::O);
+        run!(app, 1);
+        select_plane!(app, office_entity);
+        run!(app, 1);
+    }
+
+    #[test]
     fn test_position_is_already_occupied() {
         let mut app = create_app!();
 
@@ -373,6 +395,40 @@ mod tests {
         }
 
         macro_rules! create_app {
+            ($map: literal, $expected_population: literal) => {{
+                let mut app = create_app!();
+                let entities = get_entities!(planes app);
+
+                for (x, line) in $map.lines().skip(1).enumerate() {
+                    for (y, c) in line.chars().enumerate() {
+                        let house_entity = entities.get(position_to_index(x, y)).unwrap();
+                        match c {
+                            's' => release_keyboard_key!(app, KeyCode::S),
+                            'g' => release_keyboard_key!(app, KeyCode::G),
+                            'h' => release_keyboard_key!(app, KeyCode::H),
+                            'o' => release_keyboard_key!(app, KeyCode::O),
+                            _ => continue,
+                        }
+                        select_plane!(app, house_entity);
+                        run!(app, 1);
+                    }
+                }
+
+                let mut max_iter = 50;
+                loop {
+                    run!(app, 1);
+                    let palatability = app.world.get_resource_mut::<PalatabilityManager>().unwrap();
+                    if palatability.total_populations() == $expected_population {
+                        break;
+                    }
+                    max_iter -= 1;
+                    if max_iter == 0 {
+                        panic!("Unable to reach expected population of {}", $expected_population);
+                    }
+                }
+
+                app
+            }};
             () => {{
                 use bevy::{
                     asset::AssetPlugin,

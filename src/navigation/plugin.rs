@@ -41,6 +41,7 @@ impl Plugin for NavigatorPlugin {
     }
 }
 
+/// Flags buildings are receivers or donors of something
 fn new_building_created(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
     mut commands: Commands,
@@ -68,6 +69,7 @@ fn new_building_created(
     }
 }
 
+/// Try to find a good path for not-full houses
 fn handle_waiting_for_inhabitants(
     mut game_events: EventReader<GameTick>,
     mut commands: Commands,
@@ -132,6 +134,7 @@ fn handle_waiting_for_inhabitants(
     }
 }
 
+/// Track progress for inhabitants that have a house as target
 fn move_inhabitants_to_house(
     mut game_tick: EventReader<GameTick>,
     mut commands: Commands,
@@ -171,6 +174,7 @@ fn move_inhabitants_to_house(
     }
 }
 
+/// Add a node to the street graph
 fn add_node(
     mut navigator: ResMut<Navigator>,
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
@@ -194,6 +198,7 @@ fn add_node(
     navigator.rebuild();
 }
 
+/// Spawn inhabitants that needs house
 fn spawn_inhabitants(
     mut commands: Commands,
     mut waiting_for_storage: ResMut<WaitingForStorage>,
