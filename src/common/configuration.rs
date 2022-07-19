@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub cube_size: f32,
 
@@ -18,11 +19,13 @@ impl Configuration {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GameConfiguration {
     pub width_table: usize,
     pub depth_table: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct BuildingsConfiguration {
     pub house: HouseConfiguration,
     pub office: OfficeConfiguration,
@@ -30,36 +33,40 @@ pub struct BuildingsConfiguration {
     pub street: StreetConfiguration,
 }
 
+#[derive(Debug, Clone)]
 pub struct HouseConfiguration {
     pub max_residents: u8,
     pub max_inhabitant_per_travel: u8,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
+#[derive(Debug, Clone)]
 pub struct OfficeConfiguration {
     pub max_worker: u8,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
+#[derive(Debug, Clone)]
 pub struct GardenConfiguration {
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
+#[derive(Debug, Clone)]
 pub struct StreetConfiguration {
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
-
+#[derive(Debug, Clone)]
 pub struct CommonBuildingConfiguration {
     pub building_name: &'static str,
     pub time_for_building: u8,
 }
-
+#[derive(Debug, Clone)]
 pub struct PalatabilityConfiguration {
-    pub house_source: Option<HouseSourcePalatabilityConfiguration>,
-    pub office_source: Option<OfficeSourcePalatabilityConfiguration>,
+    pub source_for_house: Option<HouseSourcePalatabilityConfiguration>,
+    pub source_for_office: Option<OfficeSourcePalatabilityConfiguration>,
 }
-
+#[derive(Debug, Clone)]
 pub struct HouseSourcePalatabilityConfiguration {
     pub value: i32,
     pub max_horizontal_distribution_distance: usize,
@@ -67,6 +74,7 @@ pub struct HouseSourcePalatabilityConfiguration {
     pub linear_factor: i32,
 }
 
+#[derive(Debug, Clone)]
 pub struct OfficeSourcePalatabilityConfiguration {
     pub value: i32,
     pub max_horizontal_distribution_distance: usize,
@@ -74,6 +82,7 @@ pub struct OfficeSourcePalatabilityConfiguration {
     pub linear_factor: i32,
 }
 
+// #[cfg(test)]
 pub const CONFIGURATION: Configuration = Configuration {
     cube_size: 0.3,
     camera_velocity: 0.75,
@@ -92,13 +101,13 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 10,
             },
             palatability_configuration: PalatabilityConfiguration {
-                house_source: Some(HouseSourcePalatabilityConfiguration {
+                source_for_house: Some(HouseSourcePalatabilityConfiguration {
                     value: -1,
                     max_horizontal_distribution_distance: 2,
                     max_linear_distribution_distance: 1,
                     linear_factor: 0,
                 }),
-                office_source: None,
+                source_for_office: None,
             },
         },
         office: OfficeConfiguration {
@@ -108,8 +117,8 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 5,
             },
             palatability_configuration: PalatabilityConfiguration {
-                house_source: None,
-                office_source: Some(OfficeSourcePalatabilityConfiguration {
+                source_for_house: None,
+                source_for_office: Some(OfficeSourcePalatabilityConfiguration {
                     value: 1,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 0,
@@ -123,13 +132,13 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 2,
             },
             palatability_configuration: PalatabilityConfiguration {
-                house_source: Some(HouseSourcePalatabilityConfiguration {
+                source_for_house: Some(HouseSourcePalatabilityConfiguration {
                     value: 10,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 10,
                     linear_factor: 2,
                 }),
-                office_source: Some(OfficeSourcePalatabilityConfiguration {
+                source_for_office: Some(OfficeSourcePalatabilityConfiguration {
                     value: 10,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 10,
@@ -143,8 +152,8 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 2,
             },
             palatability_configuration: PalatabilityConfiguration {
-                house_source: None,
-                office_source: None,
+                source_for_house: None,
+                source_for_office: None,
             },
         },
     },

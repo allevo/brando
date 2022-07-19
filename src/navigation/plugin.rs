@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::{
     building::Building,
-    common::{configuration::CONFIGURATION, position::Position},
+    common::{position::Position, configuration::Configuration},
     palatability::plugin::MoreInhabitantsNeeded,
     GameTick,
 };
@@ -59,9 +61,13 @@ fn new_building_created(
                 });
             }
             Building::Office(office) => {
+                let desired_workers = office.work_property.max_worker;
                 let position = office.position;
                 let mut command = commands.entity(created_building.entity);
-                command.insert(OfficeWaitingForWorkersComponent { position });
+                command.insert(OfficeWaitingForWorkersComponent {
+                    count: desired_workers,
+                    position,
+                });
             }
             Building::Garden(_g) => {}
             Building::Street(_s) => {}
@@ -79,6 +85,7 @@ fn handle_waiting_for_inhabitants(
         (Entity, &mut HouseWaitingForInhabitantsComponent),
         (Without<NavigationDescriptorComponent>,),
     >,
+    configuration: Res<Arc<Configuration>>,
 ) {
     if game_events.iter().count() == 0 {
         return;
@@ -105,7 +112,7 @@ fn handle_waiting_for_inhabitants(
         // We would like to force it to be `u8` forcing the type here
         // We need also be carefull about how much inhabitant we have available here!!
         let delta: u8 = navigator
-            .calculate_delta(waiting_for_inhabitants.count, &CONFIGURATION)
+            .calculate_delta(waiting_for_inhabitants.count, &configuration)
             .min(waiting_for_storage.house.len() as u8);
         if delta == 0 {
             warn!("The calculated delta is 0: skipped");
@@ -251,6 +258,7 @@ mod components {
 
     #[derive(Component)]
     pub struct OfficeWaitingForWorkersComponent {
+        pub count: u8,
         pub position: Position,
     }
 

@@ -1,6 +1,5 @@
-use std::fmt::Display;
 
-use crate::common::{configuration::CONFIGURATION, position::Position};
+use crate::common::{position::Position, configuration::Configuration};
 
 pub enum Building {
     House(House),
@@ -53,48 +52,16 @@ pub enum BuildingType {
     Office,
 }
 
-pub struct BuildingPrototype {
-    name: &'static str,
-    pub time_for_building: u8,
-    pub building_type: BuildingType,
-}
-impl Display for BuildingPrototype {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
-pub static HOUSE_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: CONFIGURATION.buildings.house.common.building_name,
-    time_for_building: CONFIGURATION.buildings.house.common.time_for_building,
-    building_type: BuildingType::House,
-};
-pub static STREET_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: CONFIGURATION.buildings.street.common.building_name,
-    time_for_building: CONFIGURATION.buildings.street.common.time_for_building,
-    building_type: BuildingType::Street,
-};
-pub static GARDEN_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: CONFIGURATION.buildings.garden.common.building_name,
-    time_for_building: CONFIGURATION.buildings.garden.common.time_for_building,
-    building_type: BuildingType::Garden,
-};
-pub static OFFICE_PROTOTYPE: BuildingPrototype = BuildingPrototype {
-    name: CONFIGURATION.buildings.office.common.building_name,
-    time_for_building: CONFIGURATION.buildings.office.common.time_for_building,
-    building_type: BuildingType::Office,
-};
-
 #[derive(Clone)]
 pub struct BuildRequest {
     pub position: Position,
-    pub prototype: &'static BuildingPrototype,
+    pub building_type: BuildingType,
 }
 impl BuildRequest {
-    pub fn new(position: Position, prototype: &'static BuildingPrototype) -> Self {
+    pub fn new(position: Position, building_type: BuildingType) -> Self {
         Self {
             position,
-            prototype,
+            building_type,
         }
     }
 }
@@ -112,27 +79,41 @@ impl BuildingInConstruction {
     }
 }
 
-impl TryInto<House> for &mut BuildingInConstruction {
-    type Error = &'static str;
+pub trait IntoBuilding<T> {
+    fn into_building(&self, configuration: &Configuration) -> Result<T, &'static str>;
+}
 
-    fn try_into(self) -> Result<House, Self::Error> {
-        match self.request.prototype.building_type {
+
+impl IntoBuilding<House> for BuildingInConstruction {
+    fn into_building(&self, configuration: &Configuration) -> Result<House, &'static str> {
+        match self.request.building_type {
             BuildingType::House => Ok(House {
                 position: self.request.position,
                 resident_property: ResidentProperty {
                     current_residents: 0,
-                    max_residents: CONFIGURATION.buildings.house.max_residents,
+                    max_residents: configuration.buildings.house.max_residents,
+                },
+            }),
+            _ => Err("NO"),
+        }    }
+}
+impl IntoBuilding<Office> for BuildingInConstruction {
+    fn into_building(&self, configuration: &Configuration) -> Result<Office, &'static str> {
+        match self.request.building_type {
+            BuildingType::Office => Ok(Office {
+                position: self.request.position,
+                work_property: WorkProperty {
+                    current_worker: 0,
+                    max_worker: configuration.buildings.office.max_worker,
                 },
             }),
             _ => Err("NO"),
         }
     }
 }
-impl TryInto<Street> for &mut BuildingInConstruction {
-    type Error = &'static str;
-
-    fn try_into(self) -> Result<Street, Self::Error> {
-        match self.request.prototype.building_type {
+impl IntoBuilding<Street> for BuildingInConstruction {
+    fn into_building(&self, _configuration: &Configuration) -> Result<Street, &'static str> {
+        match self.request.building_type {
             BuildingType::Street => Ok(Street {
                 position: self.request.position,
             }),
@@ -140,12 +121,9 @@ impl TryInto<Street> for &mut BuildingInConstruction {
         }
     }
 }
-
-impl TryInto<Garden> for &mut BuildingInConstruction {
-    type Error = &'static str;
-
-    fn try_into(self) -> Result<Garden, Self::Error> {
-        match self.request.prototype.building_type {
+impl IntoBuilding<Garden> for BuildingInConstruction {
+    fn into_building(&self, _configuration: &Configuration) -> Result<Garden, &'static str> {
+        match self.request.building_type {
             BuildingType::Garden => Ok(Garden {
                 position: self.request.position,
             }),
@@ -153,33 +131,13 @@ impl TryInto<Garden> for &mut BuildingInConstruction {
         }
     }
 }
-
-impl TryInto<Office> for &mut BuildingInConstruction {
-    type Error = &'static str;
-
-    fn try_into(self) -> Result<Office, Self::Error> {
-        match self.request.prototype.building_type {
-            BuildingType::Office => Ok(Office {
-                position: self.request.position,
-                work_property: WorkProperty {
-                    current_worker: 0,
-                    max_worker: CONFIGURATION.buildings.office.max_worker,
-                },
-            }),
-            _ => Err("NO"),
-        }
-    }
-}
-
-impl TryInto<Building> for &mut BuildingInConstruction {
-    type Error = &'static str;
-
-    fn try_into(self) -> Result<Building, Self::Error> {
-        match self.request.prototype.building_type {
-            BuildingType::House => self.try_into().map(Building::House),
-            BuildingType::Street => self.try_into().map(Building::Street),
-            BuildingType::Garden => self.try_into().map(Building::Garden),
-            BuildingType::Office => self.try_into().map(Building::Office),
+impl IntoBuilding<Building> for BuildingInConstruction {
+    fn into_building(&self, configuration: &Configuration) -> Result<Building, &'static str> {
+        match self.request.building_type {
+            BuildingType::House => self.into_building(configuration).map(Building::House),
+            BuildingType::Office => self.into_building(configuration).map(Building::Office),
+            BuildingType::Garden => self.into_building(configuration).map(Building::Garden),
+            BuildingType::Street => self.into_building(configuration).map(Building::Street),
         }
     }
 }

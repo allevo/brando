@@ -22,9 +22,8 @@ pub fn convert_position_into_bevy_coords(
 #[cfg(test)]
 mod tests {
     use crate::common::{
-        configuration::CONFIGURATION,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, configuration::CONFIGURATION,
     };
 
     #[test]

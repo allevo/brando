@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::building::Building;
+use crate::common::configuration::Configuration;
 use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
 use crate::GameTick;
 
@@ -14,7 +17,8 @@ pub struct PalatabilityPlugin;
 
 impl Plugin for PalatabilityPlugin {
     fn build(&self, app: &mut App) {
-        let palatability = PalatabilityManager::new();
+        let configuration: &Arc<Configuration> = app.world.resource();
+        let palatability = PalatabilityManager::new(configuration.clone());
 
         app.insert_resource(palatability)
             .add_event::<MoreInhabitantsNeeded>()

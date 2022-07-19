@@ -5,13 +5,13 @@ mod common;
 mod navigation;
 mod palatability;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
-use common::configuration::CONFIGURATION;
+use common::configuration::{Configuration, CONFIGURATION};
 use navigation::plugin::NavigatorPlugin;
 use palatability::plugin::PalatabilityPlugin;
 
@@ -78,7 +78,7 @@ macro_rules! get_colored_plane {
 
 impl FromWorld for PbrBundles {
     fn from_world(world: &mut World) -> Self {
-        let configuration = &CONFIGURATION;
+        let configuration = world.resource::<Arc<Configuration>>().clone();
 
         let house = get_colored_plane!(cube world, configuration, 150, 150, 150);
         let street = get_colored_plane!(plane world, configuration, 81, 81, 81);
@@ -99,6 +99,7 @@ impl FromWorld for PbrBundles {
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Arc::new(CONFIGURATION))
         .add_plugins(DefaultPlugins)
         .add_plugin(DebugCursorPickingPlugin) // <- Adds the green debug cursor.
         .add_plugin(MainPlugin)
@@ -140,6 +141,7 @@ fn tick(
 fn move_camera_on_keyboard_input(
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut cameras: Query<&mut Transform, With<CameraComponent>>,
+    configuration: Res<Arc<Configuration>>,
     timer: Res<Time>,
 ) {
     let directional_events: HashSet<_> = keyboard_input_events
@@ -158,20 +160,20 @@ fn move_camera_on_keyboard_input(
         .collect();
     let mut delta = (0., 0.);
     if directional_events.contains(&KeyCode::Right) {
-        delta.0 += CONFIGURATION.camera_velocity;
-        delta.1 -= CONFIGURATION.camera_velocity;
+        delta.0 += configuration.camera_velocity;
+        delta.1 -= configuration.camera_velocity;
     }
     if directional_events.contains(&KeyCode::Left) {
-        delta.0 -= CONFIGURATION.camera_velocity;
-        delta.1 += CONFIGURATION.camera_velocity;
+        delta.0 -= configuration.camera_velocity;
+        delta.1 += configuration.camera_velocity;
     }
     if directional_events.contains(&KeyCode::Up) {
-        delta.0 -= CONFIGURATION.camera_velocity;
-        delta.1 -= CONFIGURATION.camera_velocity;
+        delta.0 -= configuration.camera_velocity;
+        delta.1 -= configuration.camera_velocity;
     }
     if directional_events.contains(&KeyCode::Down) {
-        delta.0 += CONFIGURATION.camera_velocity;
-        delta.1 += CONFIGURATION.camera_velocity;
+        delta.0 += configuration.camera_velocity;
+        delta.1 += configuration.camera_velocity;
     };
     if delta != (0., 0.) {
         let mut camera = cameras.single_mut();
@@ -219,14 +221,12 @@ fn setup(mut commands: Commands) {
 mod tests {
     use crate::{
         building::{
-            plugin::{HouseComponent, PlaneComponent},
-            House,
+            plugin::{HouseComponent, OfficeComponent, PlaneComponent},
+            House, Office,
         },
         palatability::manager::PalatabilityManager,
     };
-    use bevy::{
-        prelude::{Entity, KeyCode, With},
-    };
+    use bevy::prelude::{Entity, KeyCode, With};
 
     use helpers::*;
 
@@ -235,13 +235,13 @@ mod tests {
         let mut app = create_app();
 
         let entities = get_entities!(app, Entity, PlaneComponent);
-        let house_entity = entities.get(position_to_index(1, 2)).unwrap();
-        let street_entity_1 = entities.get(position_to_index(0, 0)).unwrap();
-        let street_entity_2 = entities.get(position_to_index(0, 1)).unwrap();
-        let street_entity_3 = entities.get(position_to_index(0, 2)).unwrap();
+        let house_entity = entities.get(position_to_index(&app, 1, 2)).unwrap();
+        let street_entity_1 = entities.get(position_to_index(&app, 0, 0)).unwrap();
+        let street_entity_2 = entities.get(position_to_index(&app, 0, 1)).unwrap();
+        let street_entity_3 = entities.get(position_to_index(&app, 0, 2)).unwrap();
 
-        let house_entity_2 = entities.get(position_to_index(1, 1)).unwrap();
-        let garden_entity = entities.get(position_to_index(2, 1)).unwrap();
+        let house_entity_2 = entities.get(position_to_index(&app, 1, 1)).unwrap();
+        let garden_entity = entities.get(position_to_index(&app, 2, 1)).unwrap();
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
@@ -309,17 +309,30 @@ mod tests {
         let map = r#"
 s
 sg
-sh"#;
+sh
+s
+s
+s"#;
         fill_map(&mut app, map, 8);
 
         let entities = get_entities!(app, Entity, PlaneComponent);
-        run(&mut app, 10);
 
-        let office_entity = entities.get(position_to_index(3, 0)).unwrap();
+        let office_entity = entities.get(position_to_index(&app, 3, 0)).unwrap();
         release_keyboard_key(&mut app, KeyCode::O);
         run(&mut app, 1);
         select_plane(&mut app, office_entity);
         run(&mut app, 1);
+
+        run(&mut app, 50);
+
+        let mut offices = get_entities!(app, (Entity, &OfficeComponent), OfficeComponent);
+        assert_eq!(offices.len(), 1);
+        let office: &Office = &offices.pop().unwrap().1 .0;
+
+        assert_eq!(
+            office.work_property.max_worker,
+            office.work_property.current_worker
+        );
     }
 
     #[test]
@@ -327,7 +340,7 @@ sh"#;
         let mut app = create_app();
 
         let entities = get_entities!(app, Entity, PlaneComponent);
-        let position = position_to_index(1, 2);
+        let position = position_to_index(&app, 1, 2);
         let house_entity = entities.get(position).unwrap();
 
         release_keyboard_key(&mut app, KeyCode::H);
@@ -348,17 +361,13 @@ sh"#;
     }
 
     mod helpers {
+        use std::sync::Arc;
+
         use crate::{
-            building::{
-                plugin::{PlaneComponent},
-            },
-            common::configuration::CONFIGURATION,
-            palatability::manager::PalatabilityManager,
-            GameTick, MainPlugin,
+            building::plugin::PlaneComponent,
+            palatability::manager::PalatabilityManager, GameTick, MainPlugin, common::configuration::{Configuration, CONFIGURATION},
         };
-        use bevy::{
-            prelude::{App, Entity, KeyCode, With},
-        };
+        use bevy::prelude::{App, Entity, KeyCode, With};
 
         macro_rules! get_entities {
             ($app: ident, $Q: tt, $F: ident) => {{
@@ -370,8 +379,10 @@ sh"#;
         }
         pub(crate) use get_entities;
 
-        pub fn position_to_index(x: usize, y: usize) -> usize {
-            CONFIGURATION.game.width_table * x + y
+        #[inline]
+        pub fn position_to_index(app: &App, x: usize, y: usize) -> usize {
+            let configuration = app.world.get_resource::<Arc<Configuration>>().unwrap();
+            configuration.game.width_table * x + y
         }
 
         pub fn run(app: &mut App, run: usize) {
@@ -482,6 +493,8 @@ sh"#;
                 app.insert_resource(camera);
             }
 
+            app.insert_resource(Arc::new(CONFIGURATION));
+
             app.add_plugin(MainPlugin);
 
             run(&mut app, 1);
@@ -494,8 +507,7 @@ sh"#;
 
             for (x, line) in map.lines().skip(1).enumerate() {
                 for (y, c) in line.chars().enumerate() {
-
-                    let house_entity = entities.get(position_to_index(x, y)).unwrap();
+                    let house_entity = entities.get(position_to_index(&app, x, y)).unwrap();
                     match c {
                         's' => release_keyboard_key(app, KeyCode::S),
                         'g' => release_keyboard_key(app, KeyCode::G),

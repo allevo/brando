@@ -1,15 +1,20 @@
+use std::sync::Arc;
+
 use bevy::utils::HashSet;
 
 use crate::building::{BuildRequest, BuildingInConstruction, House, ProgressStatus};
+use crate::common::configuration::Configuration;
 use crate::common::position::Position;
 
 pub struct BuildingBuilder {
+    configuration: Arc<Configuration>,
     position_already_used: HashSet<Position>,
 }
 
 impl BuildingBuilder {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(configuration: Arc<Configuration>) -> Self {
         Self {
+            configuration,
             position_already_used: Default::default(),
         }
     }
@@ -23,9 +28,16 @@ impl BuildingBuilder {
             return Err("Position already used");
         }
 
+        let time_for_building = match request.building_type {
+            super::BuildingType::House => self.configuration.buildings.house.common.time_for_building,
+            super::BuildingType::Street => self.configuration.buildings.street.common.time_for_building,
+            super::BuildingType::Garden => self.configuration.buildings.garden.common.time_for_building,
+            super::BuildingType::Office => self.configuration.buildings.office.common.time_for_building,
+        };
+
         let progress_status = ProgressStatus {
             current_step: 0,
-            step_to_reach: request.prototype.time_for_building,
+            step_to_reach: time_for_building,
         };
         Ok(BuildingInConstruction {
             request,

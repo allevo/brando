@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::{
     input::{keyboard::KeyboardInput, ElementState},
     prelude::*,
@@ -6,13 +8,11 @@ use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 
 use crate::{
     building::{
-        builder::BuildingBuilder, BuildRequest, Building, BuildingInConstruction, BuildingType,
-        House, GARDEN_PROTOTYPE, HOUSE_PROTOTYPE, OFFICE_PROTOTYPE, STREET_PROTOTYPE,
+        builder::BuildingBuilder, BuildRequest, Building, BuildingInConstruction, BuildingType, IntoBuilding,
     },
     common::{
-        configuration::CONFIGURATION,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, configuration::{Configuration},
     },
     navigation::plugin::events::InhabitantArrivedAtHomeEvent,
     palatability::manager::PalatabilityManager,
@@ -30,7 +30,9 @@ pub struct BuildingPlugin;
 
 impl Plugin for BuildingPlugin {
     fn build(&self, app: &mut App) {
-        let brando = BuildingBuilder::new();
+        let configuration: &Arc<Configuration> = app.world.resource();
+        let brando = BuildingBuilder::new(configuration.clone());
+
         app.insert_resource(EditMode::None)
             .insert_resource(brando)
             .add_event::<BuildingCreatedEvent>()
@@ -82,6 +84,7 @@ fn build_building(
     mut brando: ResMut<BuildingBuilder>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
+    configuration: Res<Arc<Configuration>>,
 ) {
     if *edit_mode == EditMode::None {
         return;
@@ -102,19 +105,19 @@ fn build_building(
 
     let transform = *planes.get(*entity).unwrap();
 
-    let position = convert_bevy_coords_into_position(&CONFIGURATION, &transform.translation);
+    let position = convert_bevy_coords_into_position(&configuration, &transform.translation);
 
-    let prototype = match *edit_mode {
-        EditMode::House => &HOUSE_PROTOTYPE,
-        EditMode::Garden => &GARDEN_PROTOTYPE,
-        EditMode::Street => &STREET_PROTOTYPE,
-        EditMode::Office => &OFFICE_PROTOTYPE,
+    let building_type = match *edit_mode {
+        EditMode::House => BuildingType::House,
+        EditMode::Garden => BuildingType::Garden,
+        EditMode::Street => BuildingType::Street,
+        EditMode::Office => BuildingType::Office,
         EditMode::None => unreachable!("EditMode::None is handled before"),
     };
 
-    info!("Building {} at {:?}", prototype, position);
+    info!("Building {:?} at {:?}", building_type, position);
 
-    let request = BuildRequest::new(position, prototype);
+    let request = BuildRequest::new(position, building_type);
     let res = match brando.create_building(request) {
         Ok(res) => res,
         Err(s) => {
@@ -144,6 +147,7 @@ fn make_progress(
     palatability: Res<PalatabilityManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
+    configuration: Res<Arc<Configuration>>,
     mut building_created_writer: EventWriter<BuildingCreatedEvent>,
 ) {
     // TODO: split the following logic among frames
@@ -164,7 +168,7 @@ fn make_progress(
         // Currently we implement only a type of building that, to be built,
         // needs to have a proper palatability.
         // So, for the time being, an "if" is enough
-        if building.0.request.prototype.building_type == BuildingType::House {
+        if building.0.request.building_type == BuildingType::House {
             let p = palatability.get_house_palatability(position);
             // TODO: tag this entity in order to retry later
             // If an house hasn't enough palatability, we retry again and again
@@ -175,7 +179,7 @@ fn make_progress(
                 continue;
             }
         }
-        if building.0.request.prototype.building_type == BuildingType::Office {
+        if building.0.request.building_type == BuildingType::Office {
             let p = palatability.get_office_palatability(position);
             // TODO: tag this entity in order to retry later
             // If an house hasn't enough palatability, we retry again and again
@@ -198,11 +202,11 @@ fn make_progress(
         }
 
         info!(
-            "{} completed at {:?}",
-            building_in_construction.request.prototype, building_in_construction.request.position,
+            "{:?} completed at {:?}",
+            building_in_construction.request.building_type, building_in_construction.request.position,
         );
 
-        let building_type = &building_in_construction.request.prototype.building_type;
+        let building_type = &building_in_construction.request.building_type;
         let bundle = match building_type {
             BuildingType::House => bundles.house(),
             BuildingType::Garden => bundles.garden(),
@@ -222,37 +226,28 @@ fn make_progress(
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
         let entity = match building_type {
-            BuildingType::House => {
-                let house: House = building_in_construction.try_into().unwrap();
-                // let desired_residents = house.resident_property.max_residents;
-                // let position = house.position.clone();
-                command
-                    .insert_bundle((
-                        HouseComponent(house),
-                        // HouseWaitingForInhabitantsComponent(desired_residents, position),
-                    ))
-                    .id()
-            }
+            BuildingType::House => command
+                .insert_bundle((HouseComponent(building_in_construction.into_building(&*configuration).unwrap()),))
+                .id(),
             BuildingType::Garden => command
                 .insert(GardenComponent(
-                    building_in_construction.try_into().unwrap(),
+                    building_in_construction.into_building(&*configuration).unwrap(),
                 ))
                 .id(),
             BuildingType::Street => command
                 .insert(StreetComponent(
-                    building_in_construction.try_into().unwrap(),
+                    building_in_construction.into_building(&*configuration).unwrap(),
                 ))
                 .id(),
             BuildingType::Office => command
-                .insert_bundle((
-                    OfficeComponent(building_in_construction.try_into().unwrap()),
-                    // OfficeWaitingForWorkersComponent,
-                ))
+                .insert_bundle((OfficeComponent(
+                    building_in_construction.into_building(&*configuration).unwrap(),
+                ),))
                 .id(),
         };
 
         let building: Building = building_in_construction
-            .try_into()
+            .into_building(&*configuration)
             .expect("Something goes wrong on building creation");
 
         building_created_writer.send(BuildingCreatedEvent { building, entity });
@@ -284,10 +279,11 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    configuration: Res<Arc<Configuration>>,
 ) {
-    let grid_positions: Vec<_> = (0..CONFIGURATION.game.width_table)
-        .flat_map(|x| (0..CONFIGURATION.game.depth_table).map(move |y| (x as i64, y as i64)))
-        .map(|(x, y)| convert_position_into_bevy_coords(&CONFIGURATION, &Position { x, y }))
+    let grid_positions: Vec<_> = (0..configuration.game.width_table)
+        .flat_map(|x| (0..configuration.game.depth_table).map(move |y| (x as i64, y as i64)))
+        .map(|(x, y)| convert_position_into_bevy_coords(&configuration, &Position { x, y }))
         .collect();
 
     for translation in grid_positions {
@@ -295,7 +291,7 @@ fn setup(
         commands
             .spawn_bundle(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Plane {
-                    size: CONFIGURATION.cube_size,
+                    size: configuration.cube_size,
                 })),
                 material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
                 transform,

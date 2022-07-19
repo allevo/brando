@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use tracing::info;
 
 use crate::{
     building::{Building, Garden, House, Office, Street},
-    common::position::Position,
+    common::{position::Position, configuration::Configuration},
 };
 
-#[derive(Default)]
 pub struct PalatabilityManager {
+    configuration: Arc<Configuration>,
     total_populations: u64,
     unemployed_inhabitants: u64,
     vacant_inhabitants: u64,
@@ -19,12 +21,21 @@ pub struct PalatabilityManager {
     office_sources: Vec<OfficeSourcePalatabilityDescriptor>,
 }
 impl PalatabilityManager {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(configuration: Arc<Configuration>) -> Self {
+        Self {
+            configuration,
+            total_populations: 0,
+            unemployed_inhabitants: 0,
+            vacant_inhabitants: 0,
+            vacant_work: 0,
+            houses_sources: vec![],
+            office_sources: vec![],
+        
+        }
     }
 
     pub(super) fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
-        let source = match source.to_house_source_palatability() {
+        let source = match source.to_house_source_palatability(&self.configuration) {
             None => return,
             Some(source) => source,
         };
@@ -33,7 +44,7 @@ impl PalatabilityManager {
     }
 
     pub(super) fn add_office_source(&mut self, source: &impl ToOfficeSourcePalatabilityDescriptor) {
-        let source = match source.to_office_source_palatability() {
+        let source = match source.to_office_source_palatability(&self.configuration) {
             None => return,
             Some(source) => source,
         };
@@ -187,30 +198,30 @@ impl OfficePalatability {
 }
 
 pub trait ToHouseSourcePalatabilityDescriptor {
-    fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor>;
+    fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor>;
 }
 pub trait ToOfficeSourcePalatabilityDescriptor {
-    fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor>;
+    fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor>;
 }
 
 impl ToHouseSourcePalatabilityDescriptor for Building {
-    fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor> {
+    fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor> {
         match self {
-            Building::Garden(g) => g.to_house_source_palatability(),
-            Building::House(h) => h.to_house_source_palatability(),
-            Building::Street(s) => s.to_house_source_palatability(),
-            Building::Office(o) => o.to_house_source_palatability(),
+            Building::Garden(g) => g.to_house_source_palatability(configuration),
+            Building::House(h) => h.to_house_source_palatability(configuration),
+            Building::Street(s) => s.to_house_source_palatability(configuration),
+            Building::Office(o) => o.to_house_source_palatability(configuration),
         }
     }
 }
 
 impl ToOfficeSourcePalatabilityDescriptor for Building {
-    fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
+    fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor> {
         match self {
-            Building::Garden(g) => g.to_office_source_palatability(),
-            Building::House(h) => h.to_office_source_palatability(),
-            Building::Street(s) => s.to_office_source_palatability(),
-            Building::Office(o) => o.to_office_source_palatability(),
+            Building::Garden(g) => g.to_office_source_palatability(configuration),
+            Building::House(h) => h.to_office_source_palatability(configuration),
+            Building::Street(s) => s.to_office_source_palatability(configuration),
+            Building::Office(o) => o.to_office_source_palatability(configuration),
         }
     }
 }
@@ -218,18 +229,9 @@ impl ToOfficeSourcePalatabilityDescriptor for Building {
 macro_rules! impl_to_source_palatability_descriptor {
     ($cl: ty, $name: tt) => {
         impl ToHouseSourcePalatabilityDescriptor for $cl {
-            fn to_house_source_palatability(&self) -> Option<HouseSourcePalatabilityDescriptor> {
-                use crate::common::configuration::CONFIGURATION;
-
-                let c = &CONFIGURATION
-                    .buildings
-                    .$name
-                    .palatability_configuration
-                    .house_source;
-                let e = match c {
-                    None => return None,
-                    Some(e) => e,
-                };
+            fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor> {
+                let e = configuration.buildings
+                    .$name.palatability_configuration.source_for_house.as_ref()?;
                 Some(HouseSourcePalatabilityDescriptor {
                     origin: self.position,
                     value: e.value,
@@ -240,18 +242,9 @@ macro_rules! impl_to_source_palatability_descriptor {
             }
         }
         impl ToOfficeSourcePalatabilityDescriptor for $cl {
-            fn to_office_source_palatability(&self) -> Option<OfficeSourcePalatabilityDescriptor> {
-                use crate::common::configuration::CONFIGURATION;
-
-                let c = &CONFIGURATION
-                    .buildings
-                    .$name
-                    .palatability_configuration
-                    .office_source;
-                let e = match c {
-                    None => return None,
-                    Some(e) => e,
-                };
+            fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor> {
+                let e = configuration.buildings
+                    .$name.palatability_configuration.source_for_office.as_ref()?;
                 Some(OfficeSourcePalatabilityDescriptor {
                     origin: self.position,
                     value: e.value,
