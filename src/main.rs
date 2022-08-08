@@ -7,13 +7,14 @@ mod palatability;
 
 use std::{collections::HashSet, sync::Arc};
 
-use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use bevy::{input::keyboard::KeyboardInput, render::camera::ScalingMode, time::Time, prelude::*};
 use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
 use common::configuration::{Configuration, CONFIGURATION};
 use navigation::plugin::NavigatorPlugin;
 use palatability::plugin::PalatabilityPlugin;
+use tracing::debug;
 
 #[derive(Component, Deref, DerefMut)]
 struct GameTimer(Timer);
@@ -134,7 +135,7 @@ fn tick(
 
     debug!("tick!");
 
-    my_events.send(GameTick(game_timers.0.times_finished()));
+    my_events.send(GameTick(game_timers.0.times_finished_this_tick()));
 }
 
 /// Allow to move the camera
@@ -186,8 +187,14 @@ struct CameraComponent;
 
 fn setup(mut commands: Commands) {
     // set up the camera
-    let mut camera = OrthographicCameraBundle::new_3d();
-    camera.orthographic_projection.scale = 3.0;
+    let mut camera = Camera3dBundle {
+        projection: OrthographicProjection {
+            scale: 3.0,
+            scaling_mode: ScalingMode::FixedVertical(2.),
+            ..default()
+        }.into(),
+        ..default()
+    };
     camera.transform = Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y);
 
     // camera
@@ -367,7 +374,7 @@ s"#;
             building::plugin::PlaneComponent,
             palatability::manager::PalatabilityManager, GameTick, MainPlugin, common::configuration::{Configuration, CONFIGURATION},
         };
-        use bevy::prelude::{App, Entity, KeyCode, With};
+        use bevy::{prelude::{App, Entity, KeyCode, With}, input::ButtonState, time::TimePlugin};
 
         macro_rules! get_entities {
             ($app: ident, $Q: tt, $F: ident) => {{
@@ -400,7 +407,7 @@ s"#;
         pub fn release_keyboard_key(app: &mut App, code: KeyCode) {
             use bevy::{
                 ecs::event::Events,
-                input::{keyboard::KeyboardInput, ElementState},
+                input::{keyboard::KeyboardInput},
             };
 
             let world = &mut app.world;
@@ -408,7 +415,7 @@ s"#;
             keyboard_input.send(KeyboardInput {
                 scan_code: 0,
                 key_code: Some(code),
-                state: ElementState::Released,
+                state: ButtonState::Released,
             });
         }
 
@@ -463,13 +470,14 @@ s"#;
             app.insert_resource(log_settings);
 
             app.add_plugin(CorePlugin::default());
+            app.add_plugin(TimePlugin::default());
             app.add_plugin(TransformPlugin::default());
             app.add_plugin(HierarchyPlugin::default());
             // app.add_plugin(bevy_diagnostic::DiagnosticsPlugin::default());
             app.add_plugin(InputPlugin::default());
             app.add_plugin(WindowPlugin {
-                add_primary_window: true,
-                exit_on_close: false,
+                // add_primary_window: true,
+                // exit_on_close: false,
             });
             app.add_plugin(AssetPlugin::default());
             // app.add_plugin(DebugAssetServerPlugin::default());

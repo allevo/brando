@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy::{
-    input::{keyboard::KeyboardInput, ElementState},
+    input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
 use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
@@ -62,11 +62,11 @@ fn switch_edit_mode(
     if let Some(e) = keyboard_input_events
         .iter()
         .filter_map(|e| match (e.state, e.key_code) {
-            (ElementState::Released, Some(KeyCode::S)) => Some(EditMode::Street),
-            (ElementState::Released, Some(KeyCode::G)) => Some(EditMode::Garden),
-            (ElementState::Released, Some(KeyCode::H)) => Some(EditMode::House),
-            (ElementState::Released, Some(KeyCode::O)) => Some(EditMode::Office),
-            (ElementState::Released, Some(KeyCode::Escape)) => Some(EditMode::None),
+            (ButtonState::Released, Some(KeyCode::S)) => Some(EditMode::Street),
+            (ButtonState::Released, Some(KeyCode::G)) => Some(EditMode::Garden),
+            (ButtonState::Released, Some(KeyCode::H)) => Some(EditMode::House),
+            (ButtonState::Released, Some(KeyCode::O)) => Some(EditMode::Office),
+            (ButtonState::Released, Some(KeyCode::Escape)) => Some(EditMode::None),
             _ => None,
         })
         .next()
