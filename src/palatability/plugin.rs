@@ -4,10 +4,11 @@ use bevy::prelude::*;
 
 use crate::building::Building;
 use crate::common::configuration::Configuration;
-use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
+
 use crate::GameTick;
 
 use crate::building::plugin::BuildingCreatedEvent;
+use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
 
 pub use self::events::*;
 
@@ -22,6 +23,7 @@ impl Plugin for PalatabilityPlugin {
 
         app.insert_resource(palatability)
             .add_event::<MoreInhabitantsNeeded>()
+            .add_event::<MoreWorkersNeeded>()
             .add_system_to_stage(CoreStage::Last, increment_palatabilities)
             .add_system_to_stage(CoreStage::PostUpdate, habit_house)
             .add_system(try_spawn_inhabitants)
@@ -43,35 +45,47 @@ fn habit_house(
     mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHomeEvent>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
-    let count: u8 = inhabitant_arrived_writer.iter().map(|a| a.count).sum();
-    if count == 0 {
+    let inhabitants: Vec<_> = inhabitant_arrived_writer
+        .iter()
+        .flat_map(|a| a.inhabitants_entities.iter())
+        .map(|e| (*e).to_bits())
+        .collect();
+    if inhabitants.is_empty() {
         return;
     }
 
-    palatability.increment_unemployed_inhabitants(count as i32);
-    palatability.increment_vacant_inhabitants(-(count as i32));
+    palatability.increment_vacant_inhabitants(-(inhabitants.len() as i32));
+    palatability.add_unemployed_inhabitants(inhabitants);
 }
 
 fn try_spawn_inhabitants(
     mut game_tick: EventReader<GameTick>,
     mut palatability: ResMut<PalatabilityManager>,
     mut more_inhabitants_needed_writer: EventWriter<MoreInhabitantsNeeded>,
+    // mut more_workers_needed_writer: EventWriter<MoreWorkersNeeded>,
 ) {
     if game_tick.iter().count() == 0 {
         return;
     }
 
-    let inhabitants_count = palatability.get_inhabitants_to_spawn_and_increment_populations();
-    if inhabitants_count == 0 {
-        return;
+    let inhabitants_count = palatability.consume_inhabitants_to_spawn_and_increment_populations();
+    if inhabitants_count != 0 {
+        more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
+            count: inhabitants_count,
+        });
+
+        let population = palatability.total_populations();
+        info!("population count: {population:?}");
     }
 
-    more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
-        count: inhabitants_count,
-    });
-
-    let population = palatability.total_populations();
-    info!("population count: {population:?}");
+    /*
+    let workers = palatability.consume_workers_to_spawn();
+    if !workers.is_empty() {
+        more_workers_needed_writer.send(MoreWorkersNeeded {
+            workers: workers.into_iter().map(|id| Entity::from_bits(id)).collect(),
+        });
+    }
+    */
 }
 
 fn listen_building_created(
@@ -81,11 +95,13 @@ fn listen_building_created(
     for building_created in building_created_reader.iter() {
         match &building_created.building {
             Building::House(house) => {
+                // `current_residents` is always 0 here
                 let delta = house.resident_property.max_residents
                     - house.resident_property.current_residents;
                 palatability.increment_vacant_inhabitants(delta as i32);
             }
             Building::Office(office) => {
+                // `current_worker` is always 0 here
                 let delta = office.work_property.max_worker - office.work_property.current_worker;
                 palatability.increment_vacant_work(delta as i32);
             }
@@ -95,7 +111,15 @@ fn listen_building_created(
 }
 
 mod events {
+    use bevy::prelude::Entity;
+
+    use crate::common::position::Position;
+
     pub struct MoreInhabitantsNeeded {
         pub count: u8,
+    }
+
+    pub struct MoreWorkersNeeded {
+        pub workers: Vec<(Entity, Position)>,
     }
 }

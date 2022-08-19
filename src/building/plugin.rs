@@ -8,13 +8,15 @@ use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 
 use crate::{
     building::{
-        builder::BuildingBuilder, BuildRequest, Building, BuildingInConstruction, BuildingType, IntoBuilding,
+        builder::BuildingBuilder, BuildRequest, Building, BuildingType, BuildingUnderConstruction,
+        IntoBuilding,
     },
     common::{
+        configuration::Configuration,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, configuration::{Configuration},
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
     },
-    navigation::plugin::events::InhabitantArrivedAtHomeEvent,
+    navigation::plugin::events::{InhabitantArrivedAtHomeEvent, InhabitantFoundJobEvent},
     palatability::manager::PalatabilityManager,
     GameTick, PbrBundles,
 };
@@ -31,17 +33,21 @@ pub struct BuildingPlugin;
 impl Plugin for BuildingPlugin {
     fn build(&self, app: &mut App) {
         let configuration: &Arc<Configuration> = app.world.resource();
-        let brando = BuildingBuilder::new(configuration.clone());
+        let builder = BuildingBuilder::new(configuration.clone());
 
         app.insert_resource(EditMode::None)
-            .insert_resource(brando)
+            .insert_resource(builder)
             .add_event::<BuildingCreatedEvent>()
             .add_plugins(DefaultPickingPlugins)
-            .add_system_to_stage(CoreStage::PostUpdate, build_building)
+            .add_system_to_stage(CoreStage::PostUpdate, start_building_creation)
             .add_startup_system(setup)
             .add_system_to_stage(CoreStage::PostUpdate, switch_edit_mode)
-            .add_system_to_stage(CoreStage::PostUpdate, make_progress)
-            .add_system_to_stage(CoreStage::PostUpdate, habit_house);
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                make_progress_for_building_under_construction,
+            )
+            .add_system_to_stage(CoreStage::PostUpdate, habit_house)
+            .add_system_to_stage(CoreStage::PostUpdate, work_on_office);
     }
 }
 
@@ -77,14 +83,13 @@ fn switch_edit_mode(
 }
 
 /// Spawn entity with `BuildingInConstructionComponent`
-fn build_building(
+fn start_building_creation(
     mut events: EventReader<PickingEvent>,
-    planes: Query<&Transform, With<PlaneComponent>>,
+    planes: Query<&PlaneComponent>,
     edit_mode: Res<EditMode>,
     mut brando: ResMut<BuildingBuilder>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
-    configuration: Res<Arc<Configuration>>,
 ) {
     if *edit_mode == EditMode::None {
         return;
@@ -103,9 +108,8 @@ fn build_building(
         Some(entity) => entity,
     };
 
-    let transform = *planes.get(*entity).unwrap();
-
-    let position = convert_bevy_coords_into_position(&configuration, &transform.translation);
+    let position: &PlaneComponent = planes.get(*entity).unwrap();
+    let position = position.0;
 
     let building_type = match *edit_mode {
         EditMode::House => BuildingType::House,
@@ -118,7 +122,7 @@ fn build_building(
     info!("Building {:?} at {:?}", building_type, position);
 
     let request = BuildRequest::new(position, building_type);
-    let res = match brando.create_building(request) {
+    let building_under_construction = match brando.create_building(request) {
         Ok(res) => res,
         Err(s) => {
             error!("Error on creation building: {}", s);
@@ -128,7 +132,9 @@ fn build_building(
 
     commands
         .entity(*entity)
-        .insert(BuildingInConstructionComponent(res))
+        .insert(BuildingUnderConstructionComponent {
+            building_under_construction,
+        })
         .with_children(|parent| {
             let mut sprite = bundles.in_progress();
             sprite.transform.translation = Vec3::new(0., 0.0001, 0.);
@@ -136,13 +142,13 @@ fn build_building(
         });
 }
 
-/// Make BuildingInConstruction progress:
-/// - if the building is not constructored yet, stop
+/// Make BuildingInConstruction progress. Then:
+/// - if the building is not yet finished, stop
 /// - otherwise place the building
 /// NB: the progress is made if and only if there's sufficient palatability
-fn make_progress(
+fn make_progress_for_building_under_construction(
     events: EventReader<GameTick>,
-    mut buildings_in_progress: Query<(Entity, &mut BuildingInConstructionComponent)>,
+    mut buildings_in_progress: Query<(Entity, &mut BuildingUnderConstructionComponent)>,
     brando: Res<BuildingBuilder>,
     palatability: Res<PalatabilityManager>,
     mut commands: Commands,
@@ -162,51 +168,56 @@ fn make_progress(
     }
 
     for (entity, mut building) in buildings_in_progress.iter_mut() {
-        let position = &(building.0.request.position);
+        let position = building.building_under_construction.request.position;
 
         // TODO: generalize this
         // Currently we implement only a type of building that, to be built,
         // needs to have a proper palatability.
         // So, for the time being, an "if" is enough
-        if building.0.request.building_type == BuildingType::House {
-            let p = palatability.get_house_palatability(position);
-            // TODO: tag this entity in order to retry later
-            // If an house hasn't enough palatability, we retry again and again
-            // Probably this is not good at all: we can put a dedicated component to the entity
-            // in order to deselect it avoiding the reprocessing.
-            if !p.is_positive() {
-                debug!("house palatability: insufficient at ({position:?})");
-                continue;
+        match building.building_under_construction.request.building_type {
+            BuildingType::House => {
+                let p = palatability.get_house_palatability(&position);
+                // TODO: tag this entity in order to retry later
+                // If an house hasn't enough palatability, we retry again and again
+                // Probably this is not good at all: we can put a dedicated component to the entity
+                // in order to deselect it avoiding the reprocessing.
+                if !p.is_positive() {
+                    debug!("house palatability: insufficient at ({position:?})");
+                    continue;
+                }
             }
-        }
-        if building.0.request.building_type == BuildingType::Office {
-            let p = palatability.get_office_palatability(position);
-            // TODO: tag this entity in order to retry later
-            // If an house hasn't enough palatability, we retry again and again
-            // Probably this is not good at all: we can put a dedicated component to the entity
-            // in order to deselect it avoiding the reprocessing.
-            if !p.is_positive() {
-                debug!("office palatability: insufficient at ({position:?})");
-                continue;
+            BuildingType::Office => {
+                let p = palatability.get_office_palatability(&position);
+                // TODO: tag this entity in order to retry later
+                // If an house hasn't enough palatability, we retry again and again
+                // Probably this is not good at all: we can put a dedicated component to the entity
+                // in order to deselect it avoiding the reprocessing.
+                if !p.is_positive() {
+                    debug!("office palatability: insufficient at ({position:?})");
+                    continue;
+                }
             }
+            BuildingType::Garden | BuildingType::Street => {}
         }
 
-        let building_in_construction: &mut BuildingInConstruction = &mut building.0;
+        let building_under_construction: &mut BuildingUnderConstruction =
+            &mut building.building_under_construction;
 
         brando
-            .make_progress(building_in_construction)
+            .make_progress(building_under_construction)
             .expect("make progress never fails");
 
-        if !building_in_construction.is_completed() {
+        if !building_under_construction.is_completed() {
             continue;
         }
 
         info!(
             "{:?} completed at {:?}",
-            building_in_construction.request.building_type, building_in_construction.request.position,
+            building_under_construction.request.building_type,
+            building_under_construction.request.position,
         );
 
-        let building_type = &building_in_construction.request.building_type;
+        let building_type = &building_under_construction.request.building_type;
         let bundle = match building_type {
             BuildingType::House => bundles.house(),
             BuildingType::Garden => bundles.garden(),
@@ -217,7 +228,7 @@ fn make_progress(
         let mut command = commands.entity(entity);
         command.despawn_descendants();
         command
-            .remove::<BuildingInConstructionComponent>()
+            .remove::<BuildingUnderConstructionComponent>()
             .with_children(|parent| {
                 parent.spawn_bundle(bundle);
             });
@@ -227,30 +238,44 @@ fn make_progress(
         // on the BuildingType enumeration growing.
         let entity = match building_type {
             BuildingType::House => command
-                .insert_bundle((HouseComponent(building_in_construction.into_building(&*configuration).unwrap()),))
+                .insert_bundle((HouseComponent(
+                    building_under_construction
+                        .into_building(&configuration)
+                        .unwrap(),
+                ),))
                 .id(),
             BuildingType::Garden => command
                 .insert(GardenComponent(
-                    building_in_construction.into_building(&*configuration).unwrap(),
+                    building_under_construction
+                        .into_building(&configuration)
+                        .unwrap(),
                 ))
                 .id(),
             BuildingType::Street => command
                 .insert(StreetComponent(
-                    building_in_construction.into_building(&*configuration).unwrap(),
+                    building_under_construction
+                        .into_building(&configuration)
+                        .unwrap(),
                 ))
                 .id(),
             BuildingType::Office => command
                 .insert_bundle((OfficeComponent(
-                    building_in_construction.into_building(&*configuration).unwrap(),
+                    building_under_construction
+                        .into_building(&configuration)
+                        .unwrap(),
                 ),))
                 .id(),
         };
 
-        let building: Building = building_in_construction
-            .into_building(&*configuration)
+        let building: Building = building_under_construction
+            .into_building(&configuration)
             .expect("Something goes wrong on building creation");
 
-        building_created_writer.send(BuildingCreatedEvent { building, entity });
+        building_created_writer.send(BuildingCreatedEvent {
+            building,
+            building_entity: entity,
+            position,
+        });
     }
 }
 
@@ -261,7 +286,7 @@ fn habit_house(
     mut inhabitant_arrived_reader: EventReader<InhabitantArrivedAtHomeEvent>,
 ) {
     for arrived in inhabitant_arrived_reader.iter() {
-        let mut hc = match houses.get_mut(arrived.entity) {
+        let mut hc = match houses.get_mut(arrived.building_entity) {
             Ok(c) => c,
             Err(e) => {
                 error!("error on getting house component {e:?}");
@@ -270,8 +295,29 @@ fn habit_house(
         };
 
         brando
-            .go_to_live_home(&mut hc.0, arrived.count)
+            .go_to_live_home(&mut hc.0, arrived.inhabitants_entities.len())
             .expect("error on updating house property");
+    }
+}
+
+/// marks the office as fulfilled
+fn work_on_office(
+    mut offices: Query<&mut OfficeComponent>,
+    brando: Res<BuildingBuilder>,
+    mut inhabitant_find_job_reader: EventReader<InhabitantFoundJobEvent>,
+) {
+    for arrived in inhabitant_find_job_reader.iter() {
+        let mut hc = match offices.get_mut(arrived.building_entity) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("error on getting house component {e:?}");
+                continue;
+            }
+        };
+
+        brando
+            .job_found(&mut hc.0, arrived.workers_entities.len())
+            .expect("error on updating office property");
     }
 }
 
@@ -287,6 +333,8 @@ fn setup(
         .collect();
 
     for translation in grid_positions {
+        let position = convert_bevy_coords_into_position(&configuration, &translation);
+
         let transform = Transform::from_translation(translation);
         commands
             .spawn_bundle(PbrBundle {
@@ -297,29 +345,33 @@ fn setup(
                 transform,
                 ..default()
             })
-            .insert(PlaneComponent)
+            .insert(PlaneComponent(position))
             .insert_bundle(PickableBundle::default());
     }
 }
 
 mod events {
-    use crate::building::Building;
+    use crate::{building::Building, common::position::Position};
     use bevy::prelude::{Component, Entity};
 
     #[derive(Component)]
     pub struct BuildingCreatedEvent {
+        pub position: Position,
         pub building: Building,
-        pub entity: Entity,
+        pub building_entity: Entity,
     }
 }
 
 mod components {
     use bevy::prelude::Component;
 
-    use crate::building::{BuildingInConstruction, Garden, House, Office, Street};
+    use crate::{
+        building::{BuildingUnderConstruction, Garden, House, Office, Street},
+        common::position::Position,
+    };
 
     #[derive(Component, Debug)]
-    pub struct PlaneComponent;
+    pub struct PlaneComponent(pub Position);
 
     #[derive(Component)]
     pub struct HouseComponent(pub House);
@@ -332,5 +384,7 @@ mod components {
     pub struct OfficeComponent(pub Office);
 
     #[derive(Component)]
-    pub struct BuildingInConstructionComponent(pub BuildingInConstruction);
+    pub struct BuildingUnderConstructionComponent {
+        pub building_under_construction: BuildingUnderConstruction,
+    }
 }

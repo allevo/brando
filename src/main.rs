@@ -7,7 +7,7 @@ mod palatability;
 
 use std::{collections::HashSet, sync::Arc};
 
-use bevy::{input::keyboard::KeyboardInput, render::camera::ScalingMode, time::Time, prelude::*};
+use bevy::{input::keyboard::KeyboardInput, prelude::*, render::camera::ScalingMode, time::Time};
 use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
@@ -178,7 +178,7 @@ fn move_camera_on_keyboard_input(
     };
     if delta != (0., 0.) {
         let mut camera = cameras.single_mut();
-        (*camera).translation += Vec3::new(delta.0, 0., delta.1) * timer.delta_seconds();
+        camera.translation += Vec3::new(delta.0, 0., delta.1) * timer.delta_seconds();
     }
 }
 
@@ -192,7 +192,8 @@ fn setup(mut commands: Commands) {
             scale: 3.0,
             scaling_mode: ScalingMode::FixedVertical(2.),
             ..default()
-        }.into(),
+        }
+        .into(),
         ..default()
     };
     camera.transform = Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y);
@@ -241,39 +242,46 @@ mod tests {
     fn test_main() {
         let mut app = create_app();
 
-        let entities = get_entities!(app, Entity, PlaneComponent);
-        let house_entity = entities.get(position_to_index(&app, 1, 2)).unwrap();
-        let street_entity_1 = entities.get(position_to_index(&app, 0, 0)).unwrap();
-        let street_entity_2 = entities.get(position_to_index(&app, 0, 1)).unwrap();
-        let street_entity_3 = entities.get(position_to_index(&app, 0, 2)).unwrap();
+        let entities = get_entities!(app, (Entity, &PlaneComponent), PlaneComponent);
+        let house_entity = get_at(&entities, 1, 2);
+        let street_entity_1 = get_at(&entities, 0, 0);
+        let street_entity_2 = get_at(&entities, 0, 1);
+        let street_entity_3 = get_at(&entities, 0, 2);
 
-        let house_entity_2 = entities.get(position_to_index(&app, 1, 1)).unwrap();
-        let garden_entity = entities.get(position_to_index(&app, 2, 1)).unwrap();
+        let house_entity_2 = get_at(&entities, 1, 1);
+        let garden_entity = get_at(&entities, 2, 1);
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
-        select_plane(&mut app, house_entity);
-        run(&mut app, 20);
+        select_plane(&mut app, &house_entity);
+        run(&mut app, 1);
 
         release_keyboard_key(&mut app, KeyCode::S);
         run(&mut app, 1);
-        select_plane(&mut app, street_entity_1);
+        select_plane(&mut app, &street_entity_1);
         run(&mut app, 1);
-        select_plane(&mut app, street_entity_2);
+        select_plane(&mut app, &street_entity_2);
         run(&mut app, 1);
-        select_plane(&mut app, street_entity_3);
+        select_plane(&mut app, &street_entity_3);
         run(&mut app, 1);
 
-        run(&mut app, 40);
+        run(&mut app, 50);
 
         // Home is fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 8);
+        let houses: Vec<(Entity, &HouseComponent)> =
+            get_entities!(app, (Entity, &HouseComponent), HouseComponent);
+        let house: &House = &houses.get(0).unwrap().1 .0;
+        assert_eq!(
+            house.resident_property.current_residents,
+            house.resident_property.max_residents
+        );
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
-        select_plane(&mut app, house_entity_2);
-        run(&mut app, 20);
+        select_plane(&mut app, &house_entity_2);
+        run(&mut app, 50);
 
         // palatability is not sufficient, so population count doesn't change
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
@@ -281,14 +289,14 @@ mod tests {
 
         release_keyboard_key(&mut app, KeyCode::G);
         run(&mut app, 1);
-        select_plane(&mut app, garden_entity);
-        run(&mut app, 40);
+        select_plane(&mut app, &garden_entity);
+        run(&mut app, 50);
 
         // Homes are fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 16);
 
-        // Check houses
+        // Check houses: both are fulfilled
         let houses: Vec<(Entity, &HouseComponent)> =
             get_entities!(app, (Entity, &HouseComponent), HouseComponent);
         let house: &House = &houses.get(0).unwrap().1 .0;
@@ -302,10 +310,10 @@ mod tests {
             house.resident_property.max_residents
         );
 
-        run(&mut app, 10);
+        run(&mut app, 50);
 
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
-        assert_eq!(16, palatability_manager.unemployed_inhabitants());
+        assert_eq!(16, palatability_manager.unemployed_inhabitants().len());
         assert_eq!(0, palatability_manager.vacant_work());
         assert_eq!(0, palatability_manager.vacant_inhabitants());
     }
@@ -322,12 +330,16 @@ s
 s"#;
         fill_map(&mut app, map, 8);
 
-        let entities = get_entities!(app, Entity, PlaneComponent);
+        run(&mut app, 50);
 
-        let office_entity = entities.get(position_to_index(&app, 3, 0)).unwrap();
+        let entities = get_entities!(app, (Entity, &PlaneComponent), PlaneComponent);
+
+        let office_entity = get_at(&entities, 3, 1);
         release_keyboard_key(&mut app, KeyCode::O);
         run(&mut app, 1);
-        select_plane(&mut app, office_entity);
+        select_plane(&mut app, &office_entity);
+        run(&mut app, 1);
+        release_keyboard_key(&mut app, KeyCode::O);
         run(&mut app, 1);
 
         run(&mut app, 50);
@@ -346,13 +358,12 @@ s"#;
     fn test_position_is_already_occupied() {
         let mut app = create_app();
 
-        let entities = get_entities!(app, Entity, PlaneComponent);
-        let position = position_to_index(&app, 1, 2);
-        let house_entity = entities.get(position).unwrap();
+        let entities = get_entities!(app, (Entity, &PlaneComponent), PlaneComponent);
+        let house_entity = get_at(&entities, 1, 2);
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
-        select_plane(&mut app, house_entity);
+        select_plane(&mut app, &house_entity);
         run(&mut app, 20);
 
         let houses = get_entities!(app, Entity, HouseComponent);
@@ -360,7 +371,7 @@ s"#;
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
-        select_plane(&mut app, house_entity);
+        select_plane(&mut app, &house_entity);
         run(&mut app, 20);
 
         let houses = get_entities!(app, Entity, HouseComponent);
@@ -371,25 +382,42 @@ s"#;
         use std::sync::Arc;
 
         use crate::{
-            building::plugin::PlaneComponent,
-            palatability::manager::PalatabilityManager, GameTick, MainPlugin, common::configuration::{Configuration, CONFIGURATION},
+            building::plugin::PlaneComponent, common::configuration::CONFIGURATION,
+            palatability::manager::PalatabilityManager, GameTick, MainPlugin,
         };
-        use bevy::{prelude::{App, Entity, KeyCode, With}, input::ButtonState, time::TimePlugin};
+        use bevy::{
+            input::ButtonState,
+            prelude::{App, Entity, KeyCode, With},
+            time::TimePlugin,
+        };
 
         macro_rules! get_entities {
             ($app: ident, $Q: tt, $F: ident) => {{
                 let world = &mut $app.world;
                 let mut query = world.query_filtered::<$Q, With<$F>>();
                 let query = query.iter(world);
-                query.collect::<Vec<$Q>>()
+                let entities = query.collect::<Vec<$Q>>();
+
+                entities
             }};
         }
         pub(crate) use get_entities;
 
+        /*
         #[inline]
         pub fn position_to_index(app: &App, x: usize, y: usize) -> usize {
             let configuration = app.world.get_resource::<Arc<Configuration>>().unwrap();
             configuration.game.width_table * x + y
+        }
+        */
+
+        #[inline]
+        pub fn get_at(entities: &Vec<(Entity, &PlaneComponent)>, x: i64, y: i64) -> Entity {
+            *entities
+                .iter()
+                .find(|(_, p)| p.0.x == x && p.0.y == y)
+                .map(|(e, _)| e)
+                .unwrap()
         }
 
         pub fn run(app: &mut App, run: usize) {
@@ -405,10 +433,7 @@ s"#;
         }
 
         pub fn release_keyboard_key(app: &mut App, code: KeyCode) {
-            use bevy::{
-                ecs::event::Events,
-                input::{keyboard::KeyboardInput},
-            };
+            use bevy::{ecs::event::Events, input::keyboard::KeyboardInput};
 
             let world = &mut app.world;
             let mut keyboard_input = world.get_resource_mut::<Events<KeyboardInput>>().unwrap();
@@ -511,11 +536,10 @@ s"#;
         }
 
         pub fn fill_map(app: &mut App, map: &str, expected_population: u64) {
-            let entities = get_entities!(app, Entity, PlaneComponent);
-
             for (x, line) in map.lines().skip(1).enumerate() {
                 for (y, c) in line.chars().enumerate() {
-                    let house_entity = entities.get(position_to_index(&app, x, y)).unwrap();
+                    let entities = get_entities!(app, (Entity, &PlaneComponent), PlaneComponent);
+                    let entity = get_at(&entities, x as i64, y as i64);
                     match c {
                         's' => release_keyboard_key(app, KeyCode::S),
                         'g' => release_keyboard_key(app, KeyCode::G),
@@ -524,7 +548,7 @@ s"#;
                         _ => continue,
                     }
                     run(app, 1);
-                    select_plane(app, house_entity);
+                    select_plane(app, &entity);
                     run(app, 1);
                 }
             }

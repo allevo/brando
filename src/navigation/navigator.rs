@@ -7,20 +7,17 @@ use tracing::info;
 
 use crate::{
     building::House,
-    common::{configuration::Configuration, position::Position},
+    common::{position::Position},
 };
 
 pub struct Navigator {
-    start_point: Position,
     positions_to_add: HashSet<Position>,
     nodes: HashMap<Position, HashSet<Position>>,
 }
 impl Navigator {
-    pub(super) fn new(start_point: Position) -> Self {
-        let mut nodes: HashMap<Position, HashSet<Position>> = Default::default();
-        nodes.entry(start_point).or_default();
+    pub(super) fn new() -> Self {
+        let nodes: HashMap<Position, HashSet<Position>> = Default::default();
         Self {
-            start_point,
             positions_to_add: Default::default(),
             nodes,
         }
@@ -30,18 +27,23 @@ impl Navigator {
         self.positions_to_add.insert(position);
     }
 
-    pub fn get_navigation_descriptor(&self, end: Position) -> Option<NavigationDescriptor> {
+    pub fn get_navigation_descriptor(
+        &self,
+        start_point: &Position,
+        end: Position,
+    ) -> Option<NavigationDescriptor> {
         use pathfinding::prelude::astar;
 
         let neighbors: HashSet<_> = end.neighbors().collect();
 
         let result = astar(
-            &self.start_point,
+            start_point,
             |p| {
-                self.nodes[p]
-                    .iter()
-                    .map(|p| (*p, 1_i64))
-                    .collect::<Vec<_>>()
+                let neighbors = match self.nodes.get(p) {
+                    None => return vec![],
+                    Some(n) => n,
+                };
+                neighbors.iter().map(|p| (*p, 1_i64)).collect::<Vec<_>>()
             },
             |p| {
                 let delta_x = if p.x > end.x {
@@ -103,21 +105,6 @@ impl Navigator {
 
         tot - self.positions_to_add.len()
     }
-
-    pub(super) fn make_progress(
-        &self,
-        navigator_descriptor: &mut NavigationDescriptor,
-    ) -> Option<Position> {
-        navigator_descriptor.path.pop()
-    }
-
-    pub(super) fn calculate_delta(&self, requested: u8, configuration: &Configuration) -> u8 {
-        configuration
-            .buildings
-            .house
-            .max_inhabitant_per_travel
-            .min(requested)
-    }
 }
 
 pub trait Reachable {
@@ -139,12 +126,6 @@ pub struct NavigationDescriptor {
     path: Vec<Position>,
 }
 
-impl NavigationDescriptor {
-    pub fn is_completed(&self) -> bool {
-        self.path.is_empty()
-    }
-}
-
 impl Display for NavigationDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "path length {}", self.path.len())
@@ -153,7 +134,7 @@ impl Display for NavigationDescriptor {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::configuration::CONFIGURATION;
+    
 
     use super::*;
 
@@ -166,49 +147,61 @@ mod tests {
 
     #[test]
     fn test_navigate_ok() {
-        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+        let mut navigator = Navigator::new();
+        navigator.add_node(Position { x: 0, y: 0 });
         navigator.add_node(Position { x: 1, y: 0 });
         navigator.add_node(Position { x: 2, y: 0 });
         navigator.add_node(Position { x: 3, y: 0 });
+        navigator.add_node(Position { x: 3, y: 1 });
+        navigator.add_node(Position { x: 3, y: 2 });
+        navigator.add_node(Position { x: 3, y: 3 });
+        navigator.add_node(Position { x: 2, y: 3 });
+        navigator.add_node(Position { x: 1, y: 3 });
+        navigator.add_node(Position { x: 0, y: 3 });
 
         navigator.rebuild();
 
-        let mut desc = navigator
-            .get_navigation_descriptor(Position { x: 3, y: 0 })
-            .unwrap();
+        let desc =
+            navigator.get_navigation_descriptor(&Position { x: 0, y: 0 }, Position { x: 0, y: 3 });
 
-        assert!(!desc.is_completed());
-
-        navigator.make_progress(&mut desc);
-        assert!(!desc.is_completed());
-        navigator.make_progress(&mut desc);
-        assert!(!desc.is_completed());
-        navigator.make_progress(&mut desc);
-        assert!(!desc.is_completed());
-        navigator.make_progress(&mut desc);
-        assert!(desc.is_completed());
-
-        navigator.make_progress(&mut desc);
-        assert!(desc.is_completed());
+        assert_eq!(desc.is_some(), true);
     }
 
     #[test]
-    fn test_navigate_ko() {
-        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+    fn test_navigate_ko_end_point() {
+        let mut navigator = Navigator::new();
+        navigator.add_node(Position { x: 0, y: 0 });
         navigator.add_node(Position { x: 1, y: 0 });
         navigator.add_node(Position { x: 2, y: 0 });
         navigator.add_node(Position { x: 3, y: 0 });
 
         navigator.rebuild();
 
-        let desc = navigator.get_navigation_descriptor(Position { x: 42, y: 0 });
+        let desc =
+            navigator.get_navigation_descriptor(&Position { x: 0, y: 0 }, Position { x: 42, y: 0 });
+
+        assert_eq!(desc, None);
+    }
+
+    #[test]
+    fn test_navigate_ko_stating_point() {
+        let mut navigator = Navigator::new();
+        navigator.add_node(Position { x: 0, y: 0 });
+        navigator.add_node(Position { x: 1, y: 0 });
+        navigator.add_node(Position { x: 2, y: 0 });
+        navigator.add_node(Position { x: 3, y: 0 });
+
+        navigator.rebuild();
+
+        let desc =
+            navigator.get_navigation_descriptor(&Position { x: 42, y: 0 }, Position { x: 0, y: 0 });
 
         assert_eq!(desc, None);
     }
 
     #[test]
     fn test_build() {
-        let mut navigator = Navigator::new(Position { x: 0, y: 0 });
+        let mut navigator = Navigator::new();
         navigator.add_node(Position { x: 1, y: 0 });
         navigator.add_node(Position { x: 2, y: 0 });
         navigator.add_node(Position { x: 3, y: 0 });
@@ -217,17 +210,5 @@ mod tests {
         let resolved = navigator.rebuild();
 
         assert_eq!(resolved, 3);
-    }
-
-    #[test]
-    fn test_calculate_delta() {
-        let navigator = Navigator::new(Position { x: 0, y: 0 });
-
-        let delta = navigator.calculate_delta(5, &CONFIGURATION);
-        assert_eq!(delta, 5);
-        let delta = navigator.calculate_delta(6, &CONFIGURATION);
-        assert_eq!(delta, 6);
-        let delta = navigator.calculate_delta(10, &CONFIGURATION);
-        assert_eq!(delta, 6);
     }
 }

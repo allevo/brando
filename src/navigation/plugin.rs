@@ -1,17 +1,19 @@
-use std::sync::Arc;
+
 
 use bevy::prelude::*;
 
 use crate::{
     building::Building,
-    common::{position::Position, configuration::Configuration},
+    common::{position::Position},
     palatability::plugin::MoreInhabitantsNeeded,
-    GameTick,
 };
 
 use crate::building::plugin::BuildingCreatedEvent;
 
-use super::navigator::{NavigationDescriptor, Navigator};
+use super::{
+    entity_storage::{AssignmentResult, BuildingNeedToBeFulfilled, EntityStorage},
+    navigator::Navigator,
+};
 
 #[cfg(test)]
 pub use components::*;
@@ -21,194 +23,96 @@ use components::*;
 
 use events::*;
 
-#[derive(Default)]
-struct WaitingForStorage {
-    house: Vec<Entity>,
-}
-
 pub struct NavigatorPlugin;
 
 impl Plugin for NavigatorPlugin {
     fn build(&self, app: &mut App) {
-        let navigator = Navigator::new(Position { x: 0, y: 0 });
+        let navigator = Navigator::new();
+
         app.insert_resource(navigator)
             .add_event::<InhabitantArrivedAtHomeEvent>()
+            .add_event::<InhabitantFoundJobEvent>()
             // Probably we would like to create Vecs with already-preallocated capacity
-            .insert_resource(WaitingForStorage::default())
-            .add_system(new_building_created)
-            .add_system(spawn_inhabitants)
-            .add_system_to_stage(CoreStage::Last, add_node)
-            .add_system_to_stage(CoreStage::PreUpdate, handle_waiting_for_inhabitants)
-            .add_system_to_stage(CoreStage::PreUpdate, move_inhabitants_to_house);
+            .insert_resource(EntityStorage::default())
+            // .add_system(new_building_created)
+            .add_system(expand_navigator_graph)
+            .add_system(create_inhabitants)
+            .add_system(find_houses_for_inhabitants)
+            .add_system(find_job_for_inhabitants);
+        // .add_system(tag_inhabitants_for_waiting_for_work)
+        // .add_system(assign_waiting_for)
+        // .add_system_to_stage(CoreStage::Last, add_node)
+        // .add_system_to_stage(CoreStage::PreUpdate, handle_waiting_for_inhabitants)
+        // .add_system_to_stage(CoreStage::PreUpdate, move_inhabitants_to_target);
     }
 }
 
-/// Flags buildings are receivers or donors of something
-fn new_building_created(
+fn expand_navigator_graph(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
     mut commands: Commands,
+    mut navigator: ResMut<Navigator>,
+    mut entity_storage: ResMut<EntityStorage>,
 ) {
+    let mut need_to_rebuild = false;
     for created_building in building_created_reader.iter() {
+        let building_position: &Position = &created_building.position;
+        let building_entity: Entity = created_building.building_entity;
+
         match &created_building.building {
             Building::House(house) => {
-                let desired_residents = house.resident_property.max_residents;
-                let position = house.position;
+                commands
+                    .entity(building_entity)
+                    .insert(TargetComponent {
+                        target_position: *building_position,
+                        target_type: TargetType::HOUSE,
+                    })
+                    .insert(TargetTypeHouse);
 
-                let mut command = commands.entity(created_building.entity);
-                command.insert(HouseWaitingForInhabitantsComponent {
-                    count: desired_residents,
-                    position,
-                });
+                info!("Register house");
+                entity_storage.register_house(BuildingNeedToBeFulfilled::new(
+                    building_entity,
+                    *building_position,
+                    house.resident_property.max_residents,
+                ));
             }
             Building::Office(office) => {
-                let desired_workers = office.work_property.max_worker;
-                let position = office.position;
-                let mut command = commands.entity(created_building.entity);
-                command.insert(OfficeWaitingForWorkersComponent {
-                    count: desired_workers,
-                    position,
-                });
+                commands
+                    .entity(building_entity)
+                    .insert(TargetComponent {
+                        target_position: *building_position,
+                        target_type: TargetType::OFFICE,
+                    })
+                    .insert(TargetTypeOffice);
+
+                info!("Register office");
+                entity_storage.register_office(BuildingNeedToBeFulfilled::new(
+                    building_entity,
+                    *building_position,
+                    office.work_property.max_worker,
+                ));
             }
-            Building::Garden(_g) => {}
-            Building::Street(_s) => {}
+            Building::Street(_) => {
+                info!("adding node at {:?}", building_position);
+                navigator.add_node(*building_position);
+
+                need_to_rebuild = true;
+            }
+            Building::Garden(_) => {}
         }
+    }
+
+    if need_to_rebuild {
+        // TODO not here
+        // probably this place is not so convenient and also not so convenient rebuild
+        // every time the graph.
+        navigator.rebuild();
     }
 }
 
-/// Try to find a good path for not-full houses
-fn handle_waiting_for_inhabitants(
-    mut game_events: EventReader<GameTick>,
+/// Create inhabitants
+fn create_inhabitants(
     mut commands: Commands,
-    navigator: Res<Navigator>,
-    mut waiting_for_storage: ResMut<WaitingForStorage>,
-    mut waiting_for_inhabitants_query: Query<
-        (Entity, &mut HouseWaitingForInhabitantsComponent),
-        (Without<NavigationDescriptorComponent>,),
-    >,
-    configuration: Res<Arc<Configuration>>,
-) {
-    if game_events.iter().count() == 0 {
-        return;
-    }
-
-    for (entity, mut waiting_for_inhabitants) in waiting_for_inhabitants_query.iter_mut() {
-        if waiting_for_inhabitants.count == 0 {
-            let mut command = commands.entity(entity);
-            command.remove::<HouseWaitingForInhabitantsComponent>();
-            continue;
-        }
-
-        let position = waiting_for_inhabitants.position;
-        let navigation_descriptor = match navigator.get_navigation_descriptor(position) {
-            // TODO consider to have a try not immediately
-            // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
-            // every frame. So probably the best thing todo is to remove the component,
-            // adding a dedicated new one that allow us to "wait" for a while before retrying
-            None => continue,
-            Some(nd) => nd,
-        };
-
-        // Delta cannot be negative (and probably neither zero)
-        // We would like to force it to be `u8` forcing the type here
-        // We need also be carefull about how much inhabitant we have available here!!
-        let delta: u8 = navigator
-            .calculate_delta(waiting_for_inhabitants.count, &configuration)
-            .min(waiting_for_storage.house.len() as u8);
-        if delta == 0 {
-            warn!("The calculated delta is 0: skipped");
-            continue;
-        }
-
-        info!("path ({navigation_descriptor}) found for house (id={entity:?}) at {position:?} for {delta} people");
-
-        waiting_for_inhabitants.count -= delta;
-
-        // Consume inhabitants
-        let inhabitants_to_move: Vec<_> =
-            waiting_for_storage.house.drain(0..delta as usize).collect();
-        for inhabitant_to_move in &inhabitants_to_move {
-            commands
-                .entity(*inhabitant_to_move)
-                .remove::<WaitingForHomeComponent>();
-        }
-
-        let mut command = commands.entity(entity);
-        command.insert(NavigationDescriptorComponent(
-            navigation_descriptor,
-            delta,
-            inhabitants_to_move,
-        ));
-    }
-}
-
-/// Track progress for inhabitants that have a house as target
-fn move_inhabitants_to_house(
-    mut game_tick: EventReader<GameTick>,
-    mut commands: Commands,
-    navigator: Res<Navigator>,
-    mut waiting_for_inhabitants_query: Query<(Entity, &mut NavigationDescriptorComponent)>,
-    mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHomeEvent>,
-) {
-    if game_tick.iter().count() == 0 {
-        return;
-    }
-
-    for (entity, mut navigation_descriptor_component) in waiting_for_inhabitants_query.iter_mut() {
-        let navigation_descriptor: &mut NavigationDescriptor =
-            &mut navigation_descriptor_component.0;
-
-        // TODO Move inhabitants also
-        navigator.make_progress(navigation_descriptor);
-
-        if !navigation_descriptor.is_completed() {
-            continue;
-        }
-
-        info!("navigation_descriptor ends!");
-
-        commands
-            .entity(entity)
-            .remove::<NavigationDescriptorComponent>();
-
-        inhabitant_arrived_writer.send(InhabitantArrivedAtHomeEvent {
-            count: navigation_descriptor_component.1,
-            entity,
-        });
-
-        for inhabitant in &navigation_descriptor_component.2 {
-            commands.entity(*inhabitant).insert(WaitingForWorkComponent);
-        }
-    }
-}
-
-/// Add a node to the street graph
-fn add_node(
-    mut navigator: ResMut<Navigator>,
-    mut building_created_reader: EventReader<BuildingCreatedEvent>,
-) {
-    let streets_created = building_created_reader
-        .iter()
-        .filter(|bc| matches!(bc.building, Building::Street(_)));
-
-    for street_created in streets_created {
-        let position = street_created
-            .building
-            .position()
-            .expect("street has always position");
-        info!("adding node at {:?}", position);
-        navigator.add_node(position);
-    }
-
-    // TODO not here
-    // probably this place is not so convenient and also not so convenient rebuild
-    // every time the graph.
-    navigator.rebuild();
-}
-
-/// Spawn inhabitants that needs house
-fn spawn_inhabitants(
-    mut commands: Commands,
-    mut waiting_for_storage: ResMut<WaitingForStorage>,
+    mut entity_storage: ResMut<EntityStorage>,
     mut more_inhabitants_needed_reader: EventReader<MoreInhabitantsNeeded>,
 ) {
     let total: u32 = more_inhabitants_needed_reader
@@ -219,29 +123,124 @@ fn spawn_inhabitants(
         return;
     }
 
+    let position = Position { x: 0, y: 0 };
+
     for _ in 0..total {
         let entity = commands
             .spawn()
-            .insert(InhabitantComponent {
-                position: Position { x: 0, y: 0 },
-            })
-            .insert(WaitingForHomeComponent)
+            .insert(InhabitantComponent { position })
             .id();
-        waiting_for_storage.house.push(entity);
+
+        entity_storage.introduce_inhabitants(entity);
+    }
+}
+
+fn find_houses_for_inhabitants(
+    mut commands: Commands,
+    mut entity_storage: ResMut<EntityStorage>,
+    navigator: Res<Navigator>,
+    mut inhabitant_arrived_writer: EventWriter<InhabitantArrivedAtHomeEvent>,
+) {
+    let couples: Vec<AssignmentResult> = entity_storage.get_inhabitant_house_assignment();
+
+    if couples.is_empty() {
+        return;
     }
 
-    info!(
-        "waiting for house {} (newer: {total})",
-        waiting_for_storage.house.len()
-    );
+    info!("inhabitants-houses assignments {}", couples.len());
+
+    for couple in couples {
+        let navigation_descriptor =
+            match navigator.get_navigation_descriptor(&couple.from_position, couple.to_position) {
+                // TODO consider to have a try not immediately
+                // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
+                // every frame. So probably the best thing todo is to remove the component,
+                // adding a dedicated new one that allow us to "wait" for a while before retrying
+                None => {
+                    entity_storage.resign_assign_result(couple);
+                    continue;
+                }
+                Some(nd) => nd,
+            };
+
+        commands.entity(couple.from).insert(AssignedHouse {
+            house_entity: couple.to,
+            house_position: couple.to_position,
+            navigation_descriptor,
+        });
+
+        inhabitant_arrived_writer.send(InhabitantArrivedAtHomeEvent {
+            inhabitants_entities: vec![couple.from],
+            building_entity: couple.to,
+            house_position: couple.to_position,
+        });
+
+        commands.entity(couple.from).insert(WaitingForWorkComponent);
+
+        entity_storage.register_unemployee(couple.from);
+        entity_storage.set_inhabitant_house_position(couple.from, couple.to_position);
+    }
+}
+
+fn find_job_for_inhabitants(
+    mut commands: Commands,
+    mut entity_storage: ResMut<EntityStorage>,
+    navigator: Res<Navigator>,
+    mut inhabitant_found_job_writer: EventWriter<InhabitantFoundJobEvent>,
+) {
+    let couples: Vec<AssignmentResult> = entity_storage.get_inhabitant_job_assignment();
+
+    if couples.is_empty() {
+        return;
+    }
+
+    info!("inhabitants-office assignments {}", couples.len());
+
+    for couple in couples {
+        let navigation_descriptor =
+            match navigator.get_navigation_descriptor(&couple.from_position, couple.to_position) {
+                // TODO consider to have a try not immediately
+                // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
+                // every frame. So probably the best thing todo is to remove the component,
+                // adding a dedicated new one that allow us to "wait" for a while before retrying
+                None => {
+                    entity_storage.resign_assign_result(couple);
+                    continue;
+                }
+                Some(nd) => nd,
+            };
+
+        commands.entity(couple.from).insert(AssignedOffice {
+            office_entity: couple.to,
+            office_position: couple.to_position,
+            navigation_descriptor,
+        });
+
+        inhabitant_found_job_writer.send(InhabitantFoundJobEvent {
+            workers_entities: vec![couple.from],
+            building_entity: couple.to,
+        });
+
+        commands
+            .entity(couple.from)
+            .remove::<WaitingForWorkComponent>();
+    }
 }
 
 pub mod events {
     use bevy::prelude::Entity;
 
+    use crate::common::position::Position;
+
     pub struct InhabitantArrivedAtHomeEvent {
-        pub count: u8,
-        pub entity: Entity,
+        pub inhabitants_entities: Vec<Entity>,
+        pub building_entity: Entity,
+        pub house_position: Position,
+    }
+
+    pub struct InhabitantFoundJobEvent {
+        pub workers_entities: Vec<Entity>,
+        pub building_entity: Entity,
     }
 }
 
@@ -250,20 +249,43 @@ mod components {
 
     use crate::{common::position::Position, navigation::navigator::NavigationDescriptor};
 
-    #[derive(Component)]
-    pub struct HouseWaitingForInhabitantsComponent {
-        pub count: u8,
-        pub position: Position,
+    #[derive(Copy, Clone, Debug)]
+    pub enum TargetType {
+        OFFICE,
+        HOUSE,
+    }
+
+    #[derive(Component, Copy, Clone, Debug)]
+    pub struct TargetTypeOffice;
+
+    #[derive(Component, Copy, Clone, Debug)]
+    pub struct TargetTypeHouse;
+
+    #[derive(Component, Debug)]
+    pub struct InhabitantsAssignedComponent {
+        pub from: Vec<InhabitantAssigned>,
+    }
+
+    #[derive(Debug)]
+    pub struct InhabitantAssigned {
+        pub inhabitant: Entity,
+        pub origin_position: Position,
+    }
+
+    #[derive(Component, Debug)]
+    pub struct TargetComponent {
+        // pub needed_count: usize,
+        // pub origin_position: Position,
+        pub target_position: Position,
+        pub target_type: TargetType,
     }
 
     #[derive(Component)]
-    pub struct OfficeWaitingForWorkersComponent {
-        pub count: u8,
-        pub position: Position,
+    pub struct NavigationDescriptorComponent {
+        pub descriptor: NavigationDescriptor,
+        pub entities_to_move: Vec<Entity>,
+        pub target_type: TargetType,
     }
-
-    #[derive(Component)]
-    pub struct NavigationDescriptorComponent(pub NavigationDescriptor, pub u8, pub Vec<Entity>);
 
     #[derive(Component)]
     pub struct InhabitantComponent {
@@ -271,7 +293,22 @@ mod components {
     }
 
     #[derive(Component)]
-    pub struct WaitingForHomeComponent;
+    pub struct AssignedHouse {
+        pub house_entity: Entity,
+        pub house_position: Position,
+        pub navigation_descriptor: NavigationDescriptor,
+    }
+
+    #[derive(Component)]
+    pub struct AssignedOffice {
+        pub office_entity: Entity,
+        pub office_position: Position,
+        pub navigation_descriptor: NavigationDescriptor,
+    }
+
     #[derive(Component)]
     pub struct WaitingForWorkComponent;
+
+    #[derive(Component)]
+    pub struct MovableComponent;
 }

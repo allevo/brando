@@ -35,14 +35,14 @@ pub struct BuildingsConfiguration {
 
 #[derive(Debug, Clone)]
 pub struct HouseConfiguration {
-    pub max_residents: u8,
-    pub max_inhabitant_per_travel: u8,
+    pub max_residents: usize,
+    pub max_inhabitant_per_travel: usize,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }
 #[derive(Debug, Clone)]
 pub struct OfficeConfiguration {
-    pub max_worker: u8,
+    pub max_worker: usize,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
 }

@@ -1,5 +1,4 @@
-
-use crate::common::{position::Position, configuration::Configuration};
+use crate::common::{configuration::Configuration, position::Position};
 
 pub enum Building {
     House(House),
@@ -19,8 +18,8 @@ impl Building {
 }
 
 pub struct ResidentProperty {
-    pub current_residents: u8,
-    pub max_residents: u8,
+    pub current_residents: usize,
+    pub max_residents: usize,
 }
 
 pub struct House {
@@ -29,8 +28,8 @@ pub struct House {
 }
 
 pub struct WorkProperty {
-    pub current_worker: u8,
-    pub max_worker: u8,
+    pub current_worker: usize,
+    pub max_worker: usize,
 }
 
 pub struct Office {
@@ -67,12 +66,12 @@ impl BuildRequest {
 }
 
 #[derive(Clone)]
-pub struct BuildingInConstruction {
+pub struct BuildingUnderConstruction {
     pub request: BuildRequest,
     pub progress_status: ProgressStatus,
 }
 
-impl BuildingInConstruction {
+impl BuildingUnderConstruction {
     #[inline]
     pub fn is_completed(&self) -> bool {
         self.progress_status.is_completed()
@@ -83,8 +82,7 @@ pub trait IntoBuilding<T> {
     fn into_building(&self, configuration: &Configuration) -> Result<T, &'static str>;
 }
 
-
-impl IntoBuilding<House> for BuildingInConstruction {
+impl IntoBuilding<House> for BuildingUnderConstruction {
     fn into_building(&self, configuration: &Configuration) -> Result<House, &'static str> {
         match self.request.building_type {
             BuildingType::House => Ok(House {
@@ -95,9 +93,10 @@ impl IntoBuilding<House> for BuildingInConstruction {
                 },
             }),
             _ => Err("NO"),
-        }    }
+        }
+    }
 }
-impl IntoBuilding<Office> for BuildingInConstruction {
+impl IntoBuilding<Office> for BuildingUnderConstruction {
     fn into_building(&self, configuration: &Configuration) -> Result<Office, &'static str> {
         match self.request.building_type {
             BuildingType::Office => Ok(Office {
@@ -111,7 +110,7 @@ impl IntoBuilding<Office> for BuildingInConstruction {
         }
     }
 }
-impl IntoBuilding<Street> for BuildingInConstruction {
+impl IntoBuilding<Street> for BuildingUnderConstruction {
     fn into_building(&self, _configuration: &Configuration) -> Result<Street, &'static str> {
         match self.request.building_type {
             BuildingType::Street => Ok(Street {
@@ -121,7 +120,7 @@ impl IntoBuilding<Street> for BuildingInConstruction {
         }
     }
 }
-impl IntoBuilding<Garden> for BuildingInConstruction {
+impl IntoBuilding<Garden> for BuildingUnderConstruction {
     fn into_building(&self, _configuration: &Configuration) -> Result<Garden, &'static str> {
         match self.request.building_type {
             BuildingType::Garden => Ok(Garden {
@@ -131,7 +130,7 @@ impl IntoBuilding<Garden> for BuildingInConstruction {
         }
     }
 }
-impl IntoBuilding<Building> for BuildingInConstruction {
+impl IntoBuilding<Building> for BuildingUnderConstruction {
     fn into_building(&self, configuration: &Configuration) -> Result<Building, &'static str> {
         match self.request.building_type {
             BuildingType::House => self.into_building(configuration).map(Building::House),

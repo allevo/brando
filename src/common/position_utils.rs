@@ -6,6 +6,7 @@ pub fn convert_bevy_coords_into_position(configuration: &Configuration, coords: 
     let (half_width, half_depth) = configuration.half();
     let x = ((coords.x as f32 + half_width) / configuration.cube_size).round() as i64;
     let y = ((coords.z as f32 + half_depth) / configuration.cube_size).round() as i64;
+
     Position { x, y }
 }
 
@@ -22,8 +23,9 @@ pub fn convert_position_into_bevy_coords(
 #[cfg(test)]
 mod tests {
     use crate::common::{
+        configuration::CONFIGURATION,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, configuration::CONFIGURATION,
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
     };
 
     #[test]

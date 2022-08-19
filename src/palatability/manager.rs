@@ -4,13 +4,13 @@ use tracing::info;
 
 use crate::{
     building::{Building, Garden, House, Office, Street},
-    common::{position::Position, configuration::Configuration},
+    common::{configuration::Configuration, position::Position},
 };
 
 pub struct PalatabilityManager {
     configuration: Arc<Configuration>,
     total_populations: u64,
-    unemployed_inhabitants: u64,
+    unemployed_inhabitants: Vec<u64>,
     vacant_inhabitants: u64,
     vacant_work: u64,
     // TODO: change approach to store the rendered values
@@ -25,12 +25,11 @@ impl PalatabilityManager {
         Self {
             configuration,
             total_populations: 0,
-            unemployed_inhabitants: 0,
+            unemployed_inhabitants: vec![],
             vacant_inhabitants: 0,
             vacant_work: 0,
             houses_sources: vec![],
             office_sources: vec![],
-        
         }
     }
 
@@ -70,9 +69,8 @@ impl PalatabilityManager {
         OfficePalatability { value }
     }
 
-    pub(super) fn increment_unemployed_inhabitants(&mut self, delta: i32) {
-        self.unemployed_inhabitants =
-            (self.unemployed_inhabitants as i128 + delta as i128).max(0) as u64;
+    pub(super) fn add_unemployed_inhabitants(&mut self, inhabitants: Vec<u64>) {
+        self.unemployed_inhabitants.extend(inhabitants);
     }
 
     pub(super) fn increment_vacant_work(&mut self, delta: i32) {
@@ -83,7 +81,7 @@ impl PalatabilityManager {
         self.vacant_inhabitants = (self.vacant_inhabitants as i128 + delta as i128).max(0) as u64;
     }
 
-    pub(super) fn get_inhabitants_to_spawn_and_increment_populations(&mut self) -> u8 {
+    pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(&mut self) -> u8 {
         let c: u8 = self.vacant_inhabitants.min(u8::MAX as u64) as u8;
         self.vacant_inhabitants = 0;
         self.total_populations += c as u64;
@@ -96,8 +94,8 @@ impl PalatabilityManager {
     }
 
     #[allow(dead_code)]
-    pub fn unemployed_inhabitants(&self) -> u64 {
-        self.unemployed_inhabitants
+    pub fn unemployed_inhabitants(&self) -> Vec<u64> {
+        self.unemployed_inhabitants.clone()
     }
 
     #[allow(dead_code)]
@@ -198,14 +196,23 @@ impl OfficePalatability {
 }
 
 pub trait ToHouseSourcePalatabilityDescriptor {
-    fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor>;
+    fn to_house_source_palatability(
+        &self,
+        configuration: &Configuration,
+    ) -> Option<HouseSourcePalatabilityDescriptor>;
 }
 pub trait ToOfficeSourcePalatabilityDescriptor {
-    fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor>;
+    fn to_office_source_palatability(
+        &self,
+        configuration: &Configuration,
+    ) -> Option<OfficeSourcePalatabilityDescriptor>;
 }
 
 impl ToHouseSourcePalatabilityDescriptor for Building {
-    fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor> {
+    fn to_house_source_palatability(
+        &self,
+        configuration: &Configuration,
+    ) -> Option<HouseSourcePalatabilityDescriptor> {
         match self {
             Building::Garden(g) => g.to_house_source_palatability(configuration),
             Building::House(h) => h.to_house_source_palatability(configuration),
@@ -216,7 +223,10 @@ impl ToHouseSourcePalatabilityDescriptor for Building {
 }
 
 impl ToOfficeSourcePalatabilityDescriptor for Building {
-    fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor> {
+    fn to_office_source_palatability(
+        &self,
+        configuration: &Configuration,
+    ) -> Option<OfficeSourcePalatabilityDescriptor> {
         match self {
             Building::Garden(g) => g.to_office_source_palatability(configuration),
             Building::House(h) => h.to_office_source_palatability(configuration),
@@ -229,9 +239,16 @@ impl ToOfficeSourcePalatabilityDescriptor for Building {
 macro_rules! impl_to_source_palatability_descriptor {
     ($cl: ty, $name: tt) => {
         impl ToHouseSourcePalatabilityDescriptor for $cl {
-            fn to_house_source_palatability(&self, configuration: &Configuration) -> Option<HouseSourcePalatabilityDescriptor> {
-                let e = configuration.buildings
-                    .$name.palatability_configuration.source_for_house.as_ref()?;
+            fn to_house_source_palatability(
+                &self,
+                configuration: &Configuration,
+            ) -> Option<HouseSourcePalatabilityDescriptor> {
+                let e = configuration
+                    .buildings
+                    .$name
+                    .palatability_configuration
+                    .source_for_house
+                    .as_ref()?;
                 Some(HouseSourcePalatabilityDescriptor {
                     origin: self.position,
                     value: e.value,
@@ -242,9 +259,16 @@ macro_rules! impl_to_source_palatability_descriptor {
             }
         }
         impl ToOfficeSourcePalatabilityDescriptor for $cl {
-            fn to_office_source_palatability(&self, configuration: &Configuration) -> Option<OfficeSourcePalatabilityDescriptor> {
-                let e = configuration.buildings
-                    .$name.palatability_configuration.source_for_office.as_ref()?;
+            fn to_office_source_palatability(
+                &self,
+                configuration: &Configuration,
+            ) -> Option<OfficeSourcePalatabilityDescriptor> {
+                let e = configuration
+                    .buildings
+                    .$name
+                    .palatability_configuration
+                    .source_for_office
+                    .as_ref()?;
                 Some(OfficeSourcePalatabilityDescriptor {
                     origin: self.position,
                     value: e.value,
