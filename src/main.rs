@@ -349,7 +349,7 @@ s
 s"#;
         fill_map(&mut app, map, 8);
 
-        run(&mut app, 50);
+        run(&mut app, 20);
 
         let entities = get_entities!(app, (Entity, &PlaneComponent), PlaneComponent);
 
@@ -361,7 +361,7 @@ s"#;
         release_keyboard_key(&mut app, KeyCode::O);
         run(&mut app, 1);
 
-        run(&mut app, 50);
+        run(&mut app, 20);
 
         let mut offices = get_entities!(app, (Entity, &OfficeComponent), OfficeComponent);
         assert_eq!(offices.len(), 1);

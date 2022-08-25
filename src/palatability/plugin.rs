@@ -26,7 +26,8 @@ impl Plugin for PalatabilityPlugin {
             .add_system_to_stage(CoreStage::Last, increment_palatabilities)
             .add_system_to_stage(CoreStage::PostUpdate, habit_house)
             .add_system(try_spawn_inhabitants)
-            .add_system(listen_building_created);
+            .add_system(try_spawn_workers)
+            .add_system(increment_vacant_spot);
     }
 }
 
@@ -61,7 +62,6 @@ fn try_spawn_inhabitants(
     mut game_tick: EventReader<GameTick>,
     mut palatability: ResMut<PalatabilityManager>,
     mut more_inhabitants_needed_writer: EventWriter<MoreInhabitantsNeeded>,
-    // mut more_workers_needed_writer: EventWriter<MoreWorkersNeeded>,
 ) {
     if game_tick.iter().count() == 0 {
         return;
@@ -76,18 +76,29 @@ fn try_spawn_inhabitants(
         let population = palatability.total_populations();
         info!("population count: {population:?}");
     }
-
-    /*
-    let workers = palatability.consume_workers_to_spawn();
-    if !workers.is_empty() {
-        more_workers_needed_writer.send(MoreWorkersNeeded {
-            workers: workers.into_iter().map(|id| Entity::from_bits(id)).collect(),
-        });
-    }
-    */
 }
 
-fn listen_building_created(
+fn try_spawn_workers(
+    mut game_tick: EventReader<GameTick>,
+    mut palatability: ResMut<PalatabilityManager>,
+    mut more_workers_needed_writer: EventWriter<MoreWorkersNeeded>,
+) {
+    if game_tick.iter().count() == 0 {
+        return;
+    }
+
+    let workers = palatability.consume_workers_to_spawn();
+    if workers.is_empty() {
+        return;
+    }
+
+    info!("worker {} to spawn", workers.len());
+    let event = MoreWorkersNeeded { workers };
+
+    more_workers_needed_writer.send(event);
+}
+
+fn increment_vacant_spot(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
@@ -110,15 +121,11 @@ fn listen_building_created(
 }
 
 mod events {
-    use bevy::prelude::Entity;
-
-    use crate::common::position::Position;
-
     pub struct MoreInhabitantsNeeded {
         pub count: u8,
     }
 
     pub struct MoreWorkersNeeded {
-        pub workers: Vec<(Entity, Position)>,
+        pub workers: Vec<u64>,
     }
 }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::palatability::plugin::MoreWorkersNeeded;
 use crate::{common::position::Position, palatability::plugin::MoreInhabitantsNeeded};
 
 use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
@@ -32,7 +33,8 @@ impl Plugin for NavigatorPlugin {
             .add_system(expand_navigator_graph)
             .add_system(create_inhabitants)
             .add_system(find_houses_for_inhabitants)
-            .add_system(find_job_for_inhabitants);
+            .add_system(find_job_for_inhabitants)
+            .add_system(inhabitant_want_to_work);
         // .add_system(tag_inhabitants_for_waiting_for_work)
         // .add_system(assign_waiting_for)
         // .add_system_to_stage(CoreStage::Last, add_node)
@@ -171,8 +173,21 @@ fn find_houses_for_inhabitants(
 
         commands.entity(couple.from).insert(WaitingForWorkComponent);
 
-        entity_storage.register_unemployee(couple.from);
         entity_storage.set_inhabitant_house_position(couple.from, couple.to_position);
+    }
+}
+
+fn inhabitant_want_to_work(
+    mut more_workers_needed_reader: EventReader<MoreWorkersNeeded>,
+    mut entity_storage: ResMut<EntityStorage>,
+) {
+    let entity_ids = more_workers_needed_reader
+        .iter()
+        .flat_map(|e| e.workers.iter());
+
+    for entity_id in entity_ids {
+        let entity = Entity::from_bits(*entity_id);
+        entity_storage.register_unemployee(entity);
     }
 }
 

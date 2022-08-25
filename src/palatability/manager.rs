@@ -91,6 +91,17 @@ impl PalatabilityManager {
         c
     }
 
+    pub(super) fn consume_workers_to_spawn(&mut self) -> Vec<u64> {
+        if self.unemployed_inhabitants.is_empty() {
+            return vec![];
+        }
+        if self.vacant_work == 0 {
+            return vec![];
+        }
+
+        self.unemployed_inhabitants.drain(0..1).collect()
+    }
+
     pub fn total_populations(&self) -> u64 {
         self.total_populations
     }
