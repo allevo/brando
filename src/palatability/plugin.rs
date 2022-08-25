@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 
-use crate::building::Building;
 use crate::common::configuration::Configuration;
 
 use crate::GameTick;
 
-use crate::building::plugin::BuildingCreatedEvent;
+use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
 use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
 
 pub use self::events::*;
@@ -94,18 +93,18 @@ fn listen_building_created(
 ) {
     for building_created in building_created_reader.iter() {
         match &building_created.building {
-            Building::House(house) => {
-                // `current_residents` is always 0 here
+            BuildingSnapshot::House(house) => {
+                // NB: `current_residents` is always 0 here
                 let delta = house.resident_property.max_residents
                     - house.resident_property.current_residents;
                 palatability.increment_vacant_inhabitants(delta as i32);
             }
-            Building::Office(office) => {
-                // `current_worker` is always 0 here
+            BuildingSnapshot::Office(office) => {
+                // NB: `current_worker` is always 0 here
                 let delta = office.work_property.max_worker - office.work_property.current_worker;
                 palatability.increment_vacant_work(delta as i32);
             }
-            Building::Garden(_) | Building::Street(_) => {}
+            BuildingSnapshot::Garden(_) | BuildingSnapshot::Street(_) => {}
         }
     }
 }

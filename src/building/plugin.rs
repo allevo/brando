@@ -7,10 +7,7 @@ use bevy::{
 use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 
 use crate::{
-    building::{
-        builder::BuildingBuilder, BuildRequest, Building, BuildingType, BuildingUnderConstruction,
-        IntoBuilding,
-    },
+    building::{builder::BuildingBuilder, BuildRequest, BuildingType, BuildingUnderConstruction},
     common::{
         configuration::Configuration,
         position::Position,
@@ -142,14 +139,16 @@ fn start_building_creation(
         });
 }
 
+// TODO: split this function: too many arguments
 /// Make BuildingInConstruction progress. Then:
 /// - if the building is not yet finished, stop
 /// - otherwise place the building
 /// NB: the progress is made if and only if there's sufficient palatability
+#[allow(clippy::too_many_arguments)]
 fn make_progress_for_building_under_construction(
-    events: EventReader<GameTick>,
+    game_tick: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingUnderConstructionComponent)>,
-    brando: Res<BuildingBuilder>,
+    mut builder: ResMut<BuildingBuilder>,
     palatability: Res<PalatabilityManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
@@ -163,7 +162,7 @@ fn make_progress_for_building_under_construction(
     // process little by little them.
     // we can create a dedicated entity to store the entities ids when the events count is not 0
     // and process them little by little in the following frames.
-    if events.is_empty() {
+    if game_tick.is_empty() {
         return;
     }
 
@@ -203,7 +202,7 @@ fn make_progress_for_building_under_construction(
         let building_under_construction: &mut BuildingUnderConstruction =
             &mut building.building_under_construction;
 
-        brando
+        builder
             .make_progress(building_under_construction)
             .expect("make progress never fails");
 
@@ -233,46 +232,34 @@ fn make_progress_for_building_under_construction(
                 parent.spawn_bundle(bundle);
             });
 
+        let entity_id: u64 = entity.to_bits();
+
+        // TODO: the clone of the building_under_construction is ugly
+        // Actually if I remove a component from the entity (like here),
+        // I should have back also che ownership of the component.
+        // That'd allow to avoid the clone here.
+        let building = builder.build(
+            entity_id,
+            building_under_construction.clone(),
+            &configuration,
+        );
+        let building_id = building.id();
+
         // TODO: rework this part
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
         let entity = match building_type {
-            BuildingType::House => command
-                .insert_bundle((HouseComponent(
-                    building_under_construction
-                        .into_building(&configuration)
-                        .unwrap(),
-                ),))
-                .id(),
-            BuildingType::Garden => command
-                .insert(GardenComponent(
-                    building_under_construction
-                        .into_building(&configuration)
-                        .unwrap(),
-                ))
-                .id(),
-            BuildingType::Street => command
-                .insert(StreetComponent(
-                    building_under_construction
-                        .into_building(&configuration)
-                        .unwrap(),
-                ))
-                .id(),
-            BuildingType::Office => command
-                .insert_bundle((OfficeComponent(
-                    building_under_construction
-                        .into_building(&configuration)
-                        .unwrap(),
-                ),))
-                .id(),
+            BuildingType::House => command.insert(HouseComponent(building_id)).id(),
+            BuildingType::Garden => command.insert(GardenComponent(building_id)).id(),
+            BuildingType::Street => command.insert(StreetComponent(building_id)).id(),
+            BuildingType::Office => command.insert(OfficeComponent(building_id)).id(),
         };
 
-        let building: Building = building_under_construction
-            .into_building(&configuration)
-            .expect("Something goes wrong on building creation");
+        let snapshot = building.snapshot();
 
+        // let building: Building = Building::clone(building);
         building_created_writer.send(BuildingCreatedEvent {
-            building,
+            building: snapshot,
             building_entity: entity,
             position,
         });
@@ -282,11 +269,11 @@ fn make_progress_for_building_under_construction(
 /// marks the house as inhabited
 fn habit_house(
     mut houses: Query<&mut HouseComponent>,
-    brando: Res<BuildingBuilder>,
+    mut builder: ResMut<BuildingBuilder>,
     mut inhabitant_arrived_reader: EventReader<InhabitantArrivedAtHomeEvent>,
 ) {
     for arrived in inhabitant_arrived_reader.iter() {
-        let mut hc = match houses.get_mut(arrived.building_entity) {
+        let hc = match houses.get_mut(arrived.building_entity) {
             Ok(c) => c,
             Err(e) => {
                 error!("error on getting house component {e:?}");
@@ -294,8 +281,8 @@ fn habit_house(
             }
         };
 
-        brando
-            .go_to_live_home(&mut hc.0, arrived.inhabitants_entities.len())
+        builder
+            .go_to_live_home(hc.0, arrived.inhabitants_entities.len())
             .expect("error on updating house property");
     }
 }
@@ -303,11 +290,11 @@ fn habit_house(
 /// marks the office as fulfilled
 fn work_on_office(
     mut offices: Query<&mut OfficeComponent>,
-    brando: Res<BuildingBuilder>,
+    mut builder: ResMut<BuildingBuilder>,
     mut inhabitant_find_job_reader: EventReader<InhabitantFoundJobEvent>,
 ) {
     for arrived in inhabitant_find_job_reader.iter() {
-        let mut hc = match offices.get_mut(arrived.building_entity) {
+        let hc = match offices.get_mut(arrived.building_entity) {
             Ok(c) => c,
             Err(e) => {
                 error!("error on getting house component {e:?}");
@@ -315,8 +302,8 @@ fn work_on_office(
             }
         };
 
-        brando
-            .job_found(&mut hc.0, arrived.workers_entities.len())
+        builder
+            .job_found(hc.0, arrived.workers_entities.len())
             .expect("error on updating office property");
     }
 }
@@ -351,14 +338,56 @@ fn setup(
 }
 
 mod events {
-    use crate::{building::Building, common::position::Position};
+    use crate::{
+        building::{ResidentProperty, WorkProperty},
+        common::position::Position,
+    };
     use bevy::prelude::{Component, Entity};
 
     #[derive(Component)]
     pub struct BuildingCreatedEvent {
         pub position: Position,
-        pub building: Building,
+        pub building: BuildingSnapshot,
         pub building_entity: Entity,
+    }
+
+    pub enum BuildingSnapshot {
+        House(HouseSnapshot),
+        Office(OfficeSnapshot),
+        Street(StreetSnapshot),
+        Garden(GardenSnapshot),
+    }
+
+    #[allow(dead_code)]
+    impl BuildingSnapshot {
+        pub fn into_house(self) -> HouseSnapshot {
+            match self {
+                BuildingSnapshot::House(h) => h,
+                _ => unreachable!("BuildingSnapshot is not an HouseSnapshot"),
+            }
+        }
+
+        pub fn into_office(self) -> OfficeSnapshot {
+            match self {
+                BuildingSnapshot::Office(o) => o,
+                _ => unreachable!("BuildingSnapshot is not an OfficeSnapshot"),
+            }
+        }
+    }
+
+    pub struct HouseSnapshot {
+        pub position: Position,
+        pub resident_property: ResidentProperty,
+    }
+    pub struct OfficeSnapshot {
+        pub position: Position,
+        pub work_property: WorkProperty,
+    }
+    pub struct StreetSnapshot {
+        pub position: Position,
+    }
+    pub struct GardenSnapshot {
+        pub position: Position,
     }
 }
 
@@ -366,7 +395,7 @@ mod components {
     use bevy::prelude::Component;
 
     use crate::{
-        building::{BuildingUnderConstruction, Garden, House, Office, Street},
+        building::{BuildingId, BuildingUnderConstruction},
         common::position::Position,
     };
 
@@ -374,14 +403,14 @@ mod components {
     pub struct PlaneComponent(pub Position);
 
     #[derive(Component)]
-    pub struct HouseComponent(pub House);
+    pub struct HouseComponent(pub BuildingId);
 
     #[derive(Component)]
-    pub struct StreetComponent(pub Street);
+    pub struct StreetComponent(pub BuildingId);
     #[derive(Component)]
-    pub struct GardenComponent(pub Garden);
+    pub struct GardenComponent(pub BuildingId);
     #[derive(Component)]
-    pub struct OfficeComponent(pub Office);
+    pub struct OfficeComponent(pub BuildingId);
 
     #[derive(Component)]
     pub struct BuildingUnderConstructionComponent {

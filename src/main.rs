@@ -229,8 +229,9 @@ fn setup(mut commands: Commands) {
 mod tests {
     use crate::{
         building::{
-            plugin::{HouseComponent, OfficeComponent, PlaneComponent},
-            House, Office,
+            builder::BuildingBuilder,
+            plugin::{BuildingSnapshot, HouseComponent, OfficeComponent, PlaneComponent},
+            BuildingId,
         },
         palatability::manager::PalatabilityManager,
     };
@@ -270,9 +271,16 @@ mod tests {
         // Home is fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
         assert_eq!(palatability_manager.total_populations(), 8);
+
         let houses: Vec<(Entity, &HouseComponent)> =
             get_entities!(app, (Entity, &HouseComponent), HouseComponent);
-        let house: &House = &houses.get(0).unwrap().1 .0;
+        let house_id: BuildingId = houses.get(0).unwrap().1 .0;
+
+        let house = {
+            let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
+            let house: BuildingSnapshot = building_builder.get_building(&house_id).snapshot();
+            house.into_house()
+        };
         assert_eq!(
             house.resident_property.current_residents,
             house.resident_property.max_residents
@@ -299,12 +307,23 @@ mod tests {
         // Check houses: both are fulfilled
         let houses: Vec<(Entity, &HouseComponent)> =
             get_entities!(app, (Entity, &HouseComponent), HouseComponent);
-        let house: &House = &houses.get(0).unwrap().1 .0;
+        let house1_id: BuildingId = houses.get(0).unwrap().1 .0;
+        let house2_id: BuildingId = houses.get(1).unwrap().1 .0;
+
+        let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
+
+        let house = building_builder
+            .get_building(&house1_id)
+            .snapshot()
+            .into_house();
         assert_eq!(
             house.resident_property.current_residents,
             house.resident_property.max_residents
         );
-        let house: &House = &houses.get(1).unwrap().1 .0;
+        let house = building_builder
+            .get_building(&house2_id)
+            .snapshot()
+            .into_house();
         assert_eq!(
             house.resident_property.current_residents,
             house.resident_property.max_residents
@@ -346,7 +365,13 @@ s"#;
 
         let mut offices = get_entities!(app, (Entity, &OfficeComponent), OfficeComponent);
         assert_eq!(offices.len(), 1);
-        let office: &Office = &offices.pop().unwrap().1 .0;
+        let office_id: BuildingId = offices.pop().unwrap().1 .0;
+
+        let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
+        let office = building_builder
+            .get_building(&office_id)
+            .snapshot()
+            .into_office();
 
         assert_eq!(
             office.work_property.max_worker,
@@ -393,26 +418,21 @@ s"#;
 
         macro_rules! get_entities {
             ($app: ident, $Q: tt, $F: ident) => {{
-                let world = &mut $app.world;
-                let mut query = world.query_filtered::<$Q, With<$F>>();
-                let query = query.iter(world);
-                let entities = query.collect::<Vec<$Q>>();
+                let entities = {
+                    let world = &mut $app.world;
+                    let mut query = world.query_filtered::<$Q, With<$F>>();
+                    let query = query.iter(world);
+                    let entities = query.collect::<Vec<$Q>>();
 
+                    entities.clone()
+                };
                 entities
             }};
         }
         pub(crate) use get_entities;
 
-        /*
         #[inline]
-        pub fn position_to_index(app: &App, x: usize, y: usize) -> usize {
-            let configuration = app.world.get_resource::<Arc<Configuration>>().unwrap();
-            configuration.game.width_table * x + y
-        }
-        */
-
-        #[inline]
-        pub fn get_at(entities: &Vec<(Entity, &PlaneComponent)>, x: i64, y: i64) -> Entity {
+        pub fn get_at(entities: &[(Entity, &PlaneComponent)], x: i64, y: i64) -> Entity {
             *entities
                 .iter()
                 .find(|(_, p)| p.0.x == x && p.0.y == y)
@@ -520,9 +540,10 @@ s"#;
             // app.add_plugin(bevy_animation::AnimationPlugin::default());
 
             {
-                let mut camera = Camera::default();
-                // let mut camera = app.world.get_resource_mut::<Camera>().unwrap();
-                camera.target = RenderTarget::Window(WindowId::primary());
+                let camera = Camera {
+                    target: RenderTarget::Window(WindowId::primary()),
+                    ..Camera::default()
+                };
                 app.insert_resource(camera);
             }
 

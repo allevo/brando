@@ -5,10 +5,7 @@ use std::{
 
 use tracing::info;
 
-use crate::{
-    building::House,
-    common::{position::Position},
-};
+use crate::common::position::Position;
 
 pub struct Navigator {
     positions_to_add: HashSet<Position>,
@@ -107,6 +104,7 @@ impl Navigator {
     }
 }
 
+/*
 pub trait Reachable {
     // TODO: this probably is wrong
     // In the future we might have building that has more than one position
@@ -115,11 +113,12 @@ pub trait Reachable {
     fn to_position(&self) -> Position;
 }
 
-impl Reachable for House {
+impl Reachable for HouseSnapshot {
     fn to_position(&self) -> Position {
         self.position
     }
 }
+*/
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NavigationDescriptor {
@@ -134,16 +133,8 @@ impl Display for NavigationDescriptor {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
-
-    struct Foo(Position);
-    impl Reachable for Foo {
-        fn to_position(&self) -> Position {
-            self.0
-        }
-    }
 
     #[test]
     fn test_navigate_ok() {
@@ -164,7 +155,7 @@ mod tests {
         let desc =
             navigator.get_navigation_descriptor(&Position { x: 0, y: 0 }, Position { x: 0, y: 3 });
 
-        assert_eq!(desc.is_some(), true);
+        assert!(desc.is_some());
     }
 
     #[test]

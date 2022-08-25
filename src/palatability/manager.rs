@@ -3,7 +3,9 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::{
-    building::{Building, Garden, House, Office, Street},
+    building::plugin::{
+        BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot, StreetSnapshot,
+    },
     common::{configuration::Configuration, position::Position},
 };
 
@@ -208,30 +210,30 @@ pub trait ToOfficeSourcePalatabilityDescriptor {
     ) -> Option<OfficeSourcePalatabilityDescriptor>;
 }
 
-impl ToHouseSourcePalatabilityDescriptor for Building {
+impl ToHouseSourcePalatabilityDescriptor for BuildingSnapshot {
     fn to_house_source_palatability(
         &self,
         configuration: &Configuration,
     ) -> Option<HouseSourcePalatabilityDescriptor> {
         match self {
-            Building::Garden(g) => g.to_house_source_palatability(configuration),
-            Building::House(h) => h.to_house_source_palatability(configuration),
-            Building::Street(s) => s.to_house_source_palatability(configuration),
-            Building::Office(o) => o.to_house_source_palatability(configuration),
+            BuildingSnapshot::Garden(g) => g.to_house_source_palatability(configuration),
+            BuildingSnapshot::House(h) => h.to_house_source_palatability(configuration),
+            BuildingSnapshot::Street(s) => s.to_house_source_palatability(configuration),
+            BuildingSnapshot::Office(o) => o.to_house_source_palatability(configuration),
         }
     }
 }
 
-impl ToOfficeSourcePalatabilityDescriptor for Building {
+impl ToOfficeSourcePalatabilityDescriptor for BuildingSnapshot {
     fn to_office_source_palatability(
         &self,
         configuration: &Configuration,
     ) -> Option<OfficeSourcePalatabilityDescriptor> {
         match self {
-            Building::Garden(g) => g.to_office_source_palatability(configuration),
-            Building::House(h) => h.to_office_source_palatability(configuration),
-            Building::Street(s) => s.to_office_source_palatability(configuration),
-            Building::Office(o) => o.to_office_source_palatability(configuration),
+            BuildingSnapshot::Garden(g) => g.to_office_source_palatability(configuration),
+            BuildingSnapshot::House(h) => h.to_office_source_palatability(configuration),
+            BuildingSnapshot::Street(s) => s.to_office_source_palatability(configuration),
+            BuildingSnapshot::Office(o) => o.to_office_source_palatability(configuration),
         }
     }
 }
@@ -280,7 +282,7 @@ macro_rules! impl_to_source_palatability_descriptor {
         }
     };
 }
-impl_to_source_palatability_descriptor!(House, house);
-impl_to_source_palatability_descriptor!(Garden, garden);
-impl_to_source_palatability_descriptor!(Office, office);
-impl_to_source_palatability_descriptor!(Street, street);
+impl_to_source_palatability_descriptor!(HouseSnapshot, house);
+impl_to_source_palatability_descriptor!(GardenSnapshot, garden);
+impl_to_source_palatability_descriptor!(OfficeSnapshot, office);
+impl_to_source_palatability_descriptor!(StreetSnapshot, street);

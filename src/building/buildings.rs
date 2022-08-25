@@ -1,4 +1,10 @@
-use crate::common::{configuration::Configuration, position::Position};
+use crate::common::position::Position;
+
+use super::plugin::{
+    BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot, StreetSnapshot,
+};
+
+pub type BuildingId = u64;
 
 pub enum Building {
     House(House),
@@ -6,40 +12,107 @@ pub enum Building {
     Garden(Garden),
     Office(Office),
 }
+
+#[allow(dead_code)]
 impl Building {
-    pub fn position(&self) -> Option<Position> {
+    pub fn id(&self) -> BuildingId {
         match self {
-            Building::Garden(g) => Some(g.position),
-            Building::Street(s) => Some(s.position),
-            Building::House(h) => Some(h.position),
-            Building::Office(o) => Some(o.position),
+            Building::Garden(g) => g.id,
+            Building::Office(o) => o.id,
+            Building::Street(s) => s.id,
+            Building::House(h) => h.id,
+        }
+    }
+
+    pub fn as_mut_house(&mut self) -> &mut House {
+        match self {
+            Building::House(h) => h,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+
+    pub fn into_house(self) -> House {
+        match self {
+            Building::House(h) => h,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+
+    pub fn as_mut_office(&mut self) -> &mut Office {
+        match self {
+            Building::Office(o) => o,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+
+    pub fn into_office(self) -> Office {
+        match self {
+            Building::Office(o) => o,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+    pub fn into_street(self) -> Street {
+        match self {
+            Building::Street(s) => s,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+    pub fn into_garden(self) -> Garden {
+        match self {
+            Building::Garden(g) => g,
+            _ => unreachable!("cannot call as_house for not houses"),
+        }
+    }
+
+    pub fn snapshot(&self) -> BuildingSnapshot {
+        match self {
+            Building::Office(o) => BuildingSnapshot::Office(OfficeSnapshot {
+                position: o.position,
+                work_property: o.work_property.clone(),
+            }),
+            Building::House(h) => BuildingSnapshot::House(HouseSnapshot {
+                position: h.position,
+                resident_property: h.resident_property.clone(),
+            }),
+            Building::Street(s) => BuildingSnapshot::Street(StreetSnapshot {
+                position: s.position,
+            }),
+            Building::Garden(g) => BuildingSnapshot::Garden(GardenSnapshot {
+                position: g.position,
+            }),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct ResidentProperty {
     pub current_residents: usize,
     pub max_residents: usize,
 }
 
 pub struct House {
+    pub id: BuildingId,
     pub position: Position,
     pub resident_property: ResidentProperty,
 }
 
+#[derive(Clone)]
 pub struct WorkProperty {
     pub current_worker: usize,
     pub max_worker: usize,
 }
 
 pub struct Office {
+    pub id: BuildingId,
     pub position: Position,
     pub work_property: WorkProperty,
 }
 pub struct Street {
+    pub id: BuildingId,
     pub position: Position,
 }
 pub struct Garden {
+    pub id: BuildingId,
     pub position: Position,
 }
 
@@ -75,69 +148,6 @@ impl BuildingUnderConstruction {
     #[inline]
     pub fn is_completed(&self) -> bool {
         self.progress_status.is_completed()
-    }
-}
-
-pub trait IntoBuilding<T> {
-    fn into_building(&self, configuration: &Configuration) -> Result<T, &'static str>;
-}
-
-impl IntoBuilding<House> for BuildingUnderConstruction {
-    fn into_building(&self, configuration: &Configuration) -> Result<House, &'static str> {
-        match self.request.building_type {
-            BuildingType::House => Ok(House {
-                position: self.request.position,
-                resident_property: ResidentProperty {
-                    current_residents: 0,
-                    max_residents: configuration.buildings.house.max_residents,
-                },
-            }),
-            _ => Err("NO"),
-        }
-    }
-}
-impl IntoBuilding<Office> for BuildingUnderConstruction {
-    fn into_building(&self, configuration: &Configuration) -> Result<Office, &'static str> {
-        match self.request.building_type {
-            BuildingType::Office => Ok(Office {
-                position: self.request.position,
-                work_property: WorkProperty {
-                    current_worker: 0,
-                    max_worker: configuration.buildings.office.max_worker,
-                },
-            }),
-            _ => Err("NO"),
-        }
-    }
-}
-impl IntoBuilding<Street> for BuildingUnderConstruction {
-    fn into_building(&self, _configuration: &Configuration) -> Result<Street, &'static str> {
-        match self.request.building_type {
-            BuildingType::Street => Ok(Street {
-                position: self.request.position,
-            }),
-            _ => Err("NO"),
-        }
-    }
-}
-impl IntoBuilding<Garden> for BuildingUnderConstruction {
-    fn into_building(&self, _configuration: &Configuration) -> Result<Garden, &'static str> {
-        match self.request.building_type {
-            BuildingType::Garden => Ok(Garden {
-                position: self.request.position,
-            }),
-            _ => Err("NO"),
-        }
-    }
-}
-impl IntoBuilding<Building> for BuildingUnderConstruction {
-    fn into_building(&self, configuration: &Configuration) -> Result<Building, &'static str> {
-        match self.request.building_type {
-            BuildingType::House => self.into_building(configuration).map(Building::House),
-            BuildingType::Office => self.into_building(configuration).map(Building::Office),
-            BuildingType::Garden => self.into_building(configuration).map(Building::Garden),
-            BuildingType::Street => self.into_building(configuration).map(Building::Street),
-        }
     }
 }
 

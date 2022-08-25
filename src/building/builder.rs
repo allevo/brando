@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
-use bevy::utils::HashSet;
+use bevy::utils::{HashMap, HashSet};
 
 use crate::building::{BuildRequest, BuildingUnderConstruction, House, ProgressStatus};
 use crate::common::configuration::Configuration;
 use crate::common::position::Position;
 
-use super::Office;
+use super::{
+    Building, BuildingId, BuildingType, Garden, Office, ResidentProperty, Street, WorkProperty,
+};
 
 pub struct BuildingBuilder {
     configuration: Arc<Configuration>,
     position_already_used: HashSet<Position>,
+
+    buildings: HashMap<BuildingId, Building>,
 }
 
 impl BuildingBuilder {
@@ -18,6 +22,7 @@ impl BuildingBuilder {
         Self {
             configuration,
             position_already_used: Default::default(),
+            buildings: Default::default(),
         }
     }
 
@@ -65,23 +70,75 @@ impl BuildingBuilder {
         Ok(under_construction.progress_status.is_completed())
     }
 
+    pub(super) fn build<'a, 's>(
+        &'s mut self,
+        id: u64,
+        under_construction: BuildingUnderConstruction,
+        configuration: &Configuration,
+    ) -> &'a Building
+    where
+        's: 'a,
+    {
+        let building = match under_construction.request.building_type {
+            BuildingType::House => Building::House(House {
+                id,
+                position: under_construction.request.position,
+                resident_property: ResidentProperty {
+                    current_residents: 0,
+                    max_residents: configuration.buildings.house.max_residents,
+                },
+            }),
+            BuildingType::Office => Building::Office(Office {
+                id,
+                position: under_construction.request.position,
+                work_property: WorkProperty {
+                    current_worker: 0,
+                    max_worker: configuration.buildings.office.max_worker,
+                },
+            }),
+            BuildingType::Garden => Building::Garden(Garden {
+                id,
+                position: under_construction.request.position,
+            }),
+            BuildingType::Street => Building::Street(Street {
+                id,
+                position: under_construction.request.position,
+            }),
+        };
+
+        self.buildings.entry(id).or_insert(building);
+
+        &self.buildings[&id]
+    }
+
     pub(super) fn go_to_live_home(
-        &self,
-        house: &mut House,
+        &mut self,
+        house_id: BuildingId,
         arrived: usize,
     ) -> Result<(), &'static str> {
+        let house = self.buildings.get_mut(&house_id).unwrap();
+        let house = house.as_mut_house();
+
         house.resident_property.current_residents += arrived;
 
         Ok(())
     }
 
     pub(super) fn job_found(
-        &self,
-        office: &mut Office,
+        &mut self,
+        office_id: BuildingId,
         arrived: usize,
     ) -> Result<(), &'static str> {
+        let office = self.buildings.get_mut(&office_id).unwrap();
+        let office = office.as_mut_office();
+
         office.work_property.current_worker += arrived;
 
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_building(&self, id: &BuildingId) -> &Building {
+        &self.buildings[id]
     }
 }

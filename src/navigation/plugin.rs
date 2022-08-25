@@ -1,14 +1,8 @@
-
-
 use bevy::prelude::*;
 
-use crate::{
-    building::Building,
-    common::{position::Position},
-    palatability::plugin::MoreInhabitantsNeeded,
-};
+use crate::{common::position::Position, palatability::plugin::MoreInhabitantsNeeded};
 
-use crate::building::plugin::BuildingCreatedEvent;
+use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
 
 use super::{
     entity_storage::{AssignmentResult, BuildingNeedToBeFulfilled, EntityStorage},
@@ -59,12 +53,12 @@ fn expand_navigator_graph(
         let building_entity: Entity = created_building.building_entity;
 
         match &created_building.building {
-            Building::House(house) => {
+            BuildingSnapshot::House(house) => {
                 commands
                     .entity(building_entity)
                     .insert(TargetComponent {
                         target_position: *building_position,
-                        target_type: TargetType::HOUSE,
+                        target_type: TargetType::House,
                     })
                     .insert(TargetTypeHouse);
 
@@ -75,12 +69,12 @@ fn expand_navigator_graph(
                     house.resident_property.max_residents,
                 ));
             }
-            Building::Office(office) => {
+            BuildingSnapshot::Office(office) => {
                 commands
                     .entity(building_entity)
                     .insert(TargetComponent {
                         target_position: *building_position,
-                        target_type: TargetType::OFFICE,
+                        target_type: TargetType::Office,
                     })
                     .insert(TargetTypeOffice);
 
@@ -91,13 +85,13 @@ fn expand_navigator_graph(
                     office.work_property.max_worker,
                 ));
             }
-            Building::Street(_) => {
+            BuildingSnapshot::Street(_) => {
                 info!("adding node at {:?}", building_position);
                 navigator.add_node(*building_position);
 
                 need_to_rebuild = true;
             }
-            Building::Garden(_) => {}
+            BuildingSnapshot::Garden(_) => {}
         }
     }
 
@@ -251,8 +245,8 @@ mod components {
 
     #[derive(Copy, Clone, Debug)]
     pub enum TargetType {
-        OFFICE,
-        HOUSE,
+        Office,
+        House,
     }
 
     #[derive(Component, Copy, Clone, Debug)]
