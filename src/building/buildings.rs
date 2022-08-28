@@ -1,7 +1,8 @@
 use crate::common::position::Position;
 
 use super::plugin::{
-    BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot, StreetSnapshot,
+    BiomassPowerPlantSnapshot, BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot,
+    StreetSnapshot,
 };
 
 pub type BuildingId = u64;
@@ -11,6 +12,7 @@ pub enum Building {
     Street(Street),
     Garden(Garden),
     Office(Office),
+    BiomassPowerPlant(BiomassPowerPlant),
 }
 
 #[allow(dead_code)]
@@ -21,6 +23,7 @@ impl Building {
             Building::Office(o) => o.id,
             Building::Street(s) => s.id,
             Building::House(h) => h.id,
+            Building::BiomassPowerPlant(bpp) => bpp.id,
         }
     }
 
@@ -80,6 +83,11 @@ impl Building {
             Building::Garden(g) => BuildingSnapshot::Garden(GardenSnapshot {
                 position: g.position,
             }),
+            Building::BiomassPowerPlant(bpp) => {
+                BuildingSnapshot::BiomassPowerPlant(BiomassPowerPlantSnapshot {
+                    position: bpp.position,
+                })
+            }
         }
     }
 }
@@ -116,12 +124,18 @@ pub struct Garden {
     pub position: Position,
 }
 
+pub struct BiomassPowerPlant {
+    pub id: BuildingId,
+    pub position: Position,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildingType {
     House,
     Street,
     Garden,
     Office,
+    BiomassPowerPlant,
 }
 
 #[derive(Clone)]

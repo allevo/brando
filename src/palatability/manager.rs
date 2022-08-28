@@ -4,7 +4,8 @@ use tracing::info;
 
 use crate::{
     building::plugin::{
-        BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot, StreetSnapshot,
+        BiomassPowerPlantSnapshot, BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot,
+        StreetSnapshot,
     },
     common::{configuration::Configuration, position::Position},
 };
@@ -231,6 +232,9 @@ impl ToHouseSourcePalatabilityDescriptor for BuildingSnapshot {
             BuildingSnapshot::House(h) => h.to_house_source_palatability(configuration),
             BuildingSnapshot::Street(s) => s.to_house_source_palatability(configuration),
             BuildingSnapshot::Office(o) => o.to_house_source_palatability(configuration),
+            BuildingSnapshot::BiomassPowerPlant(bpp) => {
+                bpp.to_house_source_palatability(configuration)
+            }
         }
     }
 }
@@ -245,6 +249,9 @@ impl ToOfficeSourcePalatabilityDescriptor for BuildingSnapshot {
             BuildingSnapshot::House(h) => h.to_office_source_palatability(configuration),
             BuildingSnapshot::Street(s) => s.to_office_source_palatability(configuration),
             BuildingSnapshot::Office(o) => o.to_office_source_palatability(configuration),
+            BuildingSnapshot::BiomassPowerPlant(bpp) => {
+                bpp.to_office_source_palatability(configuration)
+            }
         }
     }
 }
@@ -297,3 +304,4 @@ impl_to_source_palatability_descriptor!(HouseSnapshot, house);
 impl_to_source_palatability_descriptor!(GardenSnapshot, garden);
 impl_to_source_palatability_descriptor!(OfficeSnapshot, office);
 impl_to_source_palatability_descriptor!(StreetSnapshot, street);
+impl_to_source_palatability_descriptor!(BiomassPowerPlantSnapshot, biomass_power_plant);

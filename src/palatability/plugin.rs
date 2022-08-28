@@ -115,7 +115,9 @@ fn increment_vacant_spot(
                 let delta = office.work_property.max_worker - office.work_property.current_worker;
                 palatability.increment_vacant_work(delta as i32);
             }
-            BuildingSnapshot::Garden(_) | BuildingSnapshot::Street(_) => {}
+            BuildingSnapshot::Garden(_)
+            | BuildingSnapshot::Street(_)
+            | BuildingSnapshot::BiomassPowerPlant(_) => {}
         }
     }
 }

@@ -7,7 +7,8 @@ use crate::common::configuration::Configuration;
 use crate::common::position::Position;
 
 use super::{
-    Building, BuildingId, BuildingType, Garden, Office, ResidentProperty, Street, WorkProperty,
+    BiomassPowerPlant, Building, BuildingId, BuildingType, Garden, Office, ResidentProperty,
+    Street, WorkProperty,
 };
 
 pub struct BuildingBuilder {
@@ -47,6 +48,13 @@ impl BuildingBuilder {
             }
             super::BuildingType::Office => {
                 self.configuration.buildings.office.common.time_for_building
+            }
+            super::BuildingType::BiomassPowerPlant => {
+                self.configuration
+                    .buildings
+                    .biomass_power_plant
+                    .common
+                    .time_for_building
             }
         };
 
@@ -101,6 +109,10 @@ impl BuildingBuilder {
                 position: under_construction.request.position,
             }),
             BuildingType::Street => Building::Street(Street {
+                id,
+                position: under_construction.request.position,
+            }),
+            BuildingType::BiomassPowerPlant => Building::BiomassPowerPlant(BiomassPowerPlant {
                 id,
                 position: under_construction.request.position,
             }),

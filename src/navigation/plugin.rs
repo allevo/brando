@@ -94,6 +94,7 @@ fn expand_navigator_graph(
                 need_to_rebuild = true;
             }
             BuildingSnapshot::Garden(_) => {}
+            BuildingSnapshot::BiomassPowerPlant(_) => {}
         }
     }
 

@@ -55,6 +55,7 @@ enum EditMode {
     Garden,
     Street,
     Office,
+    BiomassPowerPlant,
 }
 
 /// Allow the user to switch edit mode base on the keyboard key
@@ -69,6 +70,7 @@ fn switch_edit_mode(
             (ButtonState::Released, Some(KeyCode::G)) => Some(EditMode::Garden),
             (ButtonState::Released, Some(KeyCode::H)) => Some(EditMode::House),
             (ButtonState::Released, Some(KeyCode::O)) => Some(EditMode::Office),
+            (ButtonState::Released, Some(KeyCode::B)) => Some(EditMode::BiomassPowerPlant),
             (ButtonState::Released, Some(KeyCode::Escape)) => Some(EditMode::None),
             _ => None,
         })
@@ -113,6 +115,7 @@ fn start_building_creation(
         EditMode::Garden => BuildingType::Garden,
         EditMode::Street => BuildingType::Street,
         EditMode::Office => BuildingType::Office,
+        EditMode::BiomassPowerPlant => BuildingType::BiomassPowerPlant,
         EditMode::None => unreachable!("EditMode::None is handled before"),
     };
 
@@ -196,7 +199,7 @@ fn make_progress_for_building_under_construction(
                     continue;
                 }
             }
-            BuildingType::Garden | BuildingType::Street => {}
+            BuildingType::Garden | BuildingType::Street | BuildingType::BiomassPowerPlant => {}
         }
 
         let building_under_construction: &mut BuildingUnderConstruction =
@@ -222,6 +225,7 @@ fn make_progress_for_building_under_construction(
             BuildingType::Garden => bundles.garden(),
             BuildingType::Street => bundles.street(),
             BuildingType::Office => bundles.office(),
+            BuildingType::BiomassPowerPlant => bundles.biomass_power_plant(),
         };
 
         let mut command = commands.entity(entity);
@@ -253,6 +257,9 @@ fn make_progress_for_building_under_construction(
             BuildingType::Garden => command.insert(GardenComponent(building_id)).id(),
             BuildingType::Street => command.insert(StreetComponent(building_id)).id(),
             BuildingType::Office => command.insert(OfficeComponent(building_id)).id(),
+            BuildingType::BiomassPowerPlant => {
+                command.insert(BiomassPowerPlantComponent(building_id)).id()
+            }
         };
 
         let snapshot = building.snapshot();
@@ -356,6 +363,7 @@ mod events {
         Office(OfficeSnapshot),
         Street(StreetSnapshot),
         Garden(GardenSnapshot),
+        BiomassPowerPlant(BiomassPowerPlantSnapshot),
     }
 
     #[allow(dead_code)]
@@ -389,6 +397,9 @@ mod events {
     pub struct GardenSnapshot {
         pub position: Position,
     }
+    pub struct BiomassPowerPlantSnapshot {
+        pub position: Position,
+    }
 }
 
 mod components {
@@ -411,6 +422,8 @@ mod components {
     pub struct GardenComponent(pub BuildingId);
     #[derive(Component)]
     pub struct OfficeComponent(pub BuildingId);
+    #[derive(Component)]
+    pub struct BiomassPowerPlantComponent(pub BuildingId);
 
     #[derive(Component)]
     pub struct BuildingUnderConstructionComponent {

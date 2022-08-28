@@ -4,6 +4,7 @@ mod building;
 mod common;
 mod navigation;
 mod palatability;
+mod power;
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -14,6 +15,7 @@ use building::plugin::BuildingPlugin;
 use common::configuration::{Configuration, CONFIGURATION};
 use navigation::plugin::NavigatorPlugin;
 use palatability::plugin::PalatabilityPlugin;
+use power::plugin::PowerPlugin;
 use tracing::debug;
 
 #[derive(Component, Deref, DerefMut)]
@@ -26,6 +28,7 @@ struct PbrBundles {
     street: PbrBundle,
     garden: PbrBundle,
     office: PbrBundle,
+    biomass_power_plant: PbrBundle,
     in_progress: PbrBundle,
 }
 impl PbrBundles {
@@ -40,6 +43,9 @@ impl PbrBundles {
     }
     pub fn office(&self) -> PbrBundle {
         self.office.clone()
+    }
+    pub fn biomass_power_plant(&self) -> PbrBundle {
+        self.biomass_power_plant.clone()
     }
     pub fn in_progress(&self) -> PbrBundle {
         self.in_progress.clone()
@@ -86,6 +92,7 @@ impl FromWorld for PbrBundles {
         let garden = get_colored_plane!(plane world, configuration, 81, 112, 55);
         let in_progress = get_colored_plane!(plane world, configuration, 33, 33, 33);
         let office = get_colored_plane!(plane world, configuration, 31, 125, 219);
+        let biomass_power_plant = get_colored_plane!(plane world, configuration, 197, 34, 34);
 
         PbrBundles {
             house,
@@ -93,6 +100,7 @@ impl FromWorld for PbrBundles {
             garden,
             in_progress,
             office,
+            biomass_power_plant,
         }
     }
 }
@@ -118,7 +126,8 @@ impl Plugin for MainPlugin {
             .init_resource::<PbrBundles>()
             .add_plugin(BuildingPlugin)
             .add_plugin(NavigatorPlugin)
-            .add_plugin(PalatabilityPlugin);
+            .add_plugin(PalatabilityPlugin)
+            .add_plugin(PowerPlugin);
     }
 }
 

@@ -31,6 +31,7 @@ pub struct BuildingsConfiguration {
     pub office: OfficeConfiguration,
     pub garden: GardenConfiguration,
     pub street: StreetConfiguration,
+    pub biomass_power_plant: BiomassPowerPlantConfiguration,
 }
 
 #[derive(Debug, Clone)]
@@ -39,12 +40,14 @@ pub struct HouseConfiguration {
     pub max_inhabitant_per_travel: usize,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
+    pub power_consumer_configuration: PowerConsumerConfiguration,
 }
 #[derive(Debug, Clone)]
 pub struct OfficeConfiguration {
     pub max_worker: usize,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
+    pub power_consumer_configuration: PowerConsumerConfiguration,
 }
 #[derive(Debug, Clone)]
 pub struct GardenConfiguration {
@@ -55,6 +58,12 @@ pub struct GardenConfiguration {
 pub struct StreetConfiguration {
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
+}
+#[derive(Debug, Clone)]
+pub struct BiomassPowerPlantConfiguration {
+    pub common: CommonBuildingConfiguration,
+    pub palatability_configuration: PalatabilityConfiguration,
+    pub power_source: PowerSourceConfiguration,
 }
 #[derive(Debug, Clone)]
 pub struct CommonBuildingConfiguration {
@@ -80,6 +89,16 @@ pub struct OfficeSourcePalatabilityConfiguration {
     pub max_horizontal_distribution_distance: usize,
     pub max_linear_distribution_distance: usize,
     pub linear_factor: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct PowerConsumerConfiguration {
+    pub consume_wh: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct PowerSourceConfiguration {
+    pub capacity_wh: usize,
 }
 
 // #[cfg(test)]
@@ -109,6 +128,7 @@ pub const CONFIGURATION: Configuration = Configuration {
                 }),
                 source_for_office: None,
             },
+            power_consumer_configuration: PowerConsumerConfiguration { consume_wh: 300 },
         },
         office: OfficeConfiguration {
             max_worker: 6,
@@ -125,6 +145,7 @@ pub const CONFIGURATION: Configuration = Configuration {
                     linear_factor: 0,
                 }),
             },
+            power_consumer_configuration: PowerConsumerConfiguration { consume_wh: 2000 },
         },
         garden: GardenConfiguration {
             common: CommonBuildingConfiguration {
@@ -154,6 +175,19 @@ pub const CONFIGURATION: Configuration = Configuration {
             palatability_configuration: PalatabilityConfiguration {
                 source_for_house: None,
                 source_for_office: None,
+            },
+        },
+        biomass_power_plant: BiomassPowerPlantConfiguration {
+            common: CommonBuildingConfiguration {
+                building_name: "biomassPowerPlant",
+                time_for_building: 10,
+            },
+            palatability_configuration: PalatabilityConfiguration {
+                source_for_house: None,
+                source_for_office: None,
+            },
+            power_source: PowerSourceConfiguration {
+                capacity_wh: 7_000_000_000,
             },
         },
     },
