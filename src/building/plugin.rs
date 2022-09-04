@@ -11,7 +11,7 @@ use crate::{
     common::{
         configuration::Configuration,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, EntityId,
     },
     navigation::plugin::events::{InhabitantArrivedAtHomeEvent, InhabitantFoundJobEvent},
     palatability::manager::PalatabilityManager,
@@ -236,7 +236,7 @@ fn make_progress_for_building_under_construction(
                 parent.spawn_bundle(bundle);
             });
 
-        let entity_id: u64 = entity.to_bits();
+        let entity_id: EntityId = entity.to_bits();
 
         // TODO: the clone of the building_under_construction is ugly
         // Actually if I remove a component from the entity (like here),
@@ -406,24 +406,24 @@ mod components {
     use bevy::prelude::Component;
 
     use crate::{
-        building::{BuildingId, BuildingUnderConstruction},
-        common::position::Position,
+        building::{BuildingUnderConstruction},
+        common::{position::Position, EntityId},
     };
 
     #[derive(Component, Debug)]
     pub struct PlaneComponent(pub Position);
 
     #[derive(Component)]
-    pub struct HouseComponent(pub BuildingId);
+    pub struct HouseComponent(pub EntityId);
 
     #[derive(Component)]
-    pub struct StreetComponent(pub BuildingId);
+    pub struct StreetComponent(pub EntityId);
     #[derive(Component)]
-    pub struct GardenComponent(pub BuildingId);
+    pub struct GardenComponent(pub EntityId);
     #[derive(Component)]
-    pub struct OfficeComponent(pub BuildingId);
+    pub struct OfficeComponent(pub EntityId);
     #[derive(Component)]
-    pub struct BiomassPowerPlantComponent(pub BuildingId);
+    pub struct BiomassPowerPlantComponent(pub EntityId);
 
     #[derive(Component)]
     pub struct BuildingUnderConstructionComponent {

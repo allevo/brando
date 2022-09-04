@@ -7,13 +7,13 @@ use crate::{
         BiomassPowerPlantSnapshot, BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot,
         StreetSnapshot,
     },
-    common::{configuration::Configuration, position::Position},
+    common::{configuration::Configuration, position::Position, EntityId},
 };
 
 pub struct PalatabilityManager {
     configuration: Arc<Configuration>,
     total_populations: u64,
-    unemployed_inhabitants: Vec<u64>,
+    unemployed_inhabitants: Vec<EntityId>,
     vacant_inhabitants: u64,
     vacant_work: u64,
     // TODO: change approach to store the rendered values
@@ -72,7 +72,7 @@ impl PalatabilityManager {
         OfficePalatability { value }
     }
 
-    pub(super) fn add_unemployed_inhabitants(&mut self, inhabitants: Vec<u64>) {
+    pub(super) fn add_unemployed_inhabitants(&mut self, inhabitants: Vec<EntityId>) {
         self.unemployed_inhabitants.extend(inhabitants);
     }
 
@@ -92,7 +92,7 @@ impl PalatabilityManager {
         c
     }
 
-    pub(super) fn consume_workers_to_spawn(&mut self) -> Vec<u64> {
+    pub(super) fn consume_workers_to_spawn(&mut self) -> Vec<EntityId> {
         if self.unemployed_inhabitants.is_empty() {
             return vec![];
         }
@@ -108,7 +108,7 @@ impl PalatabilityManager {
     }
 
     #[allow(dead_code)]
-    pub fn unemployed_inhabitants(&self) -> Vec<u64> {
+    pub fn unemployed_inhabitants(&self) -> Vec<EntityId> {
         self.unemployed_inhabitants.clone()
     }
 

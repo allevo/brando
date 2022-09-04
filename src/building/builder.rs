@@ -3,11 +3,12 @@ use std::sync::Arc;
 use bevy::utils::{HashMap, HashSet};
 
 use crate::building::{BuildRequest, BuildingUnderConstruction, House, ProgressStatus};
+use crate::common::EntityId;
 use crate::common::configuration::Configuration;
 use crate::common::position::Position;
 
 use super::{
-    BiomassPowerPlant, Building, BuildingId, BuildingType, Garden, Office, ResidentProperty,
+    BiomassPowerPlant, Building, BuildingType, Garden, Office, ResidentProperty,
     Street, WorkProperty,
 };
 
@@ -15,7 +16,7 @@ pub struct BuildingBuilder {
     configuration: Arc<Configuration>,
     position_already_used: HashSet<Position>,
 
-    buildings: HashMap<BuildingId, Building>,
+    buildings: HashMap<EntityId, Building>,
 }
 
 impl BuildingBuilder {
@@ -80,7 +81,7 @@ impl BuildingBuilder {
 
     pub(super) fn build<'a, 's>(
         &'s mut self,
-        id: u64,
+        id: EntityId,
         under_construction: BuildingUnderConstruction,
         configuration: &Configuration,
     ) -> &'a Building
@@ -125,7 +126,7 @@ impl BuildingBuilder {
 
     pub(super) fn go_to_live_home(
         &mut self,
-        house_id: BuildingId,
+        house_id: EntityId,
         arrived: usize,
     ) -> Result<(), &'static str> {
         let house = self.buildings.get_mut(&house_id).unwrap();
@@ -138,7 +139,7 @@ impl BuildingBuilder {
 
     pub(super) fn job_found(
         &mut self,
-        office_id: BuildingId,
+        office_id: EntityId,
         arrived: usize,
     ) -> Result<(), &'static str> {
         let office = self.buildings.get_mut(&office_id).unwrap();
@@ -150,7 +151,7 @@ impl BuildingBuilder {
     }
 
     #[allow(dead_code)]
-    pub fn get_building(&self, id: &BuildingId) -> &Building {
+    pub fn get_building(&self, id: &EntityId) -> &Building {
         &self.buildings[id]
     }
 }

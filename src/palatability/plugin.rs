@@ -123,11 +123,13 @@ fn increment_vacant_spot(
 }
 
 mod events {
+    use crate::common::EntityId;
+
     pub struct MoreInhabitantsNeeded {
         pub count: u8,
     }
 
     pub struct MoreWorkersNeeded {
-        pub workers: Vec<u64>,
+        pub workers: Vec<EntityId>,
     }
 }

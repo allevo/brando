@@ -2,14 +2,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     building::plugin::BuildingSnapshot,
-    common::{configuration::Configuration, position::Position},
+    common::{configuration::Configuration, position::Position, EntityId},
 };
 
 pub struct PowerManager {
     configuration: Arc<Configuration>,
-    consumers: Vec<(u64, EnergyPowerConsumer, Position)>,
-    covered_consumers: HashMap<u64, (EnergyPowerConsumer, Position, u64)>,
-    sources: HashMap<u64, (u64, EnergyPowerPlant, Position, Vec<u64>)>,
+    consumers: Vec<(EntityId, EnergyPowerConsumer, Position)>,
+    covered_consumers: HashMap<EntityId, (EnergyPowerConsumer, Position, EntityId)>,
+    sources: HashMap<EntityId, (EntityId, EnergyPowerPlant, Position, Vec<EntityId>)>,
 }
 
 impl PowerManager {
@@ -26,7 +26,7 @@ impl PowerManager {
         &mut self,
         building: &BuildingSnapshot,
         position: Position,
-        entity_id: u64,
+        building_id: EntityId,
     ) {
         let energy_power_consumer = match building {
             // TODO: keep this value from configuration
@@ -56,14 +56,14 @@ impl PowerManager {
         };
 
         self.consumers
-            .push((entity_id, energy_power_consumer, position));
+            .push((building_id, energy_power_consumer, position));
     }
 
     pub fn register_power_source(
         &mut self,
         building: &BuildingSnapshot,
         position: Position,
-        entity_id: u64,
+        building_id: EntityId,
     ) {
         let created_energy_power = match building {
             BuildingSnapshot::Office(_) | BuildingSnapshot::House(_) => return,
@@ -74,8 +74,8 @@ impl PowerManager {
             },
         };
 
-        self.sources.entry(entity_id).or_insert((
-            entity_id,
+        self.sources.entry(building_id).or_insert((
+            building_id,
             created_energy_power,
             position,
             vec![],
@@ -85,8 +85,8 @@ impl PowerManager {
     // TODO: we need to simulate blackouts.
     // For the time being, we skip that complexity avoiding to assign
     // power if the plant completely use its capacity
-    pub fn dedicate_power_to_consumers(&mut self) -> Vec<u64> {
-        let mut sources: Vec<&mut (u64, EnergyPowerPlant, Position, Vec<_>)> =
+    pub fn dedicate_power_to_consumers(&mut self) -> Vec<EntityId> {
+        let mut sources: Vec<&mut (EntityId, EnergyPowerPlant, Position, Vec<_>)> =
             self.sources.values_mut().collect();
 
         let not_yet_covered: Vec<_> = self.consumers.drain(0..self.consumers.len()).collect();
@@ -126,7 +126,7 @@ impl PowerManager {
     }
 
     #[allow(dead_code)]
-    pub fn is_covered(&self, building_id: &u64) -> bool {
+    pub fn is_covered(&self, building_id: &EntityId) -> bool {
         self.covered_consumers.contains_key(building_id) || self.sources.contains_key(building_id)
     }
 }

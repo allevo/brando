@@ -240,9 +240,8 @@ mod tests {
         building::{
             builder::BuildingBuilder,
             plugin::{BuildingSnapshot, HouseComponent, OfficeComponent, PlaneComponent},
-            BuildingId,
         },
-        palatability::manager::PalatabilityManager,
+        palatability::manager::PalatabilityManager, common::EntityId,
     };
     use bevy::prelude::{Entity, KeyCode, With};
 
@@ -283,7 +282,7 @@ mod tests {
 
         let houses: Vec<(Entity, &HouseComponent)> =
             get_entities!(app, (Entity, &HouseComponent), HouseComponent);
-        let house_id: BuildingId = houses.get(0).unwrap().1 .0;
+        let house_id: EntityId = houses.get(0).unwrap().1 .0;
 
         let house = {
             let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
@@ -316,8 +315,8 @@ mod tests {
         // Check houses: both are fulfilled
         let houses: Vec<(Entity, &HouseComponent)> =
             get_entities!(app, (Entity, &HouseComponent), HouseComponent);
-        let house1_id: BuildingId = houses.get(0).unwrap().1 .0;
-        let house2_id: BuildingId = houses.get(1).unwrap().1 .0;
+        let house1_id: EntityId = houses.get(0).unwrap().1 .0;
+        let house2_id: EntityId = houses.get(1).unwrap().1 .0;
 
         let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
 
@@ -374,7 +373,7 @@ s"#;
 
         let mut offices = get_entities!(app, (Entity, &OfficeComponent), OfficeComponent);
         assert_eq!(offices.len(), 1);
-        let office_id: BuildingId = offices.pop().unwrap().1 .0;
+        let office_id: EntityId = offices.pop().unwrap().1 .0;
 
         let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
         let office = building_builder
