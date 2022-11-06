@@ -1,15 +1,16 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use bevy::{prelude::Entity, utils::HashSet};
 
-use crate::common::position::Position;
+use crate::{common::position::Position, palatability::manager::EducationLevel};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BuildingNeedToBeFulfilled {
     building_entity: Entity,
     building_position: Position,
     remain: usize,
 }
+
 
 impl BuildingNeedToBeFulfilled {
     pub fn new(building_entity: Entity, building_position: Position, remain: usize) -> Self {
@@ -23,6 +24,8 @@ impl BuildingNeedToBeFulfilled {
 
 #[derive(Default, Debug)]
 pub struct EntityStorage {
+    inhabitants: HashMap<Entity, EducationLevel>,
+
     // Probably this shouldn't be a vec: let's see...
     /// Inhabitants that are waiting for being introducing the the game
     inhabitants_need_to_be_introduced: HashSet<Entity>,
@@ -52,8 +55,10 @@ impl EntityStorage {
         entry.or_insert(office_to_be_fulfilled);
     }
 
-    pub fn introduce_inhabitants(&mut self, entity: Entity) {
+    pub fn introduce_inhabitant(&mut self, entity: Entity, eduction_level: EducationLevel) {
         self.inhabitants_need_to_be_introduced.insert(entity);
+        self.inhabitants.entry(entity)
+            .or_insert(eduction_level);
     }
 
     pub fn register_unemployee(&mut self, entity: Entity) {
@@ -77,7 +82,11 @@ impl EntityStorage {
             return vec![];
         }
 
-        // TODO: choose better, not randomly
+        // We would like to find an house to fulfill: so find a "empty" house and
+        // remove the number of inhabitants we would like to spawn
+
+        // TODO: choose the house better, not "randomly"
+        // Currently keys().next() is not a good algorithm: we can be smarter here
         let building_entity = *self.houses_needs_to_be_fulfilled.keys().next().unwrap();
         let building_needed_to_be_fulfilled = self
             .houses_needs_to_be_fulfilled
@@ -108,23 +117,41 @@ impl EntityStorage {
     }
 
     pub fn get_inhabitant_job_assignment(&mut self) -> Vec<AssignmentResult> {
-        if self.offices_needs_to_be_fulfilled.is_empty() || self.inhabitants_need_to_work.is_empty()
-        {
+        if self.offices_needs_to_be_fulfilled.is_empty() || self.inhabitants_need_to_work.is_empty() {
             return vec![];
         }
 
-        // TODO: choose better, not randomly
+        // We would like to find an office to fulfill: so find a "empty" office and
+        // remove the number of inhabitants we would like to assign
+        // NB: this method is really too equal of "get_inhabitant_house_assignment" method
+
+        // TODO: choose the office better, not "randomly"
+        // Currently keys().next() is not a good algorithm: we can be smarter here
         let building_entity = *self.offices_needs_to_be_fulfilled.keys().next().unwrap();
         let building_needed_to_be_fulfilled = self
             .offices_needs_to_be_fulfilled
             .get_mut(&building_entity)
             .unwrap();
+        // Because the algorithm is not so "stable", we probably find some buildings
+        // without remains.
+        // TODO: avoid that
         if building_needed_to_be_fulfilled.remain == 0 {
             self.offices_needs_to_be_fulfilled.remove(&building_entity);
             return self.get_inhabitant_job_assignment();
         }
 
-        let from = *self.inhabitants_need_to_work.iter().next().unwrap();
+        let building_required_education_level = &EducationLevel::None;
+
+        let from = self.inhabitants_need_to_work.iter()
+            .filter(|i| {
+                let inhabitant_education_level: &EducationLevel = &self.inhabitants[i];
+                inhabitant_education_level >= building_required_education_level
+            }).next();
+
+        let from = match from {
+            None => return vec![],
+            Some(from) => *from,
+        };
 
         // TODO: only one?
         building_needed_to_be_fulfilled.remain -= 1;

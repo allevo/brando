@@ -84,23 +84,35 @@ impl PalatabilityManager {
         self.vacant_inhabitants = (self.vacant_inhabitants as i128 + delta as i128).max(0) as u64;
     }
 
-    pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(&mut self) -> u8 {
-        let c: u8 = self.vacant_inhabitants.min(u8::MAX as u64) as u8;
-        self.vacant_inhabitants = 0;
-        self.total_populations += c as u64;
+    pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(&mut self) -> Vec<InhabitantToSpawn> {
+        let c: u8 = self.vacant_inhabitants.min(u64::from(u8::MAX)) as u8;
+        self.vacant_inhabitants -= u64::from(c);
+        self.total_populations += u64::from(c);
 
-        c
+        let education_level = self.current_eduction_level();
+
+        (0..c)
+            .map(|_| {
+                InhabitantToSpawn {
+                    education_level,
+                }
+            })
+            .collect()
     }
 
     pub(super) fn consume_workers_to_spawn(&mut self) -> Vec<EntityId> {
-        if self.unemployed_inhabitants.is_empty() {
-            return vec![];
-        }
         if self.vacant_work == 0 {
             return vec![];
         }
 
-        self.unemployed_inhabitants.drain(0..1).collect()
+        // TODO: put 1 into configuration
+        let unemployed_to_consume = 1.min(self.unemployed_inhabitants.len());
+        let range = 0..unemployed_to_consume;
+        if range.is_empty() {
+            return vec![];
+        }
+
+        self.unemployed_inhabitants.drain(range).collect()
     }
 
     pub fn total_populations(&self) -> u64 {
@@ -120,6 +132,10 @@ impl PalatabilityManager {
     #[allow(dead_code)]
     pub fn vacant_inhabitants(&self) -> u64 {
         self.vacant_inhabitants
+    }
+
+    fn current_eduction_level(&self) -> EducationLevel {
+        EducationLevel::None
     }
 }
 
@@ -305,3 +321,23 @@ impl_to_source_palatability_descriptor!(GardenSnapshot, garden);
 impl_to_source_palatability_descriptor!(OfficeSnapshot, office);
 impl_to_source_palatability_descriptor!(StreetSnapshot, street);
 impl_to_source_palatability_descriptor!(BiomassPowerPlantSnapshot, biomass_power_plant);
+
+pub struct InhabitantToSpawn {
+    pub education_level: EducationLevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EducationLevel {
+    None,
+    Low,
+}
+
+impl PartialOrd for EducationLevel {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (EducationLevel::None, EducationLevel::None) | (EducationLevel::Low, EducationLevel::Low) => Some(std::cmp::Ordering::Equal),
+            (_, EducationLevel::Low) => Some(std::cmp::Ordering::Less),
+            (EducationLevel::Low, _) => Some(std::cmp::Ordering::Greater),
+        }
+    }
+}

@@ -7,7 +7,7 @@ use crate::common::configuration::Configuration;
 use crate::GameTick;
 
 use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
-use crate::navigation::plugin::events::InhabitantArrivedAtHomeEvent;
+use crate::inhabitant::plugin::HomeAssignedToInhabitantEvent;
 
 pub use self::events::*;
 
@@ -42,7 +42,7 @@ fn increment_palatabilities(
 }
 
 fn habit_house(
-    mut inhabitant_arrived_writer: EventReader<InhabitantArrivedAtHomeEvent>,
+    mut inhabitant_arrived_writer: EventReader<HomeAssignedToInhabitantEvent>,
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     let inhabitants: Vec<_> = inhabitant_arrived_writer
@@ -67,10 +67,10 @@ fn try_spawn_inhabitants(
         return;
     }
 
-    let inhabitants_count = palatability.consume_inhabitants_to_spawn_and_increment_populations();
-    if inhabitants_count != 0 {
+    let inhabitants_to_spawn = palatability.consume_inhabitants_to_spawn_and_increment_populations();
+    if !inhabitants_to_spawn.is_empty() {
         more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
-            count: inhabitants_count,
+            inhabitants_to_spawn,
         });
 
         let population = palatability.total_populations();
@@ -123,10 +123,10 @@ fn increment_vacant_spot(
 }
 
 mod events {
-    use crate::common::EntityId;
+    use crate::{common::EntityId, palatability::manager::InhabitantToSpawn};
 
     pub struct MoreInhabitantsNeeded {
-        pub count: u8,
+        pub inhabitants_to_spawn: Vec<InhabitantToSpawn>,
     }
 
     pub struct MoreWorkersNeeded {

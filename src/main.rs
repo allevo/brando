@@ -5,6 +5,7 @@ mod common;
 mod navigation;
 mod palatability;
 mod power;
+mod inhabitant;
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -13,6 +14,7 @@ use bevy_mod_picking::*;
 
 use building::plugin::BuildingPlugin;
 use common::configuration::{Configuration, CONFIGURATION};
+use inhabitant::plugin::InhabitantPlugin;
 use navigation::plugin::NavigatorPlugin;
 use palatability::plugin::PalatabilityPlugin;
 use power::plugin::PowerPlugin;
@@ -126,6 +128,7 @@ impl Plugin for MainPlugin {
             .init_resource::<PbrBundles>()
             .add_plugin(BuildingPlugin)
             .add_plugin(NavigatorPlugin)
+            .add_plugin(InhabitantPlugin)
             .add_plugin(PalatabilityPlugin)
             .add_plugin(PowerPlugin);
     }

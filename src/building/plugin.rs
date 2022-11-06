@@ -13,9 +13,8 @@ use crate::{
         position::Position,
         position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, EntityId,
     },
-    navigation::plugin::events::{InhabitantArrivedAtHomeEvent, InhabitantFoundJobEvent},
     palatability::manager::PalatabilityManager,
-    GameTick, PbrBundles,
+    GameTick, PbrBundles, inhabitant::plugin::{HomeAssignedToInhabitantEvent, JobAssignedToInhabitantEvent},
 };
 
 #[cfg(test)]
@@ -277,7 +276,7 @@ fn make_progress_for_building_under_construction(
 fn habit_house(
     mut houses: Query<&mut HouseComponent>,
     mut builder: ResMut<BuildingBuilder>,
-    mut inhabitant_arrived_reader: EventReader<InhabitantArrivedAtHomeEvent>,
+    mut inhabitant_arrived_reader: EventReader<HomeAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_arrived_reader.iter() {
         let hc = match houses.get_mut(arrived.building_entity) {
@@ -298,7 +297,7 @@ fn habit_house(
 fn work_on_office(
     mut offices: Query<&mut OfficeComponent>,
     mut builder: ResMut<BuildingBuilder>,
-    mut inhabitant_find_job_reader: EventReader<InhabitantFoundJobEvent>,
+    mut inhabitant_find_job_reader: EventReader<JobAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_find_job_reader.iter() {
         let hc = match offices.get_mut(arrived.building_entity) {
