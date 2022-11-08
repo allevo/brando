@@ -7,14 +7,16 @@ use bevy::{
 use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 
 use crate::{
-    building::{builder::BuildingBuilder, BuildRequest, BuildingType, BuildingUnderConstruction},
+    building::{manager::Building, BuildingSnapshot},
     common::{
         configuration::Configuration,
         position::Position,
-        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords}, EntityId,
+        position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
+        EntityId,
     },
+    inhabitant::plugin::{HomeAssignedToInhabitantEvent, JobAssignedToInhabitantEvent},
     palatability::manager::PalatabilityManager,
-    GameTick, PbrBundles, inhabitant::plugin::{HomeAssignedToInhabitantEvent, JobAssignedToInhabitantEvent},
+    GameTick, PbrBundles,
 };
 
 #[cfg(test)]
@@ -24,26 +26,25 @@ use components::*;
 
 pub use events::*;
 
+use super::manager::BuildingManager;
+
 pub struct BuildingPlugin;
 
 impl Plugin for BuildingPlugin {
     fn build(&self, app: &mut App) {
         let configuration: &Arc<Configuration> = app.world.resource();
-        let builder = BuildingBuilder::new(configuration.clone());
+        let manager = BuildingManager::new(configuration.clone());
 
         app.insert_resource(EditMode::None)
-            .insert_resource(builder)
+            .insert_resource(manager)
             .add_event::<BuildingCreatedEvent>()
             .add_plugins(DefaultPickingPlugins)
-            .add_system_to_stage(CoreStage::PostUpdate, start_building_creation)
             .add_startup_system(setup)
-            .add_system_to_stage(CoreStage::PostUpdate, switch_edit_mode)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                make_progress_for_building_under_construction,
-            )
-            .add_system_to_stage(CoreStage::PostUpdate, habit_house)
-            .add_system_to_stage(CoreStage::PostUpdate, work_on_office);
+            .add_system(start_building_creation)
+            .add_system(switch_edit_mode)
+            .add_system(make_progress_for_building_under_construction)
+            .add_system(habit_house)
+            .add_system(work_on_office);
     }
 }
 
@@ -82,10 +83,11 @@ fn switch_edit_mode(
 
 /// Spawn entity with `BuildingInConstructionComponent`
 fn start_building_creation(
+    all: Query<Entity, Without<BuildingUnderConstructionComponent>>,
     mut events: EventReader<PickingEvent>,
     planes: Query<&PlaneComponent>,
     edit_mode: Res<EditMode>,
-    mut brando: ResMut<BuildingBuilder>,
+    mut building_manager: ResMut<BuildingManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
 ) {
@@ -106,22 +108,28 @@ fn start_building_creation(
         Some(entity) => entity,
     };
 
+    all.get(*entity).unwrap();
+
     let position: &PlaneComponent = planes.get(*entity).unwrap();
     let position = position.0;
 
-    let building_type = match *edit_mode {
-        EditMode::House => BuildingType::House,
-        EditMode::Garden => BuildingType::Garden,
-        EditMode::Street => BuildingType::Street,
-        EditMode::Office => BuildingType::Office,
-        EditMode::BiomassPowerPlant => BuildingType::BiomassPowerPlant,
+    let id: EntityId = entity.to_bits();
+
+    // TODO: move away from here!
+    let building: Building = match *edit_mode {
+        EditMode::House => Building::House(building_manager.house(id, position)),
+        EditMode::Garden => Building::Garden(building_manager.garden(id, position)),
+        EditMode::Street => Building::Street(building_manager.street(id, position)),
+        EditMode::Office => Building::Office(building_manager.office(id, position)),
+        EditMode::BiomassPowerPlant => {
+            Building::BiomassPowerPlant(building_manager.biomass_power_plant(id, position))
+        }
         EditMode::None => unreachable!("EditMode::None is handled before"),
     };
 
-    info!("Building {:?} at {:?}", building_type, position);
+    info!("Building {:?} at {:?}", building, position);
 
-    let request = BuildRequest::new(position, building_type);
-    let building_under_construction = match brando.create_building(request) {
+    let building_under_construction = match building_manager.start_building_creation(building) {
         Ok(res) => res,
         Err(s) => {
             error!("Error on creation building: {}", s);
@@ -150,11 +158,11 @@ fn start_building_creation(
 fn make_progress_for_building_under_construction(
     game_tick: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingUnderConstructionComponent)>,
-    mut builder: ResMut<BuildingBuilder>,
+    mut building_manager: ResMut<BuildingManager>,
     palatability: Res<PalatabilityManager>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
-    configuration: Res<Arc<Configuration>>,
+    _configuration: Res<Arc<Configuration>>,
     mut building_created_writer: EventWriter<BuildingCreatedEvent>,
 ) {
     // TODO: split the following logic among frames
@@ -169,62 +177,47 @@ fn make_progress_for_building_under_construction(
     }
 
     for (entity, mut building) in buildings_in_progress.iter_mut() {
-        let position = building.building_under_construction.request.position;
+        debug_assert_eq!(
+            entity.to_bits(),
+            building.building_under_construction.get_building().get_id()
+        );
 
-        // TODO: generalize this
-        // Currently we implement only a type of building that, to be built,
-        // needs to have a proper palatability.
-        // So, for the time being, an "if" is enough
-        match building.building_under_construction.request.building_type {
-            BuildingType::House => {
-                let p = palatability.get_house_palatability(&position);
-                // TODO: tag this entity in order to retry later
-                // If an house hasn't enough palatability, we retry again and again
-                // Probably this is not good at all: we can put a dedicated component to the entity
-                // in order to deselect it avoiding the reprocessing.
-                if !p.is_positive() {
-                    debug!("house palatability: insufficient at ({position:?})");
-                    continue;
-                }
-            }
-            BuildingType::Office => {
-                let p = palatability.get_office_palatability(&position);
-                // TODO: tag this entity in order to retry later
-                // If an house hasn't enough palatability, we retry again and again
-                // Probably this is not good at all: we can put a dedicated component to the entity
-                // in order to deselect it avoiding the reprocessing.
-                if !p.is_positive() {
-                    debug!("office palatability: insufficient at ({position:?})");
-                    continue;
-                }
-            }
-            BuildingType::Garden | BuildingType::Street | BuildingType::BiomassPowerPlant => {}
-        }
+        let building_under_construction = &mut building.building_under_construction;
+        let building = building_under_construction.get_building();
+        let id = building.get_id();
+        let position = building.get_position();
 
-        let building_under_construction: &mut BuildingUnderConstruction =
-            &mut building.building_under_construction;
+        // TODO: is this line impact too much the performance?
+        // Technically we need to create the snapshot only when the building is finalized
+        let building_snapshot = BuildingSnapshot::from(building);
 
-        builder
-            .make_progress(building_under_construction)
-            .expect("make progress never fails");
-
-        if !building_under_construction.is_completed() {
+        let building_palatability = palatability.get_palatability(&building_snapshot);
+        if !building_palatability.is_positive() {
+            debug!(
+                "Building palatability {building_palatability:?}: insufficient at ({position:?}"
+            );
             continue;
         }
 
+        let is_completed = building_manager.make_progress(building_under_construction);
+
+        if !is_completed {
+            continue;
+        }
+
+        building_manager.finalize_building_creation(building_under_construction);
+
         info!(
             "{:?} completed at {:?}",
-            building_under_construction.request.building_type,
-            building_under_construction.request.position,
+            building_under_construction, building_under_construction,
         );
 
-        let building_type = &building_under_construction.request.building_type;
-        let bundle = match building_type {
-            BuildingType::House => bundles.house(),
-            BuildingType::Garden => bundles.garden(),
-            BuildingType::Street => bundles.street(),
-            BuildingType::Office => bundles.office(),
-            BuildingType::BiomassPowerPlant => bundles.biomass_power_plant(),
+        let bundle = match building_under_construction.get_building() {
+            Building::House(_) => bundles.house(),
+            Building::Garden(_) => bundles.garden(),
+            Building::Street(_) => bundles.street(),
+            Building::Office(_) => bundles.office(),
+            Building::BiomassPowerPlant(_) => bundles.biomass_power_plant(),
         };
 
         let mut command = commands.entity(entity);
@@ -235,51 +228,29 @@ fn make_progress_for_building_under_construction(
                 parent.spawn_bundle(bundle);
             });
 
-        let entity_id: EntityId = entity.to_bits();
-
-        // TODO: the clone of the building_under_construction is ugly
-        // Actually if I remove a component from the entity (like here),
-        // I should have back also che ownership of the component.
-        // That'd allow to avoid the clone here.
-        let building = builder.build(
-            entity_id,
-            building_under_construction.clone(),
-            &configuration,
-        );
-        let building_id = building.id();
-
         // TODO: rework this part
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
-        let entity = match building_type {
-            BuildingType::House => command.insert(HouseComponent(building_id)).id(),
-            BuildingType::Garden => command.insert(GardenComponent(building_id)).id(),
-            BuildingType::Street => command.insert(StreetComponent(building_id)).id(),
-            BuildingType::Office => command.insert(OfficeComponent(building_id)).id(),
-            BuildingType::BiomassPowerPlant => {
-                command.insert(BiomassPowerPlantComponent(building_id)).id()
-            }
+        match building_under_construction.get_building() {
+            Building::House(_) => command.insert(HouseComponent(id)),
+            Building::Garden(_) => command.insert(GardenComponent(id)),
+            Building::Street(_) => command.insert(StreetComponent(id)),
+            Building::Office(_) => command.insert(OfficeComponent(id)),
+            Building::BiomassPowerPlant(_) => command.insert(BiomassPowerPlantComponent(id)),
         };
 
-        let snapshot = building.snapshot();
-
-        // let building: Building = Building::clone(building);
-        building_created_writer.send(BuildingCreatedEvent {
-            building: snapshot,
-            building_entity: entity,
-            position,
-        });
+        building_created_writer.send(BuildingCreatedEvent { building_snapshot });
     }
 }
 
 /// marks the house as inhabited
 fn habit_house(
     mut houses: Query<&mut HouseComponent>,
-    mut builder: ResMut<BuildingBuilder>,
+    mut building_manager: ResMut<BuildingManager>,
     mut inhabitant_arrived_reader: EventReader<HomeAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_arrived_reader.iter() {
-        let hc = match houses.get_mut(arrived.building_entity) {
+        let hc = match houses.get_mut(Entity::from_bits(arrived.building_entity_id)) {
             Ok(c) => c,
             Err(e) => {
                 error!("error on getting house component {e:?}");
@@ -287,20 +258,25 @@ fn habit_house(
             }
         };
 
-        builder
-            .go_to_live_home(hc.0, arrived.inhabitants_entities.len())
-            .expect("error on updating house property");
+        building_manager.inhabitants_arrived_at_home(
+            hc.0,
+            arrived
+                .inhabitants_entity_ids
+                .len()
+                .try_into()
+                .expect("unable to convert usize into u32"),
+        );
     }
 }
 
 /// marks the office as fulfilled
 fn work_on_office(
     mut offices: Query<&mut OfficeComponent>,
-    mut builder: ResMut<BuildingBuilder>,
+    mut building_manager: ResMut<BuildingManager>,
     mut inhabitant_find_job_reader: EventReader<JobAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_find_job_reader.iter() {
-        let hc = match offices.get_mut(arrived.building_entity) {
+        let hc = match offices.get_mut(Entity::from_bits(arrived.building_entity_id)) {
             Ok(c) => c,
             Err(e) => {
                 error!("error on getting house component {e:?}");
@@ -308,9 +284,14 @@ fn work_on_office(
             }
         };
 
-        builder
-            .job_found(hc.0, arrived.workers_entities.len())
-            .expect("error on updating office property");
+        building_manager.workers_found_job(
+            hc.0,
+            arrived
+                .workers_entity_ids
+                .len()
+                .try_into()
+                .expect("unable to convert usize into u32"),
+        );
     }
 }
 
@@ -344,60 +325,12 @@ fn setup(
 }
 
 mod events {
-    use crate::{
-        building::{ResidentProperty, WorkProperty},
-        common::position::Position,
-    };
-    use bevy::prelude::{Component, Entity};
+    use crate::building::BuildingSnapshot;
+    use bevy::prelude::Component;
 
     #[derive(Component)]
     pub struct BuildingCreatedEvent {
-        pub position: Position,
-        pub building: BuildingSnapshot,
-        pub building_entity: Entity,
-    }
-
-    pub enum BuildingSnapshot {
-        House(HouseSnapshot),
-        Office(OfficeSnapshot),
-        Street(StreetSnapshot),
-        Garden(GardenSnapshot),
-        BiomassPowerPlant(BiomassPowerPlantSnapshot),
-    }
-
-    #[allow(dead_code)]
-    impl BuildingSnapshot {
-        pub fn into_house(self) -> HouseSnapshot {
-            match self {
-                BuildingSnapshot::House(h) => h,
-                _ => unreachable!("BuildingSnapshot is not an HouseSnapshot"),
-            }
-        }
-
-        pub fn into_office(self) -> OfficeSnapshot {
-            match self {
-                BuildingSnapshot::Office(o) => o,
-                _ => unreachable!("BuildingSnapshot is not an OfficeSnapshot"),
-            }
-        }
-    }
-
-    pub struct HouseSnapshot {
-        pub position: Position,
-        pub resident_property: ResidentProperty,
-    }
-    pub struct OfficeSnapshot {
-        pub position: Position,
-        pub work_property: WorkProperty,
-    }
-    pub struct StreetSnapshot {
-        pub position: Position,
-    }
-    pub struct GardenSnapshot {
-        pub position: Position,
-    }
-    pub struct BiomassPowerPlantSnapshot {
-        pub position: Position,
+        pub building_snapshot: BuildingSnapshot,
     }
 }
 
@@ -405,7 +338,7 @@ mod components {
     use bevy::prelude::Component;
 
     use crate::{
-        building::{BuildingUnderConstruction},
+        building::manager::BuildingUnderConstruction,
         common::{position::Position, EntityId},
     };
 

@@ -2,10 +2,10 @@
 
 mod building;
 mod common;
+mod inhabitant;
 mod navigation;
 mod palatability;
 mod power;
-mod inhabitant;
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -241,10 +241,12 @@ fn setup(mut commands: Commands) {
 mod tests {
     use crate::{
         building::{
-            builder::BuildingBuilder,
-            plugin::{BuildingSnapshot, HouseComponent, OfficeComponent, PlaneComponent},
+            manager::BuildingManager,
+            plugin::{HouseComponent, OfficeComponent, PlaneComponent},
+            BuildingSnapshot,
         },
-        palatability::manager::PalatabilityManager, common::EntityId,
+        common::EntityId,
+        palatability::manager::PalatabilityManager,
     };
     use bevy::prelude::{Entity, KeyCode, With};
 
@@ -288,14 +290,12 @@ mod tests {
         let house_id: EntityId = houses.get(0).unwrap().1 .0;
 
         let house = {
-            let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
-            let house: BuildingSnapshot = building_builder.get_building(&house_id).snapshot();
+            let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
+            let house: BuildingSnapshot =
+                BuildingSnapshot::from(building_manager.get_building(&house_id));
             house.into_house()
         };
-        assert_eq!(
-            house.resident_property.current_residents,
-            house.resident_property.max_residents
-        );
+        assert_eq!(house.current_residents, house.max_residents);
 
         release_keyboard_key(&mut app, KeyCode::H);
         run(&mut app, 1);
@@ -309,7 +309,7 @@ mod tests {
         release_keyboard_key(&mut app, KeyCode::G);
         run(&mut app, 1);
         select_plane(&mut app, &garden_entity);
-        run(&mut app, 50);
+        run(&mut app, 60);
 
         // Homes are fulfilled
         let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
@@ -321,24 +321,12 @@ mod tests {
         let house1_id: EntityId = houses.get(0).unwrap().1 .0;
         let house2_id: EntityId = houses.get(1).unwrap().1 .0;
 
-        let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
+        let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
 
-        let house = building_builder
-            .get_building(&house1_id)
-            .snapshot()
-            .into_house();
-        assert_eq!(
-            house.resident_property.current_residents,
-            house.resident_property.max_residents
-        );
-        let house = building_builder
-            .get_building(&house2_id)
-            .snapshot()
-            .into_house();
-        assert_eq!(
-            house.resident_property.current_residents,
-            house.resident_property.max_residents
-        );
+        let house = BuildingSnapshot::from(building_manager.get_building(&house1_id)).into_house();
+        assert_eq!(house.current_residents, house.max_residents);
+        let house = BuildingSnapshot::from(building_manager.get_building(&house2_id)).into_house();
+        assert_eq!(house.current_residents, house.max_residents);
 
         run(&mut app, 50);
 
@@ -378,16 +366,11 @@ s"#;
         assert_eq!(offices.len(), 1);
         let office_id: EntityId = offices.pop().unwrap().1 .0;
 
-        let building_builder = app.world.get_resource::<BuildingBuilder>().unwrap();
-        let office = building_builder
-            .get_building(&office_id)
-            .snapshot()
-            .into_office();
+        let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
+        let office =
+            BuildingSnapshot::from(building_manager.get_building(&office_id)).into_office();
 
-        assert_eq!(
-            office.work_property.max_worker,
-            office.work_property.current_worker
-        );
+        assert_eq!(office.max_workers, office.current_workers);
     }
 
     #[test]

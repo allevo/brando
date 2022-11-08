@@ -18,7 +18,9 @@ impl Position {
         })
     }
 
-    pub fn distance(&self, position: &Position) -> usize {
-        ((position.x - self.x).abs() + (position.y - self.y).abs()) as usize
+    pub fn distance(&self, position: &Position) -> u32 {
+        ((position.x - self.x).abs() + (position.y - self.y).abs())
+            .try_into()
+            .expect("i64 cannot be converted to u32")
     }
 }

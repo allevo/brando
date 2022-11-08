@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 
+use crate::building::BuildingSnapshot;
 use crate::common::configuration::Configuration;
 
 use crate::GameTick;
 
-use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
+use crate::building::plugin::BuildingCreatedEvent;
 use crate::inhabitant::plugin::HomeAssignedToInhabitantEvent;
 
 pub use self::events::*;
@@ -36,8 +37,7 @@ fn increment_palatabilities(
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     for building_created in building_created_reader.iter() {
-        palatability.add_house_source(&building_created.building);
-        palatability.add_office_source(&building_created.building);
+        palatability.add_palatability_source(&building_created.building_snapshot);
     }
 }
 
@@ -47,8 +47,8 @@ fn habit_house(
 ) {
     let inhabitants: Vec<_> = inhabitant_arrived_writer
         .iter()
-        .flat_map(|a| a.inhabitants_entities.iter())
-        .map(|e| (*e).to_bits())
+        .flat_map(|a| a.inhabitants_entity_ids.iter())
+        .copied()
         .collect();
     if inhabitants.is_empty() {
         return;
@@ -67,7 +67,8 @@ fn try_spawn_inhabitants(
         return;
     }
 
-    let inhabitants_to_spawn = palatability.consume_inhabitants_to_spawn_and_increment_populations();
+    let inhabitants_to_spawn =
+        palatability.consume_inhabitants_to_spawn_and_increment_populations();
     if !inhabitants_to_spawn.is_empty() {
         more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
             inhabitants_to_spawn,
@@ -103,16 +104,15 @@ fn increment_vacant_spot(
     mut palatability: ResMut<PalatabilityManager>,
 ) {
     for building_created in building_created_reader.iter() {
-        match &building_created.building {
+        match &building_created.building_snapshot {
             BuildingSnapshot::House(house) => {
                 // NB: `current_residents` is always 0 here
-                let delta = house.resident_property.max_residents
-                    - house.resident_property.current_residents;
+                let delta = house.max_residents - house.current_residents;
                 palatability.increment_vacant_inhabitants(delta as i32);
             }
             BuildingSnapshot::Office(office) => {
                 // NB: `current_worker` is always 0 here
-                let delta = office.work_property.max_worker - office.work_property.current_worker;
+                let delta = office.max_workers - office.current_workers;
                 palatability.increment_vacant_work(delta as i32);
             }
             BuildingSnapshot::Garden(_)

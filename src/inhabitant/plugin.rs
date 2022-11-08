@@ -1,23 +1,31 @@
 use bevy::prelude::*;
 
-use crate::{common::position::Position, palatability::{plugin::{MoreInhabitantsNeeded, MoreWorkersNeeded}, manager::PalatabilityManager}, building::plugin::{BuildingSnapshot, BuildingCreatedEvent}, navigation::navigator::Navigator};
+use crate::{
+    building::{plugin::BuildingCreatedEvent, BuildingSnapshot},
+    common::{position::Position, EntityId},
+    navigation::navigator::Navigator,
+    palatability::{
+        manager::PalatabilityManager,
+        plugin::{MoreInhabitantsNeeded, MoreWorkersNeeded},
+    },
+};
 
-use super::{manager::InhabitantManager, entity_storage::{EntityStorage, AssignmentResult, BuildingNeedToBeFulfilled}};
-
+use super::{
+    entity_storage::{AssignmentResult, BuildingNeedToBeFulfilled, EntityStorage},
+    inhabitant::Inhabitant,
+    manager::InhabitantManager,
+};
 
 use self::components::*;
 pub use events::*;
 
 pub struct InhabitantPlugin;
 
-
 impl Plugin for InhabitantPlugin {
     fn build(&self, app: &mut App) {
         let manager = InhabitantManager::new();
 
-        app
-            .insert_resource(manager)
-            
+        app.insert_resource(manager)
             .add_event::<HomeAssignedToInhabitantEvent>()
             .add_event::<JobAssignedToInhabitantEvent>()
             // Probably we would like to create Vecs with already-preallocated capacity
@@ -26,11 +34,9 @@ impl Plugin for InhabitantPlugin {
             .add_system(create_inhabitants)
             .add_system(find_houses_for_inhabitants)
             .add_system(find_job_for_inhabitants)
-            .add_system(inhabitant_want_to_work)
-            ;
+            .add_system(inhabitant_want_to_work);
     }
 }
-
 
 fn register_target(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
@@ -38,13 +44,14 @@ fn register_target(
     mut entity_storage: ResMut<EntityStorage>,
 ) {
     for created_building in building_created_reader.iter() {
-        let building_position: &Position = &created_building.position;
-        let building_entity: Entity = created_building.building_entity;
+        let building_position: &Position = created_building.building_snapshot.get_position();
+        let building_entity_id: &EntityId = created_building.building_snapshot.get_id();
+        let entity = Entity::from_bits(*building_entity_id);
 
-        match &created_building.building {
+        match &created_building.building_snapshot {
             BuildingSnapshot::House(house) => {
                 commands
-                    .entity(building_entity)
+                    .entity(entity)
                     .insert(TargetComponent {
                         target_position: *building_position,
                         target_type: TargetType::House,
@@ -53,14 +60,14 @@ fn register_target(
 
                 info!("Register house");
                 entity_storage.register_house(BuildingNeedToBeFulfilled::new(
-                    building_entity,
+                    entity.to_bits(),
                     *building_position,
-                    house.resident_property.max_residents,
+                    house.max_residents,
                 ));
             }
             BuildingSnapshot::Office(office) => {
                 commands
-                    .entity(building_entity)
+                    .entity(entity)
                     .insert(TargetComponent {
                         target_position: *building_position,
                         target_type: TargetType::Office,
@@ -69,9 +76,9 @@ fn register_target(
 
                 info!("Register office");
                 entity_storage.register_office(BuildingNeedToBeFulfilled::new(
-                    building_entity,
+                    entity.to_bits(),
                     *building_position,
-                    office.work_property.max_worker,
+                    office.max_workers,
                 ));
             }
             BuildingSnapshot::Street(_) => {}
@@ -86,26 +93,25 @@ fn create_inhabitants(
     mut commands: Commands,
     mut entity_storage: ResMut<EntityStorage>,
     mut more_inhabitants_needed_reader: EventReader<MoreInhabitantsNeeded>,
-    mut palatability_manager: Res<PalatabilityManager>,
-) {    
+    _palatability_manager: Res<PalatabilityManager>,
+) {
     // TODO: for the time being we consider the origin as the:
     // - origin
     // - unique point that the inhabitants came from
-    let position = Position { x: 0, y: 0 };
+    let _position = Position { x: 0, y: 0 };
 
     // let palatability_manager: &PalatabilityManager = &*palatability_manager;
 
     let total = more_inhabitants_needed_reader
         .iter()
         .flat_map(|e| e.inhabitants_to_spawn.iter());
-    
-    for inhabitant_to_spawn in total {
-        let entity = commands
-            .spawn()
-            .insert(InhabitantComponent)
-            .id();
 
-        entity_storage.introduce_inhabitant(entity, inhabitant_to_spawn.education_level);
+    for inhabitant_to_spawn in total {
+        let entity = commands.spawn().insert(InhabitantComponent).id();
+
+        let inhabitant = Inhabitant::new(entity.to_bits(), inhabitant_to_spawn.education_level);
+
+        entity_storage.introduce_inhabitant(inhabitant);
     }
 }
 
@@ -123,7 +129,7 @@ fn find_houses_for_inhabitants(
     info!("inhabitants-houses assignments {}", couples.len());
 
     for couple in couples {
-        let navigation_descriptor =
+        let _navigation_descriptor =
             match navigator.get_navigation_descriptor(&couple.from_position, couple.to_position) {
                 // TODO consider to have a try not immediately
                 // Avoiding removing HouseWaitingForInhabitantsComponent we are processing again
@@ -136,23 +142,13 @@ fn find_houses_for_inhabitants(
                 Some(nd) => nd,
             };
 
-        /*
-        commands.entity(couple.from).insert(AssignedHouse {
-            house_entity: couple.to,
-            house_position: couple.to_position,
-            navigation_descriptor,
-        });
-        */
-
         inhabitant_arrived_writer.send(HomeAssignedToInhabitantEvent {
-            inhabitants_entities: vec![couple.from],
-            building_entity: couple.to,
+            inhabitants_entity_ids: vec![couple.from],
+            building_entity_id: couple.to,
             house_position: couple.to_position,
         });
 
-        // commands.entity(couple.from).insert(WaitingForWorkComponent);
-
-        entity_storage.set_inhabitant_house_position(couple.from, couple.to_position);
+        entity_storage.found_home_for_inhabitant(&couple.from, couple.to, couple.to_position);
     }
 }
 
@@ -165,8 +161,7 @@ fn inhabitant_want_to_work(
         .flat_map(|e| e.workers.iter());
 
     for entity_id in entity_ids {
-        let entity = Entity::from_bits(*entity_id);
-        entity_storage.register_unemployee(entity);
+        entity_storage.register_unemployee(*entity_id);
     }
 }
 
@@ -184,7 +179,7 @@ fn find_job_for_inhabitants(
     info!("inhabitants-office assignments {}", couples.len());
 
     for couple in couples {
-        let navigation_descriptor =
+        let _navigation_descriptor =
             match navigator.get_navigation_descriptor(&couple.from_position, couple.to_position) {
                 // TODO consider to have a try not immediately
                 // "resign_assign_result" re-insert the couple inside an internal queue
@@ -197,47 +192,33 @@ fn find_job_for_inhabitants(
                 Some(nd) => nd,
             };
 
-        /*
-        commands.entity(couple.from).insert(AssignedOffice {
-            office_entity: couple.to,
-            office_position: couple.to_position,
-            navigation_descriptor,
-        });
-        */
-
         inhabitant_found_job_writer.send(JobAssignedToInhabitantEvent {
-            workers_entities: vec![couple.from],
-            building_entity: couple.to,
+            workers_entity_ids: vec![couple.from],
+            building_entity_id: couple.to,
         });
 
-        /*
-        commands
-            .entity(couple.from)
-            .remove::<WaitingForWorkComponent>();
-        */
+        entity_storage.found_job_for_unemployee(&couple.from, couple.to, couple.to_position);
     }
 }
 
 pub mod events {
-    use bevy::prelude::Entity;
 
-    use crate::common::position::Position;
+    use crate::common::{position::Position, EntityId};
 
     pub struct HomeAssignedToInhabitantEvent {
-        pub inhabitants_entities: Vec<Entity>,
-        pub building_entity: Entity,
+        pub inhabitants_entity_ids: Vec<EntityId>,
+        pub building_entity_id: EntityId,
         pub house_position: Position,
     }
 
     pub struct JobAssignedToInhabitantEvent {
-        pub workers_entities: Vec<Entity>,
-        pub building_entity: Entity,
+        pub workers_entity_ids: Vec<EntityId>,
+        pub building_entity_id: EntityId,
     }
 }
 
-
 mod components {
-    use bevy::prelude::{Component};
+    use bevy::prelude::Component;
 
     use crate::common::position::Position;
 

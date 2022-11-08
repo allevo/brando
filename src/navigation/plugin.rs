@@ -1,12 +1,11 @@
 use bevy::prelude::*;
 
-use crate::{common::position::Position};
+use crate::building::BuildingSnapshot;
+use crate::common::position::Position;
 
-use crate::building::plugin::{BuildingCreatedEvent, BuildingSnapshot};
+use crate::building::plugin::BuildingCreatedEvent;
 
-use super::{
-    navigator::Navigator,
-};
+use super::navigator::Navigator;
 
 #[cfg(test)]
 pub use components::*;
@@ -19,8 +18,7 @@ impl Plugin for NavigatorPlugin {
 
         app.insert_resource(navigator)
             // .add_system(new_building_created)
-            .add_system(expand_navigator_graph)
-            ;
+            .add_system(expand_navigator_graph);
         // .add_system(tag_inhabitants_for_waiting_for_work)
         // .add_system(assign_waiting_for)
         // .add_system_to_stage(CoreStage::Last, add_node)
@@ -35,9 +33,9 @@ fn expand_navigator_graph(
 ) {
     let mut need_to_rebuild = false;
     for created_building in building_created_reader.iter() {
-        let building_position: &Position = &created_building.position;
+        let building_position: &Position = created_building.building_snapshot.get_position();
 
-        match &created_building.building {
+        match &created_building.building_snapshot {
             BuildingSnapshot::Street(_) => {
                 info!("adding node at {:?}", building_position);
                 navigator.add_node(*building_position);
@@ -59,12 +57,10 @@ fn expand_navigator_graph(
     }
 }
 
-
 mod components {
     use bevy::prelude::{Component, Entity};
 
     use crate::{common::position::Position, navigation::navigator::NavigationDescriptor};
-
 
     #[derive(Component)]
     pub struct AssignedHouse {
@@ -82,5 +78,4 @@ mod components {
 
     #[derive(Component)]
     pub struct WaitingForWorkComponent;
-
 }

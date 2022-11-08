@@ -19,7 +19,6 @@ impl Plugin for PowerPlugin {
         app.insert_resource(power_manager)
             // .add_event::<PowerCoveredBuildingEvent>()
             .add_system(register_power_consumers)
-            .add_system(register_power_sources)
             .add_system(dedicate_power_to_consumers);
     }
 }
@@ -29,28 +28,9 @@ fn register_power_consumers(
     mut building_created: EventReader<BuildingCreatedEvent>,
 ) {
     for building_created_event in building_created.iter() {
-        let BuildingCreatedEvent {
-            building,
-            position,
-            building_entity,
-        } = &building_created_event;
-
-        power_manager.register_power_consumer(building, *position, building_entity.to_bits());
-    }
-}
-
-fn register_power_sources(
-    mut power_manager: ResMut<PowerManager>,
-    mut building_created: EventReader<BuildingCreatedEvent>,
-) {
-    for building_created_event in building_created.iter() {
-        let BuildingCreatedEvent {
-            building,
-            position,
-            building_entity,
-        } = &building_created_event;
-
-        power_manager.register_power_source(building, *position, building_entity.to_bits());
+        let building_snapshot = &building_created_event.building_snapshot;
+        power_manager.register_power_consumer(building_snapshot);
+        power_manager.register_power_source(building_snapshot);
     }
 }
 

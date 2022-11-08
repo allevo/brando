@@ -1,14 +1,18 @@
 use std::sync::Arc;
 
-use tracing::info;
+use bevy::utils::HashMap;
 
 use crate::{
-    building::plugin::{
-        BiomassPowerPlantSnapshot, BuildingSnapshot, GardenSnapshot, HouseSnapshot, OfficeSnapshot,
-        StreetSnapshot,
+    building::BuildingSnapshot,
+    common::{
+        configuration::{Configuration, SourcePalatabilityConfiguration},
+        position::Position,
+        EntityId,
     },
-    common::{configuration::Configuration, position::Position, EntityId},
+    palatability::manager::macros::apply_source,
 };
+
+use self::macros::palatability_range;
 
 pub struct PalatabilityManager {
     configuration: Arc<Configuration>,
@@ -16,12 +20,13 @@ pub struct PalatabilityManager {
     unemployed_inhabitants: Vec<EntityId>,
     vacant_inhabitants: u64,
     vacant_work: u64,
-    // TODO: change approach to store the rendered values
-    // We can consider also an async update:
-    // - collects all the sources into a dedicated collection
-    // - process little by little the palatability adding into a concrete view
-    houses_sources: Vec<HouseSourcePalatabilityDescriptor>,
-    office_sources: Vec<OfficeSourcePalatabilityDescriptor>,
+    // This is the "concrete view" of all palatability sources
+    // This mean we can have some problem on:
+    // - building deletion
+    // - temporary unavailability
+    // - change value on upgrading / downgrading building values
+    // - other (?)
+    palatability_descriptors: HashMap<Position, PalatabilityDescriptor>,
 }
 impl PalatabilityManager {
     pub fn new(configuration: Arc<Configuration>) -> Self {
@@ -31,29 +36,40 @@ impl PalatabilityManager {
             unemployed_inhabitants: vec![],
             vacant_inhabitants: 0,
             vacant_work: 0,
-            houses_sources: vec![],
-            office_sources: vec![],
+            palatability_descriptors: Default::default(),
         }
     }
 
-    pub(super) fn add_house_source(&mut self, source: &impl ToHouseSourcePalatabilityDescriptor) {
-        let source = match source.to_house_source_palatability(&self.configuration) {
-            None => return,
-            Some(source) => source,
-        };
-        info!("added as house palatability source");
-        self.houses_sources.push(source);
+    pub(super) fn add_palatability_source(&mut self, source: &BuildingSnapshot) {
+        let palatabilities_range = get_palatabilities_range(&self.configuration, source);
+
+        if let Some(house_source) = palatabilities_range.house {
+            apply_source!(self, house_source, house_value);
+        }
+
+        if let Some(office_source) = palatabilities_range.office {
+            apply_source!(self, office_source, office_value);
+        }
     }
 
-    pub(super) fn add_office_source(&mut self, source: &impl ToOfficeSourcePalatabilityDescriptor) {
-        let source = match source.to_office_source_palatability(&self.configuration) {
-            None => return,
-            Some(source) => source,
-        };
-        info!("added as house palatability source");
-        self.office_sources.push(source);
+    pub fn get_palatability(&self, building: &BuildingSnapshot) -> BuildingPalatability {
+        let position = building.get_position();
+
+        let value = self
+            .palatability_descriptors
+            .get(position)
+            .map_or(0, |p| match building {
+                BuildingSnapshot::House(_) => p.house_value,
+                BuildingSnapshot::Office(_) => p.office_value,
+                BuildingSnapshot::Street(_) => 0,
+                BuildingSnapshot::Garden(_) => 0,
+                BuildingSnapshot::BiomassPowerPlant(_) => 0,
+            });
+
+        BuildingPalatability { value }
     }
 
+    /*
     pub fn get_house_palatability(&self, position: &Position) -> HousePalatability {
         let value: i32 = self
             .houses_sources
@@ -71,6 +87,7 @@ impl PalatabilityManager {
             .sum();
         OfficePalatability { value }
     }
+    */
 
     pub(super) fn add_unemployed_inhabitants(&mut self, inhabitants: Vec<EntityId>) {
         self.unemployed_inhabitants.extend(inhabitants);
@@ -84,7 +101,11 @@ impl PalatabilityManager {
         self.vacant_inhabitants = (self.vacant_inhabitants as i128 + delta as i128).max(0) as u64;
     }
 
-    pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(&mut self) -> Vec<InhabitantToSpawn> {
+    pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(
+        &mut self,
+    ) -> Vec<InhabitantToSpawn> {
+        // info!("vacant_inhabitants {}", self.vacant_inhabitants);
+
         let c: u8 = self.vacant_inhabitants.min(u64::from(u8::MAX)) as u8;
         self.vacant_inhabitants -= u64::from(c);
         self.total_populations += u64::from(c);
@@ -92,11 +113,7 @@ impl PalatabilityManager {
         let education_level = self.current_eduction_level();
 
         (0..c)
-            .map(|_| {
-                InhabitantToSpawn {
-                    education_level,
-                }
-            })
+            .map(|_| InhabitantToSpawn { education_level })
             .collect()
     }
 
@@ -139,194 +156,92 @@ impl PalatabilityManager {
     }
 }
 
-pub struct HouseSourcePalatabilityDescriptor {
-    pub origin: Position,
-    pub value: i32,
-    pub max_horizontal_distribution_distance: usize,
-    pub max_linear_distribution_distance: usize,
-    pub linear_factor: i32,
+#[derive(Debug)]
+struct PalatabilityDescriptor {
+    house_value: i32,
+    office_value: i32,
 }
 
-impl HouseSourcePalatabilityDescriptor {
-    fn calculate(&self, position: &Position) -> i32 {
-        let distance = self.origin.distance(position);
+fn calculate_palatability_value(range: &PalatabilityRange, position: &Position) -> i32 {
+    let distance = range.origin.distance(position);
 
-        if distance < self.max_horizontal_distribution_distance {
-            return self.value;
+    if distance < range.max_horizontal_distribution_distance {
+        return range.origin_value;
+    }
+
+    if distance < range.max_linear_distribution_distance {
+        let d = (distance - range.max_horizontal_distribution_distance) as i32;
+
+        let value = range.origin_value - range.linear_factor * d;
+        if range.origin_value > 0 {
+            return value.max(0);
+        } else {
+            return value.min(0);
         }
+    }
 
-        if distance < self.max_linear_distribution_distance {
-            let d = (distance - self.max_horizontal_distribution_distance) as i32;
+    0
+}
 
-            let value = self.value - self.linear_factor * d;
-            if self.value > 0 {
-                return value.max(0);
-            } else {
-                return value.min(0);
-            }
+#[derive(Debug)]
+struct PalatabilitiesRange {
+    house: Option<PalatabilityRange>,
+    office: Option<PalatabilityRange>,
+}
+
+#[derive(Debug)]
+struct PalatabilityRange {
+    origin: Position,
+    origin_value: i32,
+    max_horizontal_distribution_distance: u32,
+    max_linear_distribution_distance: u32,
+    linear_factor: i32,
+}
+
+fn get_palatabilities_range(
+    configuration: &Arc<Configuration>,
+    building: &BuildingSnapshot,
+) -> PalatabilitiesRange {
+    match building {
+        BuildingSnapshot::House(_) => palatability_range!(configuration, house, building),
+        BuildingSnapshot::Office(_) => palatability_range!(configuration, office, building),
+        BuildingSnapshot::Street(_) => palatability_range!(configuration, street, building),
+        BuildingSnapshot::Garden(_) => palatability_range!(configuration, garden, building),
+        BuildingSnapshot::BiomassPowerPlant(_) => {
+            palatability_range!(configuration, biomass_power_plant, building)
         }
-
-        0
     }
 }
 
-pub struct OfficeSourcePalatabilityDescriptor {
-    pub origin: Position,
-    pub value: i32,
-    pub max_horizontal_distribution_distance: usize,
-    pub max_linear_distribution_distance: usize,
-    pub linear_factor: i32,
-}
-
-impl OfficeSourcePalatabilityDescriptor {
-    fn calculate(&self, position: &Position) -> i32 {
-        let distance = self.origin.distance(position);
-
-        if distance < self.max_horizontal_distribution_distance {
-            return self.value;
-        }
-
-        if distance < self.max_linear_distribution_distance {
-            let d = (distance - self.max_horizontal_distribution_distance) as i32;
-
-            let value = self.value - self.linear_factor * d;
-            if self.value > 0 {
-                return value.max(0);
-            } else {
-                return value.min(0);
-            }
-        }
-
-        0
+fn get_palatability_wrapper(
+    origin: Position,
+) -> impl FnOnce(&SourcePalatabilityConfiguration) -> PalatabilityRange {
+    move |for_house: &SourcePalatabilityConfiguration| PalatabilityRange {
+        origin,
+        origin_value: for_house.value,
+        max_horizontal_distribution_distance: for_house.max_horizontal_distribution_distance,
+        max_linear_distribution_distance: for_house.max_linear_distribution_distance,
+        linear_factor: for_house.linear_factor,
     }
 }
 
-pub struct HousePalatability {
+#[derive(Debug)]
+pub struct BuildingPalatability {
     value: i32,
 }
-
-impl HousePalatability {
+impl BuildingPalatability {
     #[inline]
     pub fn is_positive(&self) -> bool {
         // we consider 0 as positive PalatabilityManager
         !self.value.is_negative()
     }
 }
-
-pub struct OfficePalatability {
-    value: i32,
-}
-
-impl OfficePalatability {
-    #[inline]
-    pub fn is_positive(&self) -> bool {
-        // we consider 0 as positive PalatabilityManager
-        !self.value.is_negative()
-    }
-}
-
-pub trait ToHouseSourcePalatabilityDescriptor {
-    fn to_house_source_palatability(
-        &self,
-        configuration: &Configuration,
-    ) -> Option<HouseSourcePalatabilityDescriptor>;
-}
-pub trait ToOfficeSourcePalatabilityDescriptor {
-    fn to_office_source_palatability(
-        &self,
-        configuration: &Configuration,
-    ) -> Option<OfficeSourcePalatabilityDescriptor>;
-}
-
-impl ToHouseSourcePalatabilityDescriptor for BuildingSnapshot {
-    fn to_house_source_palatability(
-        &self,
-        configuration: &Configuration,
-    ) -> Option<HouseSourcePalatabilityDescriptor> {
-        match self {
-            BuildingSnapshot::Garden(g) => g.to_house_source_palatability(configuration),
-            BuildingSnapshot::House(h) => h.to_house_source_palatability(configuration),
-            BuildingSnapshot::Street(s) => s.to_house_source_palatability(configuration),
-            BuildingSnapshot::Office(o) => o.to_house_source_palatability(configuration),
-            BuildingSnapshot::BiomassPowerPlant(bpp) => {
-                bpp.to_house_source_palatability(configuration)
-            }
-        }
-    }
-}
-
-impl ToOfficeSourcePalatabilityDescriptor for BuildingSnapshot {
-    fn to_office_source_palatability(
-        &self,
-        configuration: &Configuration,
-    ) -> Option<OfficeSourcePalatabilityDescriptor> {
-        match self {
-            BuildingSnapshot::Garden(g) => g.to_office_source_palatability(configuration),
-            BuildingSnapshot::House(h) => h.to_office_source_palatability(configuration),
-            BuildingSnapshot::Street(s) => s.to_office_source_palatability(configuration),
-            BuildingSnapshot::Office(o) => o.to_office_source_palatability(configuration),
-            BuildingSnapshot::BiomassPowerPlant(bpp) => {
-                bpp.to_office_source_palatability(configuration)
-            }
-        }
-    }
-}
-
-macro_rules! impl_to_source_palatability_descriptor {
-    ($cl: ty, $name: tt) => {
-        impl ToHouseSourcePalatabilityDescriptor for $cl {
-            fn to_house_source_palatability(
-                &self,
-                configuration: &Configuration,
-            ) -> Option<HouseSourcePalatabilityDescriptor> {
-                let e = configuration
-                    .buildings
-                    .$name
-                    .palatability_configuration
-                    .source_for_house
-                    .as_ref()?;
-                Some(HouseSourcePalatabilityDescriptor {
-                    origin: self.position,
-                    value: e.value,
-                    max_horizontal_distribution_distance: e.max_horizontal_distribution_distance,
-                    max_linear_distribution_distance: e.max_linear_distribution_distance,
-                    linear_factor: e.linear_factor,
-                })
-            }
-        }
-        impl ToOfficeSourcePalatabilityDescriptor for $cl {
-            fn to_office_source_palatability(
-                &self,
-                configuration: &Configuration,
-            ) -> Option<OfficeSourcePalatabilityDescriptor> {
-                let e = configuration
-                    .buildings
-                    .$name
-                    .palatability_configuration
-                    .source_for_office
-                    .as_ref()?;
-                Some(OfficeSourcePalatabilityDescriptor {
-                    origin: self.position,
-                    value: e.value,
-                    max_horizontal_distribution_distance: e.max_horizontal_distribution_distance,
-                    max_linear_distribution_distance: e.max_linear_distribution_distance,
-                    linear_factor: e.linear_factor,
-                })
-            }
-        }
-    };
-}
-impl_to_source_palatability_descriptor!(HouseSnapshot, house);
-impl_to_source_palatability_descriptor!(GardenSnapshot, garden);
-impl_to_source_palatability_descriptor!(OfficeSnapshot, office);
-impl_to_source_palatability_descriptor!(StreetSnapshot, street);
-impl_to_source_palatability_descriptor!(BiomassPowerPlantSnapshot, biomass_power_plant);
 
 pub struct InhabitantToSpawn {
     pub education_level: EducationLevel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EducationLevel {
     None,
     Low,
@@ -335,9 +250,64 @@ pub enum EducationLevel {
 impl PartialOrd for EducationLevel {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
-            (EducationLevel::None, EducationLevel::None) | (EducationLevel::Low, EducationLevel::Low) => Some(std::cmp::Ordering::Equal),
+            (EducationLevel::None, EducationLevel::None)
+            | (EducationLevel::Low, EducationLevel::Low) => Some(std::cmp::Ordering::Equal),
             (_, EducationLevel::Low) => Some(std::cmp::Ordering::Less),
             (EducationLevel::Low, _) => Some(std::cmp::Ordering::Greater),
         }
     }
+}
+
+mod macros {
+
+    macro_rules! palatability_range {
+        ($configuration: tt, $name: ident, $building: ident) => {{
+            let for_house = $configuration
+                .buildings
+                .$name
+                .palatability_configuration
+                .source_for_house
+                .as_ref();
+            let for_office = $configuration
+                .buildings
+                .$name
+                .palatability_configuration
+                .source_for_office
+                .as_ref();
+
+            PalatabilitiesRange {
+                house: for_house.map(get_palatability_wrapper(*$building.get_position())),
+                office: for_office.map(get_palatability_wrapper(*$building.get_position())),
+            }
+        }};
+    }
+
+    macro_rules! apply_source {
+        ($self: ident, $palatability_range: ident, $name: ident) => {
+            let max: i64 = $palatability_range
+                .max_linear_distribution_distance
+                .max($palatability_range.max_horizontal_distribution_distance)
+                .into();
+            (($palatability_range.origin.x - max)..($palatability_range.origin.x + max))
+                .flat_map(|x| {
+                    (($palatability_range.origin.y - max)..($palatability_range.origin.y + max))
+                        .map(move |y| Position { x, y })
+                })
+                .for_each(|position| {
+                    let delta = calculate_palatability_value(&$palatability_range, &position);
+
+                    let entry = $self.palatability_descriptors.entry(position).or_insert(
+                        PalatabilityDescriptor {
+                            house_value: 0,
+                            office_value: 0,
+                        },
+                    );
+
+                    entry.$name += delta;
+                });
+        };
+    }
+
+    pub(super) use apply_source;
+    pub(super) use palatability_range;
 }

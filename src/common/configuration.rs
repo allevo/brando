@@ -36,15 +36,15 @@ pub struct BuildingsConfiguration {
 
 #[derive(Debug, Clone)]
 pub struct HouseConfiguration {
-    pub max_residents: usize,
-    pub max_inhabitant_per_travel: usize,
+    pub max_residents: u32,
+    pub max_inhabitant_per_travel: u32,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
     pub power_consumer_configuration: PowerConsumerConfiguration,
 }
 #[derive(Debug, Clone)]
 pub struct OfficeConfiguration {
-    pub max_worker: usize,
+    pub max_worker: u32,
     pub common: CommonBuildingConfiguration,
     pub palatability_configuration: PalatabilityConfiguration,
     pub power_consumer_configuration: PowerConsumerConfiguration,
@@ -72,33 +72,25 @@ pub struct CommonBuildingConfiguration {
 }
 #[derive(Debug, Clone)]
 pub struct PalatabilityConfiguration {
-    pub source_for_house: Option<HouseSourcePalatabilityConfiguration>,
-    pub source_for_office: Option<OfficeSourcePalatabilityConfiguration>,
+    pub source_for_house: Option<SourcePalatabilityConfiguration>,
+    pub source_for_office: Option<SourcePalatabilityConfiguration>,
 }
 #[derive(Debug, Clone)]
-pub struct HouseSourcePalatabilityConfiguration {
+pub struct SourcePalatabilityConfiguration {
     pub value: i32,
-    pub max_horizontal_distribution_distance: usize,
-    pub max_linear_distribution_distance: usize,
-    pub linear_factor: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct OfficeSourcePalatabilityConfiguration {
-    pub value: i32,
-    pub max_horizontal_distribution_distance: usize,
-    pub max_linear_distribution_distance: usize,
+    pub max_horizontal_distribution_distance: u32,
+    pub max_linear_distribution_distance: u32,
     pub linear_factor: i32,
 }
 
 #[derive(Debug, Clone)]
 pub struct PowerConsumerConfiguration {
-    pub consume_wh: usize,
+    pub consume_wh: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct PowerSourceConfiguration {
-    pub capacity_wh: usize,
+    pub capacity_wh: u32,
 }
 
 // #[cfg(test)]
@@ -120,7 +112,7 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 10,
             },
             palatability_configuration: PalatabilityConfiguration {
-                source_for_house: Some(HouseSourcePalatabilityConfiguration {
+                source_for_house: Some(SourcePalatabilityConfiguration {
                     value: -1,
                     max_horizontal_distribution_distance: 2,
                     max_linear_distribution_distance: 1,
@@ -138,7 +130,7 @@ pub const CONFIGURATION: Configuration = Configuration {
             },
             palatability_configuration: PalatabilityConfiguration {
                 source_for_house: None,
-                source_for_office: Some(OfficeSourcePalatabilityConfiguration {
+                source_for_office: Some(SourcePalatabilityConfiguration {
                     value: 1,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 0,
@@ -153,13 +145,13 @@ pub const CONFIGURATION: Configuration = Configuration {
                 time_for_building: 2,
             },
             palatability_configuration: PalatabilityConfiguration {
-                source_for_house: Some(HouseSourcePalatabilityConfiguration {
+                source_for_house: Some(SourcePalatabilityConfiguration {
                     value: 10,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 10,
                     linear_factor: 2,
                 }),
-                source_for_office: Some(OfficeSourcePalatabilityConfiguration {
+                source_for_office: Some(SourcePalatabilityConfiguration {
                     value: 10,
                     max_horizontal_distribution_distance: 3,
                     max_linear_distribution_distance: 10,
@@ -187,7 +179,7 @@ pub const CONFIGURATION: Configuration = Configuration {
                 source_for_office: None,
             },
             power_source: PowerSourceConfiguration {
-                capacity_wh: 7_000_000_000,
+                capacity_wh: 7_000_000,
             },
         },
     },

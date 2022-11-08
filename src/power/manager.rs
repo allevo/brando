@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    building::plugin::BuildingSnapshot,
+    building::BuildingSnapshot,
     common::{configuration::Configuration, position::Position, EntityId},
 };
 
@@ -22,12 +22,7 @@ impl PowerManager {
         }
     }
 
-    pub fn register_power_consumer(
-        &mut self,
-        building: &BuildingSnapshot,
-        position: Position,
-        building_id: EntityId,
-    ) {
+    pub fn register_power_consumer(&mut self, building: &BuildingSnapshot) {
         let energy_power_consumer = match building {
             // TODO: keep this value from configuration
             BuildingSnapshot::Office(_) => EnergyPowerConsumer {
@@ -46,7 +41,7 @@ impl PowerManager {
                     .house
                     .power_consumer_configuration
                     .consume_wh
-                    * h.resident_property.current_residents,
+                    * h.current_residents,
             },
             // TODO: check better the following statement...
             // The following ones are not considered as consumer of electric power
@@ -55,29 +50,27 @@ impl PowerManager {
             | BuildingSnapshot::BiomassPowerPlant(_) => return,
         };
 
-        self.consumers
-            .push((building_id, energy_power_consumer, position));
+        self.consumers.push((
+            *building.get_id(),
+            energy_power_consumer,
+            *building.get_position(),
+        ));
     }
 
-    pub fn register_power_source(
-        &mut self,
-        building: &BuildingSnapshot,
-        position: Position,
-        building_id: EntityId,
-    ) {
+    pub fn register_power_source(&mut self, building: &BuildingSnapshot) {
         let created_energy_power = match building {
             BuildingSnapshot::Office(_) | BuildingSnapshot::House(_) => return,
             BuildingSnapshot::Garden(_) | BuildingSnapshot::Street(_) => return,
             // TODO: keep this value from configuration
             BuildingSnapshot::BiomassPowerPlant(_) => EnergyPowerPlant {
-                capacity_wh: 7_000_000_000,
+                capacity_wh: 7_000_000,
             },
         };
 
-        self.sources.entry(building_id).or_insert((
-            building_id,
+        self.sources.entry(*building.get_id()).or_insert((
+            *building.get_id(),
             created_energy_power,
-            position,
+            *building.get_position(),
             vec![],
         ));
     }
@@ -133,24 +126,18 @@ impl PowerManager {
 
 #[derive(Debug)]
 struct EnergyPowerPlant {
-    pub capacity_wh: usize,
+    pub capacity_wh: u32,
 }
 
 #[derive(Debug)]
 struct EnergyPowerConsumer {
-    consumed_wh: usize,
+    consumed_wh: u32,
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        building::{
-            plugin::{BiomassPowerPlantSnapshot, HouseSnapshot, OfficeSnapshot},
-            ResidentProperty, WorkProperty,
-        },
-        common::configuration::CONFIGURATION,
-    };
+    use crate::{building::snapshot::*, common::configuration::CONFIGURATION};
 
     use super::*;
 
@@ -161,35 +148,32 @@ mod tests {
         let entity_id = 0_u64;
         let position = Position { x: 0, y: 0 };
         let building = &BuildingSnapshot::House(HouseSnapshot {
-            position: position.clone(),
-            resident_property: ResidentProperty {
-                current_residents: 16,
-                max_residents: 16,
-            },
+            id: entity_id,
+            position,
+            current_residents: 16,
+            max_residents: 16,
         });
-        manager.register_power_consumer(building, position, entity_id);
+        manager.register_power_consumer(building);
 
         let entity_id = 1_u64;
         let position = Position { x: 1, y: 0 };
         let building = &BuildingSnapshot::House(HouseSnapshot {
-            position: position.clone(),
-            resident_property: ResidentProperty {
-                current_residents: 8,
-                max_residents: 16,
-            },
+            id: entity_id,
+            position,
+            current_residents: 8,
+            max_residents: 16,
         });
-        manager.register_power_consumer(building, position, entity_id);
+        manager.register_power_consumer(building);
 
         let entity_id = 2_u64;
         let position = Position { x: 2, y: 0 };
         let building = &BuildingSnapshot::Office(OfficeSnapshot {
-            position: position.clone(),
-            work_property: WorkProperty {
-                current_worker: 10,
-                max_worker: 16,
-            },
+            id: entity_id,
+            position,
+            current_workers: 10,
+            max_workers: 16,
         });
-        manager.register_power_consumer(building, position, entity_id);
+        manager.register_power_consumer(building);
 
         let resolved = manager.dedicate_power_to_consumers();
         assert!(resolved.is_empty());
@@ -197,9 +181,10 @@ mod tests {
         let entity_id = 3_u64;
         let position = Position { x: 3, y: 0 };
         let building = &BuildingSnapshot::BiomassPowerPlant(BiomassPowerPlantSnapshot {
-            position: position.clone(),
+            id: entity_id,
+            position,
         });
-        manager.register_power_source(building, position, entity_id);
+        manager.register_power_source(building);
 
         let resolved = manager.dedicate_power_to_consumers();
 
@@ -221,9 +206,10 @@ mod tests {
         let entity_id = 0_u64;
         let position = Position { x: 3, y: 0 };
         let building = &BuildingSnapshot::BiomassPowerPlant(BiomassPowerPlantSnapshot {
-            position: position.clone(),
+            id: entity_id,
+            position,
         });
-        manager.register_power_source(building, position, entity_id);
+        manager.register_power_source(building);
 
         let total_capacity_wh = CONFIGURATION
             .buildings
@@ -245,14 +231,13 @@ mod tests {
             let entity_id = i;
             let position = Position { x: 0, y: 0 };
             let building = &BuildingSnapshot::House(HouseSnapshot {
-                position: position.clone(),
-                resident_property: ResidentProperty {
-                    current_residents: max_residents,
-                    max_residents: max_residents,
-                },
+                id: entity_id,
+                position,
+                current_residents: max_residents,
+                max_residents,
             });
 
-            manager.register_power_consumer(building, position, entity_id);
+            manager.register_power_consumer(building);
         }
 
         manager.dedicate_power_to_consumers();
