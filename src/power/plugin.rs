@@ -37,10 +37,12 @@ fn register_power_consumers(
 fn dedicate_power_to_consumers(mut power_manager: ResMut<PowerManager>, mut commands: Commands) {
     let covered_buildings = power_manager.dedicate_power_to_consumers();
 
+    /*
     for building_id in covered_buildings {
         let entity = Entity::from_bits(building_id);
         commands.entity(entity).insert(PowerCoveredComponent);
     }
+    */
 
     /*
     // TODO: probably we can bulk this batch using one event

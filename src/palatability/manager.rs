@@ -23,7 +23,7 @@ pub struct PalatabilityManager {
     // This is the "concrete view" of all palatability sources
     // This mean we can have some problem on:
     // - building deletion
-    // - temporary unavailability
+    // - capability of building temporary unavailability
     // - change value on upgrading / downgrading building values
     // - other (?)
     palatability_descriptors: HashMap<Position, PalatabilityDescriptor>,
@@ -69,26 +69,6 @@ impl PalatabilityManager {
         BuildingPalatability { value }
     }
 
-    /*
-    pub fn get_house_palatability(&self, position: &Position) -> HousePalatability {
-        let value: i32 = self
-            .houses_sources
-            .iter()
-            .map(|hsp| hsp.calculate(position))
-            .sum();
-        HousePalatability { value }
-    }
-
-    pub fn get_office_palatability(&self, position: &Position) -> OfficePalatability {
-        let value: i32 = self
-            .office_sources
-            .iter()
-            .map(|hsp| hsp.calculate(position))
-            .sum();
-        OfficePalatability { value }
-    }
-    */
-
     pub(super) fn add_unemployed_inhabitants(&mut self, inhabitants: Vec<EntityId>) {
         self.unemployed_inhabitants.extend(inhabitants);
     }
@@ -104,8 +84,6 @@ impl PalatabilityManager {
     pub(super) fn consume_inhabitants_to_spawn_and_increment_populations(
         &mut self,
     ) -> Vec<InhabitantToSpawn> {
-        // info!("vacant_inhabitants {}", self.vacant_inhabitants);
-
         let c: u8 = self.vacant_inhabitants.min(u64::from(u8::MAX)) as u8;
         self.vacant_inhabitants -= u64::from(c);
         self.total_populations += u64::from(c);

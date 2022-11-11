@@ -72,12 +72,14 @@ impl EntityStorage {
         inhabitant_id: &EntityId,
         house_id: EntityId,
         house_position: Position,
-    ) {
+    ) -> &Inhabitant {
         info!("Found home for {}", inhabitant_id);
         self.inhabitants
             .get_mut(inhabitant_id)
             .unwrap()
             .home_found(house_id, house_position);
+
+        self.inhabitants.get(inhabitant_id).unwrap()
     }
 
     pub fn found_job_for_unemployee(
