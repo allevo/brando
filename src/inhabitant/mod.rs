@@ -1,9 +1,8 @@
-pub mod inhabitant;
-pub mod manager;
-pub mod plugin;
+mod inhabitant;
+mod manager;
+mod plugin;
 
-#[cfg(test)]
-pub mod entity_storage;
-
-#[cfg(not(test))]
 mod entity_storage;
+
+pub use plugin::events;
+pub use plugin::InhabitantPlugin;

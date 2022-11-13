@@ -100,6 +100,16 @@ impl PowerManager {
             .insert(*building.get_id(), energy_power_producer);
     }
 
+    pub fn register_new_inhabitants_at_home(&mut self, house_id: EntityId, inhabitant_delta: u32) {
+        let house = self.consumers.get_mut(&house_id).unwrap();
+        house.multiplier += inhabitant_delta;
+    }
+
+    pub fn register_new_workers(&mut self, office_id: &EntityId, inhabitant_delta: u32) {
+        let office = self.consumers.get_mut(office_id).unwrap();
+        office.multiplier += inhabitant_delta;
+    }
+
     // TODO: we need to simulate blackouts.
     // For the time being, we skip that complexity avoiding to assign
     // power if the plant completely use its capacity
@@ -125,8 +135,7 @@ impl PowerManager {
             // try to put the remains into already assigned producers
             if let Some(assignments) = self.assignments.get(not_yet_covered_consumer) {
                 for assignment in assignments {
-
-                    let producer = self.producers.get_mut(&*assignment).unwrap();
+                    let producer = self.producers.get_mut(assignment).unwrap();
                     let energy_to_reduce = producer.remain_capacity_wh.min(remain);
                     producer.remain_capacity_wh -= energy_to_reduce;
                     remain -= energy_to_reduce;
@@ -172,7 +181,6 @@ impl PowerManager {
                 Some(available_producer) => available_producer,
             };
 
-
             let energy_to_reduce = available_producer.1.remain_capacity_wh.min(remain);
             available_producer.1.remain_capacity_wh -= energy_to_reduce;
             consumer.covered += energy_to_reduce;
@@ -189,7 +197,12 @@ impl PowerManager {
                 .entry(*not_yet_covered_consumer)
                 .or_default();
 
-            debug_assert!(!assignments.contains(available_producer.0), "producer {} already present for {}", available_producer.0, not_yet_covered_consumer);
+            debug_assert!(
+                !assignments.contains(available_producer.0),
+                "producer {} already present for {}",
+                available_producer.0,
+                not_yet_covered_consumer
+            );
 
             assignments.push(*available_producer.0);
         }
@@ -198,11 +211,13 @@ impl PowerManager {
         self.not_yet_covered_consumers = self
             .not_yet_covered_consumers
             .iter()
-            .filter(|id| !changed_consumers.contains_key(&id))
+            .filter(|id| !changed_consumers.contains_key(id))
             .cloned()
             .collect();
 
         ChangePowerAssignment {
+            // TODO: check is those operation is needed or not.
+            // in plugin, are those info used ?
             consumers: changed_consumers
                 .into_iter()
                 .map(|e| {
@@ -242,8 +257,8 @@ impl PowerManager {
 
 #[derive(Debug)]
 pub struct ChangePowerAssignment {
-    consumers: HashMap<EntityId, (u32, u32)>,
-    producers: HashMap<EntityId, u32>,
+    pub(super) consumers: HashMap<EntityId, (u32, u32)>,
+    pub(super) producers: HashMap<EntityId, u32>,
 }
 
 #[derive(Debug)]
@@ -276,7 +291,7 @@ struct ConsumerAssignmentPair {
 #[cfg(test)]
 mod tests {
 
-    use crate::{building::snapshot::*, common::configuration::CONFIGURATION};
+    use crate::{building::*, common::configuration::CONFIGURATION};
 
     use super::*;
 
@@ -405,13 +420,12 @@ mod tests {
             max_residents,
         });
         manager.register_power_consumer(building);
-        
+
         changes = manager.dedicate_power_to_consumers();
         assert_eq!(true, changes.consumers.is_empty());
         assert_eq!(true, changes.producers.is_empty());
 
         let missing_power = manager.calculate_missing_power_energy();
         assert_eq!(missing_power, 2400 + manager.consumers[&house].requested());
-
     }
 }

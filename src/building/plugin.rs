@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
@@ -9,13 +7,13 @@ use bevy_mod_picking::{DefaultPickingPlugins, PickableBundle, PickingEvent};
 use crate::{
     building::{manager::Building, BuildingSnapshot},
     common::{
-        configuration::Configuration,
         position::Position,
         position_utils::{convert_bevy_coords_into_position, convert_position_into_bevy_coords},
         EntityId,
     },
-    inhabitant::plugin::{HomeAssignedToInhabitantEvent, JobAssignedToInhabitantEvent},
-    palatability::manager::PalatabilityManager,
+    inhabitant::events::{HomeAssignedToInhabitantEvent, JobAssignedToInhabitantEvent},
+    palatability::PalatabilityManagerResource,
+    resources::ConfigurationResource,
     GameTick, PbrBundles,
 };
 
@@ -24,7 +22,8 @@ pub use components::*;
 #[cfg(not(test))]
 use components::*;
 
-pub use events::*;
+use events::*;
+pub use resources::*;
 
 use super::manager::BuildingManager;
 
@@ -32,8 +31,8 @@ pub struct BuildingPlugin;
 
 impl Plugin for BuildingPlugin {
     fn build(&self, app: &mut App) {
-        let configuration: &Arc<Configuration> = app.world.resource();
-        let manager = BuildingManager::new(configuration.clone());
+        let configuration: &ConfigurationResource = app.world.resource();
+        let manager = BuildingManagerResource(BuildingManager::new((*configuration).clone()));
 
         app.insert_resource(EditMode::None)
             .insert_resource(manager)
@@ -46,16 +45,6 @@ impl Plugin for BuildingPlugin {
             .add_system(habit_house)
             .add_system(work_on_office);
     }
-}
-
-#[derive(Debug, Hash, PartialEq, Eq)]
-enum EditMode {
-    None,
-    House,
-    Garden,
-    Street,
-    Office,
-    BiomassPowerPlant,
 }
 
 /// Allow the user to switch edit mode base on the keyboard key
@@ -83,11 +72,10 @@ fn switch_edit_mode(
 
 /// Spawn entity with `BuildingInConstructionComponent`
 fn start_building_creation(
-    all: Query<Entity, Without<BuildingUnderConstructionComponent>>,
     mut events: EventReader<PickingEvent>,
     planes: Query<&PlaneComponent>,
     edit_mode: Res<EditMode>,
-    mut building_manager: ResMut<BuildingManager>,
+    mut building_manager: ResMut<BuildingManagerResource>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
 ) {
@@ -107,8 +95,6 @@ fn start_building_creation(
         None => return,
         Some(entity) => entity,
     };
-
-    all.get(*entity).unwrap();
 
     let position: &PlaneComponent = planes.get(*entity).unwrap();
     let position = position.0;
@@ -158,11 +144,11 @@ fn start_building_creation(
 fn make_progress_for_building_under_construction(
     game_tick: EventReader<GameTick>,
     mut buildings_in_progress: Query<(Entity, &mut BuildingUnderConstructionComponent)>,
-    mut building_manager: ResMut<BuildingManager>,
-    palatability: Res<PalatabilityManager>,
+    mut building_manager: ResMut<BuildingManagerResource>,
+    palatability: Res<PalatabilityManagerResource>,
     mut commands: Commands,
     bundles: Res<PbrBundles>,
-    _configuration: Res<Arc<Configuration>>,
+    _configuration: Res<ConfigurationResource>,
     mut building_created_writer: EventWriter<BuildingCreatedEvent>,
 ) {
     // TODO: split the following logic among frames
@@ -246,7 +232,7 @@ fn make_progress_for_building_under_construction(
 /// marks the house as inhabited
 fn habit_house(
     mut houses: Query<&mut HouseComponent>,
-    mut building_manager: ResMut<BuildingManager>,
+    mut building_manager: ResMut<BuildingManagerResource>,
     mut inhabitant_arrived_reader: EventReader<HomeAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_arrived_reader.iter() {
@@ -272,7 +258,7 @@ fn habit_house(
 /// marks the office as fulfilled
 fn work_on_office(
     mut offices: Query<&mut OfficeComponent>,
-    mut building_manager: ResMut<BuildingManager>,
+    mut building_manager: ResMut<BuildingManagerResource>,
     mut inhabitant_find_job_reader: EventReader<JobAssignedToInhabitantEvent>,
 ) {
     for arrived in inhabitant_find_job_reader.iter() {
@@ -299,7 +285,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    configuration: Res<Arc<Configuration>>,
+    configuration: Res<ConfigurationResource>,
 ) {
     let grid_positions: Vec<_> = (0..configuration.game.width_table)
         .flat_map(|x| (0..configuration.game.depth_table).map(move |y| (x as i64, y as i64)))
@@ -324,7 +310,42 @@ fn setup(
     }
 }
 
-mod events {
+mod resources {
+    use std::ops::{Deref, DerefMut};
+
+    use bevy::prelude::Resource;
+
+    use crate::building::manager::BuildingManager;
+
+    #[derive(Debug, Hash, PartialEq, Eq, Resource)]
+    pub enum EditMode {
+        None,
+        House,
+        Garden,
+        Street,
+        Office,
+        BiomassPowerPlant,
+    }
+
+    #[derive(Resource)]
+    pub struct BuildingManagerResource(pub BuildingManager);
+
+    impl Deref for BuildingManagerResource {
+        type Target = BuildingManager;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for BuildingManagerResource {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+}
+
+pub mod events {
     use crate::building::BuildingSnapshot;
     use bevy::prelude::Component;
 

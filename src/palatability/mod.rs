@@ -1,2 +1,10 @@
+#[cfg(not(test))]
+mod manager;
+
+#[cfg(test)]
 pub mod manager;
-pub mod plugin;
+
+mod plugin;
+pub use plugin::{
+    MoreInhabitantsNeeded, MoreWorkersNeeded, PalatabilityManagerResource, PalatabilityPlugin,
+};

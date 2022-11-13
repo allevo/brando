@@ -12,12 +12,13 @@ use std::{collections::HashSet, sync::Arc};
 use bevy::{input::keyboard::KeyboardInput, prelude::*, render::camera::ScalingMode, time::Time};
 use bevy_mod_picking::*;
 
-use building::plugin::BuildingPlugin;
-use common::configuration::{Configuration, CONFIGURATION};
-use inhabitant::plugin::InhabitantPlugin;
-use navigation::plugin::NavigatorPlugin;
-use palatability::plugin::PalatabilityPlugin;
-use power::plugin::PowerPlugin;
+use building::BuildingPlugin;
+use common::configuration::CONFIGURATION;
+use inhabitant::InhabitantPlugin;
+use navigation::NavigatorPlugin;
+use palatability::PalatabilityPlugin;
+use power::PowerPlugin;
+use resources::ConfigurationResource;
 use tracing::debug;
 
 #[derive(Component, Deref, DerefMut)]
@@ -25,6 +26,7 @@ struct GameTimer(Timer);
 #[derive(Component)]
 struct GameTick(u32);
 
+#[derive(Resource)]
 struct PbrBundles {
     house: PbrBundle,
     street: PbrBundle,
@@ -87,7 +89,7 @@ macro_rules! get_colored_plane {
 
 impl FromWorld for PbrBundles {
     fn from_world(world: &mut World) -> Self {
-        let configuration = world.resource::<Arc<Configuration>>().clone();
+        let configuration = (*(world.resource::<ConfigurationResource>())).clone();
 
         let house = get_colored_plane!(cube world, configuration, 150, 150, 150);
         let street = get_colored_plane!(plane world, configuration, 81, 81, 81);
@@ -109,10 +111,9 @@ impl FromWorld for PbrBundles {
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(Arc::new(CONFIGURATION))
         .add_plugins(DefaultPlugins)
         .add_plugin(DebugCursorPickingPlugin) // <- Adds the green debug cursor.
+        .insert_resource(ConfigurationResource(Arc::new(CONFIGURATION)))
         .add_plugin(MainPlugin)
         .run();
 }
@@ -154,7 +155,7 @@ fn tick(
 fn move_camera_on_keyboard_input(
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut cameras: Query<&mut Transform, With<CameraComponent>>,
-    configuration: Res<Arc<Configuration>>,
+    configuration: Res<ConfigurationResource>,
     timer: Res<Time>,
 ) {
     let directional_events: HashSet<_> = keyboard_input_events
@@ -233,20 +234,38 @@ fn setup(mut commands: Commands) {
     });
 
     commands
-        .spawn()
-        .insert(GameTimer(Timer::from_seconds(1.0, true)));
+        .spawn_empty()
+        .insert(GameTimer(Timer::from_seconds(1.0, TimerMode::Repeating)));
+}
+
+pub mod resources {
+    use std::{ops::Deref, sync::Arc};
+
+    use bevy::prelude::Resource;
+
+    use crate::common::configuration::Configuration;
+
+    #[derive(Resource)]
+    pub struct ConfigurationResource(pub Arc<Configuration>);
+
+    impl Deref for ConfigurationResource {
+        type Target = Arc<Configuration>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
         building::{
-            manager::BuildingManager,
-            plugin::{HouseComponent, OfficeComponent, PlaneComponent},
-            BuildingSnapshot,
+            BuildingManagerResource, BuildingSnapshot,
+            {HouseComponent, OfficeComponent, PlaneComponent},
         },
         common::EntityId,
-        palatability::manager::PalatabilityManager,
+        palatability::PalatabilityManagerResource,
     };
     use bevy::prelude::{Entity, KeyCode, With};
 
@@ -282,7 +301,10 @@ mod tests {
         run(&mut app, 50);
 
         // Home is fulfilled
-        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        let palatability_manager = app
+            .world
+            .get_resource::<PalatabilityManagerResource>()
+            .unwrap();
         assert_eq!(palatability_manager.total_populations(), 8);
 
         let houses: Vec<(Entity, &HouseComponent)> =
@@ -290,7 +312,7 @@ mod tests {
         let house_id: EntityId = houses.get(0).unwrap().1 .0;
 
         let house = {
-            let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
+            let building_manager = app.world.get_resource::<BuildingManagerResource>().unwrap();
             let house: BuildingSnapshot =
                 BuildingSnapshot::from(building_manager.get_building(&house_id));
             house.into_house()
@@ -303,7 +325,10 @@ mod tests {
         run(&mut app, 50);
 
         // palatability is not sufficient, so population count doesn't change
-        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        let palatability_manager = app
+            .world
+            .get_resource::<PalatabilityManagerResource>()
+            .unwrap();
         assert_eq!(palatability_manager.total_populations(), 8);
 
         release_keyboard_key(&mut app, KeyCode::G);
@@ -312,7 +337,10 @@ mod tests {
         run(&mut app, 60);
 
         // Homes are fulfilled
-        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        let palatability_manager = app
+            .world
+            .get_resource::<PalatabilityManagerResource>()
+            .unwrap();
         assert_eq!(palatability_manager.total_populations(), 16);
 
         // Check houses: both are fulfilled
@@ -321,7 +349,7 @@ mod tests {
         let house1_id: EntityId = houses.get(0).unwrap().1 .0;
         let house2_id: EntityId = houses.get(1).unwrap().1 .0;
 
-        let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
+        let building_manager = app.world.get_resource::<BuildingManagerResource>().unwrap();
 
         let house = BuildingSnapshot::from(building_manager.get_building(&house1_id)).into_house();
         assert_eq!(house.current_residents, house.max_residents);
@@ -330,7 +358,10 @@ mod tests {
 
         run(&mut app, 50);
 
-        let palatability_manager = app.world.get_resource::<PalatabilityManager>().unwrap();
+        let palatability_manager = app
+            .world
+            .get_resource::<PalatabilityManagerResource>()
+            .unwrap();
         assert_eq!(16, palatability_manager.unemployed_inhabitants().len());
         assert_eq!(0, palatability_manager.vacant_work());
         assert_eq!(0, palatability_manager.vacant_inhabitants());
@@ -366,7 +397,7 @@ s"#;
         assert_eq!(offices.len(), 1);
         let office_id: EntityId = offices.pop().unwrap().1 .0;
 
-        let building_manager = app.world.get_resource::<BuildingManager>().unwrap();
+        let building_manager = app.world.get_resource::<BuildingManagerResource>().unwrap();
         let office =
             BuildingSnapshot::from(building_manager.get_building(&office_id)).into_office();
 
@@ -401,12 +432,13 @@ s"#;
         use std::sync::Arc;
 
         use crate::{
-            building::plugin::PlaneComponent, common::configuration::CONFIGURATION,
-            palatability::manager::PalatabilityManager, GameTick, MainPlugin,
+            building::PlaneComponent, common::configuration::CONFIGURATION,
+            palatability::PalatabilityManagerResource, resources::ConfigurationResource, GameTick,
+            MainPlugin,
         };
         use bevy::{
             input::ButtonState,
-            prelude::{App, Entity, KeyCode, With},
+            prelude::{default, App, Entity, ImagePlugin, KeyCode, With},
             time::TimePlugin,
         };
 
@@ -469,22 +501,11 @@ s"#;
 
         pub fn create_app() -> App {
             use bevy::{
-                asset::AssetPlugin,
-                core::CorePlugin,
-                core_pipeline::CorePipelinePlugin,
-                hierarchy::HierarchyPlugin,
-                input::InputPlugin,
-                log::LogSettings,
-                pbr::PbrPlugin,
-                prelude::Camera,
-                render::{camera::RenderTarget, RenderPlugin},
-                scene::ScenePlugin,
-                sprite::SpritePlugin,
-                text::TextPlugin,
-                transform::TransformPlugin,
-                ui::UiPlugin,
-                utils::tracing::subscriber::set_global_default,
-                window::{WindowId, WindowPlugin},
+                asset::AssetPlugin, core::CorePlugin, core_pipeline::CorePipelinePlugin,
+                hierarchy::HierarchyPlugin, input::InputPlugin, pbr::PbrPlugin,
+                render::RenderPlugin, scene::ScenePlugin, sprite::SpritePlugin, text::TextPlugin,
+                transform::TransformPlugin, ui::UiPlugin,
+                utils::tracing::subscriber::set_global_default, window::WindowPlugin,
             };
             use tracing_log::LogTracer;
             use tracing_subscriber::{prelude::*, registry::Registry, EnvFilter};
@@ -504,44 +525,26 @@ s"#;
             app.world.clear_entities();
             app.world.clear_trackers();
 
-            let mut log_settings = LogSettings::default();
-            log_settings.filter = format!("{},bevy_mod_raycast=off", log_settings.filter);
-            app.insert_resource(log_settings);
+            app.add_plugin(CorePlugin::default())
+                .add_plugin(TimePlugin::default())
+                .add_plugin(TransformPlugin::default())
+                .add_plugin(HierarchyPlugin::default())
+                .add_plugin(InputPlugin::default())
+                .add_plugin(WindowPlugin {
+                    add_primary_window: true,
+                    ..default() // exit_on_close: false,
+                })
+                .add_plugin(AssetPlugin::default())
+                .add_plugin(ScenePlugin::default())
+                .add_plugin(RenderPlugin::default())
+                .add_plugin(CorePipelinePlugin::default())
+                .add_plugin(TextPlugin::default())
+                .add_plugin(UiPlugin::default())
+                .add_plugin(ImagePlugin::default())
+                .add_plugin(PbrPlugin::default())
+                .add_plugin(SpritePlugin::default());
 
-            app.add_plugin(CorePlugin::default());
-            app.add_plugin(TimePlugin::default());
-            app.add_plugin(TransformPlugin::default());
-            app.add_plugin(HierarchyPlugin::default());
-            // app.add_plugin(bevy_diagnostic::DiagnosticsPlugin::default());
-            app.add_plugin(InputPlugin::default());
-            app.add_plugin(WindowPlugin {
-                // add_primary_window: true,
-                // exit_on_close: false,
-            });
-            app.add_plugin(AssetPlugin::default());
-            // app.add_plugin(DebugAssetServerPlugin::default());
-            app.add_plugin(ScenePlugin::default());
-            // app.add_plugin(WinitPlugin::default());
-            app.add_plugin(RenderPlugin::default());
-            app.add_plugin(CorePipelinePlugin::default());
-            app.add_plugin(SpritePlugin::default());
-            app.add_plugin(TextPlugin::default());
-            app.add_plugin(UiPlugin::default());
-            app.add_plugin(PbrPlugin::default());
-            // app.add_plugin(GltfPlugin::default());
-            // app.add_plugin(bevy_audio::AudioPlugin::default());
-            // app.add_plugin(GilrsPlugin::default());
-            // app.add_plugin(bevy_animation::AnimationPlugin::default());
-
-            {
-                let camera = Camera {
-                    target: RenderTarget::Window(WindowId::primary()),
-                    ..Camera::default()
-                };
-                app.insert_resource(camera);
-            }
-
-            app.insert_resource(Arc::new(CONFIGURATION));
+            app.insert_resource(ConfigurationResource(Arc::new(CONFIGURATION)));
 
             app.add_plugin(MainPlugin);
 
@@ -571,7 +574,10 @@ s"#;
             let mut max_iter = 50;
             loop {
                 run(app, 3);
-                let palatability = app.world.get_resource_mut::<PalatabilityManager>().unwrap();
+                let palatability = app
+                    .world
+                    .get_resource_mut::<PalatabilityManagerResource>()
+                    .unwrap();
                 if palatability.total_populations() == expected_population {
                     break;
                 }

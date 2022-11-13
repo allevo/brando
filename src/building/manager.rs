@@ -4,7 +4,7 @@ use bevy::utils::{HashMap, HashSet};
 
 use crate::common::{configuration::Configuration, position::Position, EntityId};
 
-use super::{BiomassPowerPlant, Garden, House, Office, Street};
+use super::buildings::{BiomassPowerPlant, Garden, House, Office, Street};
 
 pub struct BuildingManager {
     configuration: Arc<Configuration>,

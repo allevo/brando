@@ -3,18 +3,20 @@ use bevy::prelude::*;
 use crate::building::BuildingSnapshot;
 use crate::common::position::Position;
 
-use crate::building::plugin::BuildingCreatedEvent;
+use crate::building::events::BuildingCreatedEvent;
 
 use super::navigator::Navigator;
 
 #[cfg(test)]
 pub use components::*;
 
+pub use resources::*;
+
 pub struct NavigatorPlugin;
 
 impl Plugin for NavigatorPlugin {
     fn build(&self, app: &mut App) {
-        let navigator = Navigator::new();
+        let navigator = NavigatorResource(Navigator::new());
 
         app.insert_resource(navigator)
             // .add_system(new_building_created)
@@ -29,7 +31,7 @@ impl Plugin for NavigatorPlugin {
 
 fn expand_navigator_graph(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
-    mut navigator: ResMut<Navigator>,
+    mut navigator: ResMut<NavigatorResource>,
 ) {
     let mut need_to_rebuild = false;
     for created_building in building_created_reader.iter() {
@@ -54,6 +56,31 @@ fn expand_navigator_graph(
         // probably this place is not so convenient and also not so convenient rebuild
         // every time the graph.
         navigator.rebuild();
+    }
+}
+
+mod resources {
+    use std::ops::{Deref, DerefMut};
+
+    use bevy::prelude::Resource;
+
+    use crate::navigation::navigator::Navigator;
+
+    #[derive(Resource)]
+    pub struct NavigatorResource(pub Navigator);
+
+    impl Deref for NavigatorResource {
+        type Target = Navigator;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for NavigatorResource {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
     }
 }
 

@@ -4,8 +4,8 @@ use super::{configuration::Configuration, position::Position};
 
 pub fn convert_bevy_coords_into_position(configuration: &Configuration, coords: &Vec3) -> Position {
     let (half_width, half_depth) = configuration.half();
-    let x = ((coords.x as f32 + half_width) / configuration.cube_size).round() as i64;
-    let y = ((coords.z as f32 + half_depth) / configuration.cube_size).round() as i64;
+    let x = ((coords.x + half_width) / configuration.cube_size).round() as i64;
+    let y = ((coords.z + half_depth) / configuration.cube_size).round() as i64;
 
     Position { x, y }
 }

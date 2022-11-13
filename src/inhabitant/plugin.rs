@@ -1,13 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    building::{plugin::BuildingCreatedEvent, BuildingSnapshot},
+    building::{events::BuildingCreatedEvent, BuildingSnapshot},
     common::{position::Position, EntityId},
-    navigation::navigator::Navigator,
-    palatability::{
-        manager::PalatabilityManager,
-        plugin::{MoreInhabitantsNeeded, MoreWorkersNeeded},
-    },
+    navigation::NavigatorResource,
+    palatability::{MoreInhabitantsNeeded, MoreWorkersNeeded, PalatabilityManagerResource},
 };
 
 use super::{
@@ -16,20 +13,20 @@ use super::{
     manager::InhabitantManager,
 };
 
-use self::components::*;
-pub use events::*;
+use self::{components::*, resources::*};
+use events::*;
 
 pub struct InhabitantPlugin;
 
 impl Plugin for InhabitantPlugin {
     fn build(&self, app: &mut App) {
-        let manager = InhabitantManager::new();
+        let manager = InhabitantManagerResource(InhabitantManager::new());
 
         app.insert_resource(manager)
             .add_event::<HomeAssignedToInhabitantEvent>()
             .add_event::<JobAssignedToInhabitantEvent>()
             // Probably we would like to create Vecs with already-preallocated capacity
-            .insert_resource(EntityStorage::default())
+            .insert_resource(EntityStorageResource(EntityStorage::default()))
             .add_system(register_target)
             .add_system(create_inhabitants)
             .add_system(find_houses_for_inhabitants)
@@ -41,7 +38,7 @@ impl Plugin for InhabitantPlugin {
 fn register_target(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
     mut commands: Commands,
-    mut entity_storage: ResMut<EntityStorage>,
+    mut entity_storage: ResMut<EntityStorageResource>,
 ) {
     for created_building in building_created_reader.iter() {
         let building_position: &Position = created_building.building_snapshot.get_position();
@@ -91,9 +88,9 @@ fn register_target(
 /// Create inhabitants
 fn create_inhabitants(
     mut commands: Commands,
-    mut entity_storage: ResMut<EntityStorage>,
+    mut entity_storage: ResMut<EntityStorageResource>,
     mut more_inhabitants_needed_reader: EventReader<MoreInhabitantsNeeded>,
-    _palatability_manager: Res<PalatabilityManager>,
+    _palatability_manager: Res<PalatabilityManagerResource>,
 ) {
     // TODO: for the time being we consider the origin as the:
     // - origin
@@ -107,7 +104,7 @@ fn create_inhabitants(
         .flat_map(|e| e.inhabitants_to_spawn.iter());
 
     for inhabitant_to_spawn in total {
-        let entity = commands.spawn().insert(InhabitantComponent).id();
+        let entity = commands.spawn_empty().insert(InhabitantComponent).id();
 
         let inhabitant = Inhabitant::new(entity.to_bits(), inhabitant_to_spawn.education_level);
 
@@ -116,8 +113,8 @@ fn create_inhabitants(
 }
 
 fn find_houses_for_inhabitants(
-    mut entity_storage: ResMut<EntityStorage>,
-    navigator: Res<Navigator>,
+    mut entity_storage: ResMut<EntityStorageResource>,
+    navigator: Res<NavigatorResource>,
     mut inhabitant_arrived_writer: EventWriter<HomeAssignedToInhabitantEvent>,
 ) {
     let couples: Vec<AssignmentResult> = entity_storage.get_inhabitant_house_assignment();
@@ -154,7 +151,7 @@ fn find_houses_for_inhabitants(
 
 fn inhabitant_want_to_work(
     mut more_workers_needed_reader: EventReader<MoreWorkersNeeded>,
-    mut entity_storage: ResMut<EntityStorage>,
+    mut entity_storage: ResMut<EntityStorageResource>,
 ) {
     let entity_ids = more_workers_needed_reader
         .iter()
@@ -166,8 +163,8 @@ fn inhabitant_want_to_work(
 }
 
 fn find_job_for_inhabitants(
-    mut entity_storage: ResMut<EntityStorage>,
-    navigator: Res<Navigator>,
+    mut entity_storage: ResMut<EntityStorageResource>,
+    navigator: Res<NavigatorResource>,
     mut inhabitant_found_job_writer: EventWriter<JobAssignedToInhabitantEvent>,
 ) {
     let couples: Vec<AssignmentResult> = entity_storage.get_inhabitant_job_assignment();
@@ -198,6 +195,48 @@ fn find_job_for_inhabitants(
         });
 
         entity_storage.found_job_for_unemployee(&couple.from, couple.to, couple.to_position);
+    }
+}
+
+mod resources {
+    use std::ops::{Deref, DerefMut};
+
+    use bevy::prelude::Resource;
+
+    use crate::inhabitant::{entity_storage::EntityStorage, manager::InhabitantManager};
+
+    #[derive(Resource)]
+    pub struct EntityStorageResource(pub EntityStorage);
+
+    impl Deref for EntityStorageResource {
+        type Target = EntityStorage;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for EntityStorageResource {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+
+    #[derive(Resource)]
+    pub struct InhabitantManagerResource(pub InhabitantManager);
+
+    impl Deref for InhabitantManagerResource {
+        type Target = InhabitantManager;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for InhabitantManagerResource {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
     }
 }
 

@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use bevy::utils::HashSet;
 use tracing::info;
 
-use crate::{
-    common::{position::Position, EntityId},
-    palatability::manager::EducationLevel,
-};
+use crate::common::{enums::EducationLevel, position::Position, EntityId};
 
 use super::inhabitant::Inhabitant;
 
@@ -243,8 +240,8 @@ pub enum AssignmentType {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::position::Position, inhabitant::inhabitant::Inhabitant,
-        palatability::manager::EducationLevel,
+        common::{enums::EducationLevel, position::Position},
+        inhabitant::inhabitant::Inhabitant,
     };
 
     use super::{BuildingNeedToBeFulfilled, EntityStorage};

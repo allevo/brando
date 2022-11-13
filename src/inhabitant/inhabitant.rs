@@ -1,9 +1,6 @@
 use lombok::Getter;
 
-use crate::{
-    common::{position::Position, EntityId},
-    palatability::manager::EducationLevel,
-};
+use crate::common::{enums::EducationLevel, position::Position, EntityId};
 
 #[derive(Getter, Debug)]
 pub struct Inhabitant {

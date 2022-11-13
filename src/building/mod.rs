@@ -1,11 +1,17 @@
 mod buildings;
-pub mod manager;
-pub mod plugin;
+mod manager;
+mod plugin;
 
-#[cfg(test)]
-pub use buildings::*;
+// #[cfg(test)]
+// pub use buildings::*;
 
 pub use buildings::snapshot::*;
 
-#[cfg(not(test))]
-use buildings::*;
+pub use plugin::events;
+pub use plugin::{BuildingManagerResource, BuildingPlugin};
+
+#[cfg(test)]
+pub use plugin::{
+    BiomassPowerPlantComponent, BuildingUnderConstructionComponent, GardenComponent,
+    HouseComponent, OfficeComponent, PlaneComponent, StreetComponent,
+};

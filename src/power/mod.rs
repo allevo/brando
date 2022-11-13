@@ -1,2 +1,4 @@
 mod manager;
-pub mod plugin;
+mod plugin;
+
+pub use plugin::PowerPlugin;

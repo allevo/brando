@@ -1,16 +1,17 @@
-use std::sync::Arc;
+
 
 use bevy::prelude::*;
 
 use crate::building::BuildingSnapshot;
-use crate::common::configuration::Configuration;
 
 use crate::GameTick;
 
-use crate::building::plugin::BuildingCreatedEvent;
-use crate::inhabitant::plugin::HomeAssignedToInhabitantEvent;
+use crate::building::events::BuildingCreatedEvent;
+use crate::inhabitant::events::HomeAssignedToInhabitantEvent;
+use crate::resources::ConfigurationResource;
 
 pub use self::events::*;
+pub use self::resources::*;
 
 use super::manager::PalatabilityManager;
 
@@ -18,10 +19,10 @@ pub struct PalatabilityPlugin;
 
 impl Plugin for PalatabilityPlugin {
     fn build(&self, app: &mut App) {
-        let configuration: &Arc<Configuration> = app.world.resource();
-        let palatability = PalatabilityManager::new(configuration.clone());
+        let configuration: &ConfigurationResource = app.world.resource();
+        let palatability = PalatabilityManager::new((*configuration).clone());
 
-        app.insert_resource(palatability)
+        app.insert_resource(PalatabilityManagerResource(palatability))
             .add_event::<MoreInhabitantsNeeded>()
             .add_event::<MoreWorkersNeeded>()
             .add_system_to_stage(CoreStage::Last, increment_palatabilities)
@@ -34,7 +35,7 @@ impl Plugin for PalatabilityPlugin {
 
 fn increment_palatabilities(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
-    mut palatability: ResMut<PalatabilityManager>,
+    mut palatability: ResMut<PalatabilityManagerResource>,
 ) {
     for building_created in building_created_reader.iter() {
         palatability.add_palatability_source(&building_created.building_snapshot);
@@ -43,7 +44,7 @@ fn increment_palatabilities(
 
 fn habit_house(
     mut inhabitant_arrived_writer: EventReader<HomeAssignedToInhabitantEvent>,
-    mut palatability: ResMut<PalatabilityManager>,
+    mut palatability: ResMut<PalatabilityManagerResource>,
 ) {
     let inhabitants: Vec<_> = inhabitant_arrived_writer
         .iter()
@@ -60,7 +61,7 @@ fn habit_house(
 
 fn try_spawn_inhabitants(
     mut game_tick: EventReader<GameTick>,
-    mut palatability: ResMut<PalatabilityManager>,
+    mut palatability: ResMut<PalatabilityManagerResource>,
     mut more_inhabitants_needed_writer: EventWriter<MoreInhabitantsNeeded>,
 ) {
     if game_tick.iter().count() == 0 {
@@ -81,7 +82,7 @@ fn try_spawn_inhabitants(
 
 fn try_spawn_workers(
     mut game_tick: EventReader<GameTick>,
-    mut palatability: ResMut<PalatabilityManager>,
+    mut palatability: ResMut<PalatabilityManagerResource>,
     mut more_workers_needed_writer: EventWriter<MoreWorkersNeeded>,
 ) {
     if game_tick.iter().count() == 0 {
@@ -101,7 +102,7 @@ fn try_spawn_workers(
 
 fn increment_vacant_spot(
     mut building_created_reader: EventReader<BuildingCreatedEvent>,
-    mut palatability: ResMut<PalatabilityManager>,
+    mut palatability: ResMut<PalatabilityManagerResource>,
 ) {
     for building_created in building_created_reader.iter() {
         match &building_created.building_snapshot {
@@ -118,6 +119,31 @@ fn increment_vacant_spot(
             BuildingSnapshot::Garden(_)
             | BuildingSnapshot::Street(_)
             | BuildingSnapshot::BiomassPowerPlant(_) => {}
+        }
+    }
+}
+
+mod resources {
+    use std::ops::{Deref, DerefMut};
+
+    use bevy::prelude::Resource;
+
+    use crate::palatability::manager::PalatabilityManager;
+
+    #[derive(Resource)]
+    pub struct PalatabilityManagerResource(pub PalatabilityManager);
+
+    impl Deref for PalatabilityManagerResource {
+        type Target = PalatabilityManager;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for PalatabilityManagerResource {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
         }
     }
 }
