@@ -2,9 +2,6 @@ mod buildings;
 mod manager;
 mod plugin;
 
-// #[cfg(test)]
-// pub use buildings::*;
-
 pub use buildings::snapshot::*;
 
 pub use plugin::events;

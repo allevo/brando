@@ -108,8 +108,8 @@ impl BuildingManager {
     }
 
     #[cfg(test)]
-    pub fn get_building(&self, id: &EntityId) -> &Building {
-        &self.buildings[id]
+    pub fn get_building(&self, id: &EntityId) -> Option<&Building> {
+        self.buildings.get(id)
     }
 }
 
@@ -182,6 +182,14 @@ pub struct BuildingUnderConstruction {
 impl BuildingUnderConstruction {
     pub fn get_building(&self) -> &Building {
         &self.building
+    }
+
+    #[cfg(test)]
+    pub fn get_status(&self) -> (u8, u8) {
+        (
+            self.progress_status.current_step,
+            self.progress_status.step_to_reach,
+        )
     }
 }
 

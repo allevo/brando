@@ -5,6 +5,7 @@ use crate::{
     common::{position::Position, EntityId},
 };
 
+#[derive(Debug)]
 pub enum BuildingSnapshot {
     House(HouseSnapshot),
     Office(OfficeSnapshot),
@@ -83,31 +84,31 @@ impl From<&Building> for BuildingSnapshot {
     }
 }
 
-#[derive(Getter)]
+#[derive(Getter, Debug)]
 pub struct HouseSnapshot {
     pub id: EntityId,
     pub position: Position,
     pub current_residents: u32,
     pub max_residents: u32,
 }
-#[derive(Getter)]
+#[derive(Getter, Debug)]
 pub struct OfficeSnapshot {
     pub id: EntityId,
     pub position: Position,
     pub current_workers: u32,
     pub max_workers: u32,
 }
-#[derive(Getter)]
+#[derive(Getter, Debug)]
 pub struct StreetSnapshot {
     pub id: EntityId,
     pub position: Position,
 }
-#[derive(Getter)]
+#[derive(Getter, Debug)]
 pub struct GardenSnapshot {
     pub id: EntityId,
     pub position: Position,
 }
-#[derive(Getter)]
+#[derive(Getter, Debug)]
 pub struct BiomassPowerPlantSnapshot {
     pub id: EntityId,
     pub position: Position,

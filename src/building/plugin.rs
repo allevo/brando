@@ -198,7 +198,9 @@ fn make_progress_for_building_under_construction(
             building_under_construction, building_under_construction,
         );
 
-        let bundle = match building_under_construction.get_building() {
+        let building = building_under_construction.get_building();
+
+        let bundle = match building {
             Building::House(_) => bundles.house(),
             Building::Garden(_) => bundles.garden(),
             Building::Street(_) => bundles.street(),
@@ -211,13 +213,13 @@ fn make_progress_for_building_under_construction(
         command
             .remove::<BuildingUnderConstructionComponent>()
             .with_children(|parent| {
-                parent.spawn_bundle(bundle);
+                parent.spawn(bundle);
             });
 
         // TODO: rework this part
         // This part need to be reworked in order to let it scalable
         // on the BuildingType enumeration growing.
-        match building_under_construction.get_building() {
+        match building {
             Building::House(_) => command.insert(HouseComponent(id)),
             Building::Garden(_) => command.insert(GardenComponent(id)),
             Building::Street(_) => command.insert(StreetComponent(id)),
