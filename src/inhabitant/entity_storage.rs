@@ -162,14 +162,11 @@ impl EntityStorage {
 
         let building_required_education_level = &EducationLevel::None;
 
-        let from = self
-            .inhabitants_need_to_work
-            .iter()
-            .find(|i| {
-                let inhabitant_education_level: &EducationLevel =
-                    self.inhabitants[*i].get_education_level();
-                inhabitant_education_level >= building_required_education_level
-            });
+        let from = self.inhabitants_need_to_work.iter().find(|i| {
+            let inhabitant_education_level: &EducationLevel =
+                self.inhabitants[*i].get_education_level();
+            inhabitant_education_level >= building_required_education_level
+        });
 
         let from = match from {
             None => return vec![],

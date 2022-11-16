@@ -3,8 +3,9 @@ use bevy::{
     ecs::query::{ReadOnlyWorldQuery, WorldQuery},
     prelude::{Component, Entity, KeyCode, Resource},
 };
+use tracing_log::LogTracer;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicBool, Mutex};
 
 use crate::{
     common::configuration::CONFIGURATION, resources::ConfigurationResource, GameTick, MainPlugin,
@@ -186,6 +187,8 @@ pub fn select_plane(app: &mut App, entity: &Entity) {
     picking_event.send(PickingEvent::Clicked(*entity));
 }
 
+static LOG_TRACER_INITIALIZED: Mutex<bool> = Mutex::new(false);
+
 pub fn create_app() -> App {
     use bevy::{
         asset::AssetPlugin, core::CorePlugin, core_pipeline::CorePipelinePlugin,
@@ -193,10 +196,13 @@ pub fn create_app() -> App {
         scene::ScenePlugin, sprite::SpritePlugin, text::TextPlugin, transform::TransformPlugin,
         ui::UiPlugin, utils::tracing::subscriber::set_global_default, window::WindowPlugin,
     };
-    use tracing_log::LogTracer;
     use tracing_subscriber::{prelude::*, registry::Registry, EnvFilter};
 
-    if LogTracer::init().is_ok() {
+    let mut w = LOG_TRACER_INITIALIZED.lock().unwrap();
+    let b = &mut *w;
+    if *b {
+        LogTracer::init().unwrap();
+        *b = true;
         let filter_layer = EnvFilter::try_from_default_env()
             .or_else(|_| EnvFilter::try_new("OFF,brando=INFO"))
             .unwrap();
@@ -205,6 +211,7 @@ pub fn create_app() -> App {
         let subscriber = subscriber.with(fmt_layer);
         set_global_default(subscriber).unwrap();
     }
+    drop(w);
 
     let mut app = App::new();
 
