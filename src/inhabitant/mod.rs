@@ -1,4 +1,4 @@
-mod inhabitant;
+mod inhabitant_entity;
 mod manager;
 mod plugin;
 

@@ -68,14 +68,16 @@ fn try_spawn_inhabitants(
 
     let inhabitants_to_spawn =
         palatability.consume_inhabitants_to_spawn_and_increment_populations();
-    if !inhabitants_to_spawn.is_empty() {
-        more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
-            inhabitants_to_spawn,
-        });
-
-        let population = palatability.total_populations();
-        info!("population count: {population:?}");
+    if inhabitants_to_spawn.is_empty() {
+        return;
     }
+
+    more_inhabitants_needed_writer.send(MoreInhabitantsNeeded {
+        inhabitants_to_spawn,
+    });
+
+    let population = palatability.total_populations();
+    info!("population count: {population:?}");
 }
 
 fn try_spawn_workers(
@@ -107,11 +109,13 @@ fn increment_vacant_spot(
             BuildingSnapshot::House(house) => {
                 // NB: `current_residents` is always 0 here
                 let delta = house.max_residents - house.current_residents;
+                info!("increment_vacant_inhabitants by {}", delta);
                 palatability.increment_vacant_inhabitants(delta as i32);
             }
             BuildingSnapshot::Office(office) => {
                 // NB: `current_worker` is always 0 here
                 let delta = office.max_workers - office.current_workers;
+                info!("increment_vacant_work by {}", delta);
                 palatability.increment_vacant_work(delta as i32);
             }
             BuildingSnapshot::Garden(_)

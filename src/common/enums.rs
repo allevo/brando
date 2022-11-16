@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EducationLevel {
     None,
+    #[allow(dead_code)]
     Low,
 }
 

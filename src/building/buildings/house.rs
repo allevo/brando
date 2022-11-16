@@ -25,6 +25,7 @@ impl House {
         debug_assert!(self.max_residents >= self.current_residents);
     }
 
+    #[allow(dead_code)]
     pub fn inhabitant_left(&mut self) {
         debug_assert!(self.current_residents >= 1);
         self.current_residents -= 1;

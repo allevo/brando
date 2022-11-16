@@ -131,7 +131,7 @@ fn start_building_creation(
         .with_children(|parent| {
             let mut sprite = bundles.in_progress();
             sprite.transform.translation = Vec3::new(0., 0.0001, 0.);
-            parent.spawn_bundle(sprite);
+            parent.spawn(sprite);
         });
 }
 
@@ -299,7 +299,7 @@ fn setup(
 
         let transform = Transform::from_translation(translation);
         commands
-            .spawn_bundle(PbrBundle {
+            .spawn(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Plane {
                     size: configuration.cube_size,
                 })),
@@ -308,7 +308,7 @@ fn setup(
                 ..default()
             })
             .insert(PlaneComponent(position))
-            .insert_bundle(PickableBundle::default());
+            .insert(PickableBundle::default());
     }
 }
 

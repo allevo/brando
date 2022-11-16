@@ -8,7 +8,7 @@ mod palatability;
 mod power;
 
 #[cfg(test)]
-mod e2e;
+mod e2e_test;
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -216,12 +216,12 @@ fn setup(mut commands: Commands) {
 
     // camera
     commands
-        .spawn_bundle(camera)
+        .spawn(camera)
         .insert(CameraComponent)
-        .insert_bundle(PickingCameraBundle::default());
+        .insert(PickingCameraBundle::default());
 
     // light
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 5000.,
             color: Color::WHITE,

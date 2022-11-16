@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     entity_storage::{AssignmentResult, BuildingNeedToBeFulfilled, EntityStorage},
-    inhabitant::Inhabitant,
+    inhabitant_entity::Inhabitant,
     manager::InhabitantManager,
 };
 

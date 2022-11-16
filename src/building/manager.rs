@@ -43,10 +43,15 @@ impl BuildingManager {
         &mut self,
         building_under_construction: &mut BuildingUnderConstruction,
     ) -> bool {
+        debug_assert!(
+            building_under_construction.progress_status.current_step
+                < building_under_construction.progress_status.step_to_reach
+        );
+
         building_under_construction.progress_status.make_progress();
 
-        building_under_construction.progress_status.step_to_reach
-            >= building_under_construction.progress_status.current_step
+        building_under_construction.progress_status.current_step
+            >= building_under_construction.progress_status.step_to_reach
     }
 
     pub(super) fn finalize_building_creation(
@@ -64,7 +69,7 @@ impl BuildingManager {
             .buildings
             .get_mut(&house_id)
             .expect("house should exists");
-        let house = house.to_mut_house();
+        let house = house.to_house_mut();
 
         house.inhabitants_arrived(count);
     }
@@ -74,7 +79,7 @@ impl BuildingManager {
             .buildings
             .get_mut(&office_id)
             .expect("office should exists");
-        let office = office.to_mut_office();
+        let office = office.to_office_mut();
 
         office.workers_arrived(count);
     }
@@ -123,13 +128,13 @@ pub enum Building {
 }
 
 impl Building {
-    fn to_mut_house(&mut self) -> &mut House {
+    fn to_house_mut(&mut self) -> &mut House {
         match self {
             Building::House(h) => h,
             _ => unreachable!("cannot call to_mut_house for not houses"),
         }
     }
-    fn to_mut_office(&mut self) -> &mut Office {
+    fn to_office_mut(&mut self) -> &mut Office {
         match self {
             Building::Office(o) => o,
             _ => unreachable!("cannot call to_mut_office for not offices"),

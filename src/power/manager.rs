@@ -105,6 +105,7 @@ impl PowerManager {
         house.multiplier += inhabitant_delta;
     }
 
+    #[allow(dead_code)]
     pub fn register_new_workers(&mut self, office_id: &EntityId, inhabitant_delta: u32) {
         let office = self.consumers.get_mut(office_id).unwrap();
         office.multiplier += inhabitant_delta;
@@ -255,12 +256,14 @@ impl PowerManager {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ChangePowerAssignment {
     pub(super) consumers: HashMap<EntityId, (u32, u32)>,
     pub(super) producers: HashMap<EntityId, u32>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct EnergyPowerProducer {
     position: Position,
@@ -268,6 +271,7 @@ struct EnergyPowerProducer {
     remain_capacity_wh: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct EnergyPowerConsumer {
     position: Position,
@@ -422,8 +426,8 @@ mod tests {
         manager.register_power_consumer(building);
 
         changes = manager.dedicate_power_to_consumers();
-        assert_eq!(true, changes.consumers.is_empty());
-        assert_eq!(true, changes.producers.is_empty());
+        assert!(changes.consumers.is_empty());
+        assert!(changes.producers.is_empty());
 
         let missing_power = manager.calculate_missing_power_energy();
         assert_eq!(missing_power, 2400 + manager.consumers[&house].requested());

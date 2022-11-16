@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::common::{enums::EducationLevel, position::Position, EntityId};
 
-use super::inhabitant::Inhabitant;
+use super::inhabitant_entity::Inhabitant;
 
 #[derive(Debug)]
 pub struct BuildingNeedToBeFulfilled {
@@ -165,12 +165,11 @@ impl EntityStorage {
         let from = self
             .inhabitants_need_to_work
             .iter()
-            .filter(|i| {
+            .find(|i| {
                 let inhabitant_education_level: &EducationLevel =
                     self.inhabitants[*i].get_education_level();
                 inhabitant_education_level >= building_required_education_level
-            })
-            .next();
+            });
 
         let from = match from {
             None => return vec![],
@@ -241,7 +240,7 @@ pub enum AssignmentType {
 mod tests {
     use crate::{
         common::{enums::EducationLevel, position::Position},
-        inhabitant::inhabitant::Inhabitant,
+        inhabitant::inhabitant_entity::Inhabitant,
     };
 
     use super::{BuildingNeedToBeFulfilled, EntityStorage};

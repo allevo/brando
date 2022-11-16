@@ -41,12 +41,14 @@ impl Inhabitant {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Getter)]
 pub struct Home {
     house_id: EntityId,
     house_position: Position,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Getter)]
 pub struct WorkPlace {
     work_place_id: EntityId,

@@ -25,6 +25,7 @@ impl Office {
         debug_assert!(self.max_workers >= self.current_workers);
     }
 
+    #[allow(dead_code)]
     pub fn worker_left(&mut self) {
         debug_assert!(self.current_workers >= 1);
         self.current_workers -= 1;

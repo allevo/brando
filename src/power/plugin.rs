@@ -60,7 +60,7 @@ fn dedicate_power_to_consumers(
 ) {
     let covered_buildings = power_manager.dedicate_power_to_consumers();
 
-    for (building_id, _) in &covered_buildings.consumers {
+    for building_id in covered_buildings.consumers.keys() {
         let entity = Entity::from_bits(*building_id);
         commands.entity(entity).insert(PowerCoveredComponent);
     }
