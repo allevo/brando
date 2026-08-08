@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+sim-core = { path = "../sim-core" }
+sim-data = { path = "../sim-data" }
+sim-replay = { path = "../sim-replay" }
+
+[lints]
+workspace = true

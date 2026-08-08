@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["sim-core", "sim-data", "sim-replay", "xtask"]
+
+# Versioni pinnate qui: i crate figli usano { workspace = true }.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+slotmap = { version = "1", features = ["serde"] }
+rand = { version = "0.9", default-features = false }
+rand_pcg = "0.9"
+ron = "0.10"
+blake3 = "1"
+proptest = "1"
+insta = "1"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# I float restano nel renderer (D4): nello stato non entrano.
+float_arithmetic = "deny"

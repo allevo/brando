@@ -1,0 +1,17 @@
+[package]
+name = "sim-data"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+sim-core = { path = "../sim-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+ron = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+
+[lints]
+workspace = true

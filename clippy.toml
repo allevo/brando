@@ -1,0 +1,10 @@
+# I divieti di CLAUDE.md (D4) come errori del linter, non come convenzioni.
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "D4: ordine di iterazione non deterministico, usare BTreeMap o IndexMap" },
+  { path = "std::collections::HashSet", reason = "D4: idem" },
+]
+disallowed-methods = [
+  { path = "rand::rng", reason = "D4: l'RNG vive nello stato ed e' seedato" },
+  { path = "std::time::Instant::now", reason = "D4: nessun accesso all'orologio nel core" },
+  { path = "std::time::SystemTime::now", reason = "D4: idem" },
+]

@@ -1,0 +1,20 @@
+[package]
+name = "sim-core"
+edition.workspace = true
+version.workspace = true
+
+# ATTENZIONE: questa lista non cresce senza discussione (D1).
+# sim-core e' un crate Rust puro: niente ECS, niente Bevy, niente I/O.
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+slotmap = { workspace = true }
+rand = { workspace = true }
+rand_pcg = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
