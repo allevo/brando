@@ -8,8 +8,10 @@
 
 pub mod grid;
 pub mod ids;
+pub mod rng;
 pub mod units;
 
 pub use grid::{Grid, GridError, OccupantSlot, Terrain, Tile, TileFlags};
 pub use ids::{BuildingId, HouseId, TileIdx, TilePos};
+pub use rng::{RngDomain, RngSet};
 pub use units::{Coins, Milli};
