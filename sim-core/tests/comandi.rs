@@ -304,11 +304,20 @@ fn costruire_segna_il_provider_come_dirty() {
         }],
     );
     let id = w.buildings().next().map(|(id, _)| id).expect("il pozzo");
-    assert_eq!(w.dirty().coverage, [id]);
+    // Come per le strade, il passo 3 consuma la lista nello stesso tick:
+    // l'effetto osservabile e' che la copertura sia stata ricalcolata.
+    assert!(w.dirty().coverage.is_empty());
+    assert!(!w.dirty().coverage_invalidata);
+    assert_eq!(w.coverage().ricalcoli(), 1);
 
     tick(&mut w, &[Command::Demolish { at: pos(5, 5) }]);
     assert!(
         !w.dirty().coverage.contains(&id),
         "un provider demolito non resta nella lista dei dirty"
+    );
+    assert_eq!(
+        w.coverage().ricalcoli(),
+        2,
+        "anche demolire l'ultimo provider forza un ricalcolo"
     );
 }

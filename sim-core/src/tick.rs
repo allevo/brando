@@ -168,6 +168,10 @@ fn place_building(
         });
         world.case_per_origine.insert(origin_idx, id);
         occupa(world, &tiles, origin_idx, true);
+        // Una casa nuova va coperta: senza questo, resterebbe non servita
+        // finche' qualcos'altro non sporca la copertura. E' esattamente
+        // l'invalidazione dimenticata che il test di equivalenza coglie.
+        segna_tutti_i_provider(world);
         r.events.push(Event::HousePlaced { id, origin });
     } else {
         let id = world.buildings.insert(Building {
@@ -262,8 +266,10 @@ fn rebuild_roads(world: &mut World) {
     segna_tutti_i_provider(world);
 }
 
-/// Passo 3 — si riempie nella fase 06. E' l'hot path del progetto.
-fn propagate_coverage(_world: &mut World) {}
+/// Passo 3 — copertura aggregata dei servizi. E' l'hot path del progetto.
+fn propagate_coverage(world: &mut World) {
+    crate::coverage::propagate_coverage(world);
+}
 
 /// Passo 4 — si riempie nella fase 07.
 fn production(_world: &mut World) {}
@@ -373,6 +379,9 @@ fn libera_footprint(world: &mut World, origin: TilePos, footprint: (u8, u8)) {
 /// tutti i provider tornano dirty. `CLAUDE.md` lo autorizza, purche' i flag
 /// esistano — ed esistono.
 fn segna_tutti_i_provider(world: &mut World) {
+    // Anche quando non resta nessun provider: le assegnazioni esistenti vanno
+    // comunque buttate.
+    world.dirty.invalida_coverage();
     let ids: Vec<BuildingId> = world.buildings.keys().collect();
     for id in ids {
         world.dirty.segna_coverage(id);

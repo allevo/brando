@@ -7,6 +7,7 @@
 //! funzione pura `step(&mut World, &[Command])` (D4).
 
 pub mod command;
+pub mod coverage;
 pub mod data;
 mod data_hash;
 pub mod event;
@@ -20,6 +21,7 @@ pub mod units;
 pub mod world;
 
 pub use command::{Command, CommandError};
+pub use coverage::Coverage;
 pub use data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileOccupant};

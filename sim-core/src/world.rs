@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use slotmap::SlotMap;
 
+use crate::coverage::Coverage;
 use crate::data::DataSet;
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
@@ -69,6 +70,14 @@ pub struct DirtyFlags {
     /// Provider la cui copertura va ricalcolata. `Vec` ordinato, non un
     /// `HashSet` (D4).
     pub coverage: Vec<BuildingId>,
+    /// La copertura va rivista anche se nessun provider e' nella lista.
+    ///
+    /// Serve al caso che la sola lista non sa esprimere: demolito l'ultimo
+    /// provider, non resta nessuno da segnare come dirty, ma le assegnazioni
+    /// esistenti vanno comunque buttate. Senza questo flag le case restavano
+    /// servite da un pozzo che non c'e' piu' — un bug trovato dal test di
+    /// demolizione della fase 06.
+    pub coverage_invalidata: bool,
 }
 
 impl DirtyFlags {
@@ -76,9 +85,19 @@ impl DirtyFlags {
     /// l'ordine per `BuildingId`: l'ordine di iterazione dei provider decide
     /// chi vince le case contese (fase 06), quindi e' semantica di gioco.
     pub fn segna_coverage(&mut self, id: BuildingId) {
+        self.coverage_invalidata = true;
         if let Err(pos) = self.coverage.binary_search(&id) {
             self.coverage.insert(pos, id);
         }
+    }
+
+    /// La copertura va rivista, senza indicare un provider specifico.
+    pub fn invalida_coverage(&mut self) {
+        self.coverage_invalidata = true;
+    }
+
+    pub fn coverage_da_rivedere(&self) -> bool {
+        self.coverage_invalidata || !self.coverage.is_empty()
     }
 
     pub fn dimentica_coverage(&mut self, id: BuildingId) {
@@ -108,6 +127,8 @@ pub struct World {
     /// presenterebbe come divergenza di hash invece che come test di
     /// equivalenza fallito.
     pub(crate) roads: RoadNetwork,
+    /// Derivata come [`RoadNetwork`], e fuori dall'hash per lo stesso motivo.
+    pub(crate) coverage: Coverage,
     /// Indici da tile di origine a id. Sono `BTreeMap` e non `HashMap` (D4):
     /// l'ordine di iterazione e' un contratto.
     pub(crate) edifici_per_origine: BTreeMap<TileIdx, BuildingId>,
@@ -134,6 +155,7 @@ impl World {
             rng: RngSet::from_seed(seed),
             dirty: DirtyFlags::default(),
             roads: RoadNetwork::new(tiles),
+            coverage: Coverage::default(),
             edifici_per_origine: BTreeMap::new(),
             case_per_origine: BTreeMap::new(),
             data,
@@ -162,6 +184,10 @@ impl World {
 
     pub const fn roads(&self) -> &RoadNetwork {
         &self.roads
+    }
+
+    pub const fn coverage(&self) -> &Coverage {
+        &self.coverage
     }
 
     pub fn data(&self) -> &DataSet {

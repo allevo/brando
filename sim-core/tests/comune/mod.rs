@@ -19,6 +19,9 @@ use sim_core::{BuildingKindId, Coins, Command, Grid, Milli, ServiceKind, Terrain
 pub const CASA: BuildingKindId = BuildingKindId::new(0);
 pub const POZZO: BuildingKindId = BuildingKindId::new(1);
 pub const FATTORIA: BuildingKindId = BuildingKindId::new(2);
+/// Pozzo da una casa sola: serve a far mordere la capacita' nei test, che con
+/// capacita' 8 non si osserverebbe.
+pub const POZZETTO: BuildingKindId = BuildingKindId::new(3);
 /// Tipo che non esiste in tabella: e' cio' che produrra' l'LLM.
 pub const INESISTENTE: BuildingKindId = BuildingKindId::new(99);
 
@@ -102,6 +105,20 @@ pub fn dataset() -> Arc<DataSet> {
             servizi_richiesti: vec![],
             produzione_per_tick: Some(Milli::from_millis(400)),
             giacenza_max: Some(Milli::from_millis(20_000)),
+        },
+        BuildingDef {
+            id: "pozzetto".into(),
+            footprint: (1, 1),
+            costo: Coins::new(COSTO_POZZO),
+            livelli: 1,
+            servizio: Some(ServiceDef {
+                kind: ServiceKind::Acqua,
+                raggio_per_livello: vec![12],
+                capacita_per_livello: vec![1],
+            }),
+            servizi_richiesti: vec![],
+            produzione_per_tick: None,
+            giacenza_max: None,
         },
     ];
 
