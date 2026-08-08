@@ -171,12 +171,16 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
 /// che puo' essere piu' lontana. L'alternativa — fermarsi alla prima che non
 /// ci sta — terrebbe la distanza come priorita' assoluta, ma lascerebbe posti
 /// inutilizzati: un provider dichiarato per venti abitanti ne servirebbe
-/// sedici, e la capacita' in tabella smetterebbe di dire il vero. Peggio, una
-/// casa grande costruita vicino al provider taglierebbe fuori *tutte* quelle
-/// oltre, pur restando dei posti liberi.
+/// sedici, e la capacita' in tabella smetterebbe di dire il vero. Per un
+/// produttore quel divario romperebbe anche la coerenza fra capacita' e
+/// produzione che [`capacita_cibo_insostenibile`] presidia. Peggio, una casa
+/// grande costruita vicino al provider taglierebbe fuori *tutte* quelle oltre,
+/// pur restando dei posti liberi.
 ///
 /// La distanza resta comunque l'ordine di priorita': nessuna candidata viene
 /// scavalcata per preferenza, solo per impossibilita'.
+///
+/// [`capacita_cibo_insostenibile`]: crate::data::DataSet::capacita_cibo_insostenibile
 fn scelte_entro_capacita<T>(
     candidate: impl IntoIterator<Item = (T, u16)>,
     capacita: u16,

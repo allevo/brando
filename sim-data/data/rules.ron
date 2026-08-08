@@ -13,8 +13,12 @@
     abitanti_per_livello_casa: [4],
 
     // Milli di cibo consumati da un abitante in un tick. Con 4 abitanti per
-    // casa fanno 80 milli/casa/tick: una fattoria da 400 ne sostiene 5, e la
-    // sesta (capacita' della fattoria) resta a bocca asciutta. La carestia
-    // deve essere raggiungibile, e' lo scenario "fame" della fase 08.
+    // casa fanno 80 milli/casa/tick: una fattoria da 400 ne sostiene 5, ed e'
+    // esattamente la capacita' che la fattoria dichiara — la validazione non
+    // le lascerebbe dichiararne di piu'.
+    //
+    // La carestia resta raggiungibile, ed e' lo scenario "fame" della fase 08:
+    // succede quando le case superano la capacita' dei provider, che e' fame
+    // per **mancanza di copertura**. Una casa coperta, invece, mangia sempre.
     consumo_cibo_per_abitante: 20,
 )

@@ -13,6 +13,8 @@ Fasi plausibili, nell'ordine in cui probabilmente conviene farle:
    livello. Le case evolvono se servite per N tick consecutivi, degradano altrimenti.
    Goal verificabile: una casa servita da acqua e cibo raggiunge il livello 2 in un numero di
    tick calcolabile dal `DataSet`; togliendo l'acqua torna al livello 1.
+   Il prerequisito — capacità dei servizi in abitanti anziché in case — è stato fatto prima,
+   subito dopo M0: vedi [A5](decisioni-aperte.md).
 2. **Migrazione.** Primo uso reale di `RngDomain::Migration` — ed è il tick in cui il test 7
    della fase 08 (sensibilità al seed) si riattiva e deve passare.
    Goal: una città attraente cresce, una città affamata si spopola, e due seed diversi danno
@@ -50,8 +52,11 @@ La copertura resta, cambia da dove viene la merce.
 
 - Il passo 3 (copertura) è davvero l'hot path, o lo è il rebuild della rete? Lo dirà
   `bench-smoke` della fase 09, non il ragionamento.
-- La capacità dei servizi ha senso in "case servite" o in "abitanti serviti"? Si vedrà quando le
-  case avranno livelli e popolazione variabile (M1, fase 1).
+- ~~La capacità dei servizi ha senso in "case servite" o in "abitanti serviti"?~~ **Risposto:**
+  in abitanti, e la risposta è arrivata prima di M1 perché era il prerequisito della fase 1.
+  La parte che contava non era l'unità ma il ribilanciamento che l'accompagna — la capacità di
+  un produttore dev'essere ciò che la sua produzione sostiene. Dettagli in
+  [A5](decisioni-aperte.md).
 - 30 tick/mese ([A6](decisioni-aperte.md)) dà una curva giocabile? Lo dirà il primo scenario con
   un obiettivo temporale.
 - Un `Tile` di 4 byte basta quando arriveranno i walker e i magazzini? Il test di budget della

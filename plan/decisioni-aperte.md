@@ -11,7 +11,7 @@ raccomandazione che le fasi assumono, e cosa cambia se si decide diversamente.
 | A2 | **Chiusa, diversamente** | `Arc<DataSet>` nel `World`, ma le *definizioni* sono dovute passare in `sim-core` |
 | A3 | **Chiusa**, come raccomandato | hash a mano, più un test che verifica che copra ogni campo |
 | A4 | **Chiusa**, come raccomandato | lato fino a 256, golden su 32×32, tripwire a 200×200 |
-| A5 | **Chiusa con una scoperta** | la fame risulta uno stato assorbente: vedi sotto |
+| A5 | **Chiusa con una scoperta**, poi corretta | la fame risultava uno stato assorbente; sciolta dopo M0 rendendo coerenti capacità e produzione: vedi sotto |
 | A6 | **Chiusa**, come raccomandato | 30 tick/mese, 360/anno, in `rules.ron` |
 
 Nessuna è rimasta aperta. Le due che meritano di essere lette sono A2 e A5, perché entrambe
@@ -115,6 +115,45 @@ che la semplificazione è stata sciolta, non una regressione.
 Aggiunta anche una voce al `FoodLedger`, `perso_per_demolizione`: demolire una fattoria piena
 fa sparire la sua giacenza dal mondo, e senza registrarlo la conservazione smetteva di essere
 un'uguaglianza. Stesso motivo per cui esiste `perso_per_giacenza_piena`.
+
+**Come è stata sciolta (2026-08-08, prerequisito di M1 fase 1).** La capacità ora si conta in
+**abitanti serviti**. È stato fatto adesso e non dentro M1 perché i livelli delle case rendono
+la popolazione variabile per casa, e con popolazione variabile una capacità in case non dice
+più quanta gente un provider riesca a servire.
+
+Cambiare unità, da solo, **non è servito a niente**: convertendo i valori in tabella per il
+numero di abitanti per casa (pozzo 8 → 32, fattoria 6 → 24) il comportamento è rimasto
+identico al tile — verificato eseguendo i due scenari su un anno di gioco e confrontando
+l'output. Lo stato assorbente era lì lo stesso, espresso in un'altra unità. È il motivo per cui
+i due passaggi sono commit separati: il primo lo dimostra.
+
+Ciò che l'ha sciolto è la seconda metà: **la capacità di un produttore dev'essere coerente con
+ciò che la sua produzione sostiene**. La fattoria produce 400 milli/tick e un abitante ne
+consuma 20, quindi ne sostiene 20 — cinque case, non sei. Da questo segue un invariante che
+prima non c'era, ed è il vero guadagno: *una casa coperta dal servizio cibo mangia sempre*
+(`invarianti.rs::invarianti_coperta_significa_sfamata`). La fame resta raggiungibile, ma è
+mancanza di **copertura** e si cura costruendo.
+
+La coerenza è un **controllo di validazione**, non una convenzione nei commenti:
+`DataSet::capacita_cibo_insostenibile` in `sim-core`, richiamato dalla validazione di
+`sim-data`. Sta nel core perché è lì che vivono le definizioni (A2) e perché serve anche alla
+fixture dei test di `sim-core`, che non passa per `sim-data` e altrimenti potrebbe scivolare su
+un bilanciamento che in produzione sarebbe rifiutato. Il conto è sul caso peggiore, giacenza a
+zero: il minore tra la produzione di un tick e la capienza del granaio. **Va tolto in M3**
+insieme ad A5: quando la merce arriverà da un magazzino via walker (D3), la capacità smetterà
+di dipendere dalla produzione locale.
+
+Fissata anche la regola di riempimento, che con popolazioni miste diventerà osservabile:
+nessuna assegnazione parziale, e chi non ci sta viene **saltato**, non fa da barriera. Fermarsi
+alla prima casa che non entra terrebbe la distanza come priorità assoluta, ma lascerebbe posti
+inutilizzati — e la capacità in tabella smetterebbe di dire il vero, il che romperebbe proprio
+la coerenza con la produzione. Il costo è che una casa più lontana può passare davanti a una
+più vicina che non ci sta; accettato. La regola è una funzione pura,
+`coverage::scelte_entro_capacita`, con un test tabellare che copre i casi a popolazione mista
+che M0 non sa ancora produrre.
+
+Il test scritto in fase 07 per cambiare esito ha cambiato esito, ed è ora
+`la_fame_si_cura_costruendo_una_seconda_fattoria`.
 
 ---
 

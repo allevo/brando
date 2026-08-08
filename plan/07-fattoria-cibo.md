@@ -77,6 +77,12 @@ cibo differenziato.
    si rompe a ogni ribilanciamento senza segnalare nulla di reale.
 4. **Ripresa**: aggiunta una seconda fattoria, le case tornano servite. Verifica che lo stato
    "affamato" non sia assorbente.
+
+   > **Aggiornato dopo M0.** In fase 07 questo punto è fallito: lo stato affamato *era*
+   > assorbente, e il test è stato scritto per fissare il limite invece che la proprietà. Ora la
+   > proprietà vale davvero — *una casa coperta dal cibo mangia sempre* — perché la capacità di
+   > un produttore non può superare ciò che la sua produzione sostiene. Vedi
+   > [A5](decisioni-aperte.md).
 5. **Saturazione**: fattoria senza case coperte ⇒ `stock` cresce fino a `giacenza_max` e si
    ferma; `perso_per_giacenza_piena` cresce di conseguenza.
 6. **Ordine deterministico**: giacenza sufficiente per due case su tre ⇒ mangiano sempre le

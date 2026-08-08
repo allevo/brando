@@ -39,8 +39,15 @@
             servizio: Some((
                 kind: "cibo",
                 raggio_per_livello: [10],
-                // Abitanti serviti contemporaneamente: sei case da quattro.
-                capacita_per_livello: [24],
+                // Abitanti serviti contemporaneamente. Non e' un numero
+                // libero: e' cio' che la produzione sostiene,
+                // produzione_per_tick / consumo_cibo_per_abitante = 400 / 20 =
+                // 20 abitanti, cioe' cinque case da quattro. Alzarlo
+                // rimetterebbe in piedi lo stato assorbente della fame — case
+                // assegnate a una fattoria che non le sfama e che nessun'altra
+                // fattoria puo' rilevare. Lo verifica la validazione, non
+                // questo commento: sim-core `DataSet::capacita_cibo_insostenibile`.
+                capacita_per_livello: [20],
             )),
             servizi_richiesti: [],
             produzione_per_tick: Some(400),

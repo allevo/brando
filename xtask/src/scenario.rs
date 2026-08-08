@@ -77,13 +77,19 @@ fn minimo(data: &DataSet) -> Scenario {
     }
 }
 
-/// Come `minimo`, ma con abbastanza case da mandare la fattoria in deficit.
-/// Serve a osservare la giacenza che si esaurisce (fase 07, test 3).
+/// Come `minimo`, ma con piu' case di quante i provider ne coprano.
+///
+/// La fame che si osserva qui e' **mancanza di copertura**: la fattoria
+/// dichiara la capacita' che la sua produzione sostiene, quindi le case che
+/// riesce ad assegnarsi mangiano tutte, e le eccedenti restano fuori. Si cura
+/// costruendo — ed e' cio' che distingue questo scenario da come si comportava
+/// prima che capacita' e produzione fossero rese coerenti, quando una casa
+/// coperta poteva restare affamata per sempre.
 fn fame(data: &DataSet) -> Scenario {
     let casa = kind(data, "casa");
     let mut s = minimo(data);
     s.nome = "fame";
-    s.descrizione = "piu' case di quante la fattoria ne sfami";
+    s.descrizione = "piu' case di quante i provider ne coprano";
     for i in 4..8u8 {
         s.comandi.push((
             2,

@@ -46,6 +46,12 @@ provider — che è l'ordine di `BuildingId`, deterministico). Da annotare come 
 in M1 la capacità dovesse diventare "abitanti serviti" invece di "case servite", questo punto va
 riaperto.
 
+> **Aggiornato dopo M0.** È successo: la capacità si conta in abitanti, e con essa sono arrivate
+> due regole che questa fase non aveva — nessuna assegnazione parziale, e chi non entra nella
+> capacità residua viene *saltato* invece di fermare la scansione. La contesa continua a vincerla
+> il primo provider, ma una casa contesa non consuma più la capacità di chi arriva secondo.
+> Vedi [A5](decisioni-aperte.md) e `coverage::scelte_entro_capacita`.
+
 **`dirty.coverage` in M0 può essere ricalcolato in modo ingenuo**: quando cambiano le strade,
 tutti i provider sono dirty. `CLAUDE.md` autorizza l'ingenuità qui, purché i flag esistano — ed
 esistono dalla fase 04. Ciò che non va rimandato è il test 6.

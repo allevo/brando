@@ -288,9 +288,16 @@ Due cose imparate implementando, che valgono più delle decisioni prese a tavoli
 1. Il passo 3 (copertura) è l'hot path, confermato da misura e non da ragionamento: un tick che
    accetta un comando costa ~75× un tick a vuoto, perché l'invalidazione è ingenua. Il costo è
    **per tick, non per comando**. Numeri in [plan/09-invarianti-chiusura.md](plan/09-invarianti-chiusura.md).
-2. La copertura "prima capacità occupata, primo servito" rende lo stato di fame **assorbente**
-   per una casa già assegnata. È una conseguenza reale della semplificazione A5, ha un test che
-   la fissa, e va sciolta in M1 quando la capacità diventerà "abitanti serviti".
+2. La copertura "prima capacità occupata, primo servito" rendeva lo stato di fame **assorbente**
+   per una casa già assegnata. Sciolto subito dopo M0, come prerequisito dei livelli delle case:
+   non contando la capacità in abitanti — quello riesprime lo stesso vincolo in un'altra unità,
+   e i due scenari danno output identico — ma rendendo la capacità di un produttore coerente con
+   ciò che la sua produzione sostiene. Ne segue l'invariante *una casa coperta dal cibo mangia
+   sempre*. La lezione generale: un numero di bilanciamento che deve stare in una certa
+   relazione con un altro è un **controllo di validazione**, non un commento.
+
+**Dopo M0**, prima di entrare in M1: capacità dei servizi in abitanti serviti e coerenza fra
+capacità e produzione ([A5](plan/decisioni-aperte.md)).
 
 ---
 

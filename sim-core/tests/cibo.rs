@@ -129,11 +129,15 @@ fn senza_case_la_giacenza_cresce_fino_al_massimo_e_si_ferma() {
 
 // --- 3, 4. fame e ripresa ---------------------------------------------------
 
-/// Fattoria che copre piu' case di quante ne possa sfamare: dopo un numero di
-/// tick calcolabile dai dati la giacenza si esaurisce e qualcuno resta a
-/// bocca asciutta.
+/// Piu' case di quante la fattoria ne copra: le eccedenti restano **fuori
+/// dalla copertura**, e chi e' dentro mangia a regime, per sempre.
+///
+/// E' il modo in cui la fame esiste in M0. La fattoria dichiara la capacita'
+/// che la sua produzione sostiene, quindi non puo' assegnarsi case che poi non
+/// sfama: la fame e' mancanza di copertura, non un deficit dentro la
+/// copertura.
 #[test]
-fn a_regime_la_fattoria_non_sfama_tutta_la_sua_capacita() {
+fn le_case_oltre_la_capacita_restano_scoperte_e_le_altre_mangiano() {
     let mut w = scenario_fattoria(6);
     let (id, _) = w.buildings().next().expect("la fattoria");
     let def = w
@@ -143,11 +147,11 @@ fn a_regime_la_fattoria_non_sfama_tutta_la_sua_capacita() {
     let per_tick = def.produzione_per_tick.expect("produzione");
     let consumo = consumo_per_casa(&w);
 
-    let servite = w.n_case() as i32;
-    let domanda = consumo.checked_mul_int(servite).expect("domanda");
+    let domanda = consumo.checked_mul_int(w.n_case() as i32).expect("domanda");
     assert!(
         domanda > per_tick,
-        "lo scenario deve essere in deficit: {domanda} <= {per_tick}"
+        "lo scenario deve chiedere piu' di quanto la fattoria produca: \
+         {domanda} <= {per_tick}"
     );
 
     // Girare abbastanza da esaurire qualunque scorta accumulata.
@@ -157,13 +161,17 @@ fn a_regime_la_fattoria_non_sfama_tutta_la_sua_capacita() {
         giacenze_nel_range(&w).expect("giacenze nel range");
     }
 
-    let affamate = w
+    let coperte = usize::from(CAPACITA_FATTORIA / ABITANTI_PER_CASA);
+    let sazie = w
         .houses()
-        .filter(|(_, h)| !h.servita.get(ServiceKind::Cibo))
+        .filter(|(_, h)| h.servita.get(ServiceKind::Cibo))
         .count();
-    assert!(affamate > 0, "in deficit qualcuno deve restare senza cibo");
-    let sazie = w.n_case() - affamate;
-    assert!(sazie > 0, "il deficit non deve azzerare tutti");
+    assert_eq!(sazie, coperte, "mangiano tutte e sole le case coperte");
+    assert_eq!(
+        w.n_case() - sazie,
+        6 - coperte,
+        "le eccedenti restano senza cibo"
+    );
 }
 
 /// La ripresa che M0 sa fare: una seconda fattoria copre le case che la
@@ -206,26 +214,43 @@ fn una_seconda_fattoria_copre_le_case_lasciate_fuori() {
     conservazione(&w).expect("conservazione");
 }
 
-/// **Limite noto di M0, non un bug.** Una casa gia' assegnata a una fattoria
-/// in deficit non viene salvata da una seconda fattoria: la contesa la vince
-/// il primo provider (fase 06) e il posto resta occupato da chi non riesce a
-/// mangiare.
+/// **La fame non e' piu' uno stato assorbente.** Questo test aveva l'esito
+/// opposto: in M0 una casa assegnata a una fattoria in deficit non mangiava
+/// piu', per sempre, e nemmeno una seconda fattoria poteva rilevarla — la
+/// contesa la vince il primo provider (fase 06), e il posto restava occupato
+/// da chi non riusciva a mangiare.
 ///
-/// Contare la capacita' in abitanti invece che in case non basta a scioglierlo
-/// — riesprime lo stesso vincolo in un'altra unita'. Serve che la capacita'
-/// dichiarata sia coerente con cio' che la produzione sostiene: allora una
-/// casa coperta mangia sempre e questo test cambia esito.
+/// A scioglierlo non e' bastato contare la capacita' in abitanti invece che in
+/// case: quello riesprime lo stesso vincolo in un'altra unita'. Serviva che la
+/// capacita' dichiarata fosse coerente con cio' che la produzione sostiene, e
+/// da li' segue che una casa **coperta mangia sempre**: chi resta senza cibo
+/// e' solo chi la copertura non raggiunge, ed e' recuperabile costruendo.
+///
+/// La versione generale dell'implicazione sta in
+/// `invarianti.rs::invarianti_coperta_significa_sfamata`; qui si guarda il
+/// caso concreto da cui era emersa.
 #[test]
-fn una_casa_affamata_non_viene_salvata_da_una_seconda_fattoria() {
+fn la_fame_si_cura_costruendo_una_seconda_fattoria() {
     let mut w = scenario_fattoria(6);
     for _ in 0..200 {
         tick(&mut w, &[]);
     }
-    let affamate_prima = w
+    let affamate: Vec<_> = w
         .houses()
         .filter(|(_, h)| !h.servita.get(ServiceKind::Cibo))
-        .count();
-    assert_eq!(affamate_prima, 1, "sei case, la fattoria ne sfama cinque");
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(
+        affamate.len(),
+        6 - usize::from(CAPACITA_FATTORIA / ABITANTI_PER_CASA),
+        "sei case, la fattoria ne copre e sfama cinque"
+    );
+    for id in &affamate {
+        assert!(
+            !w.coverage().e_servita(*id, ServiceKind::Cibo),
+            "{id:?} non mangia perche' e' scoperta, non perche' e' in deficit"
+        );
+    }
 
     costruisci(&mut w, FATTORIA, 12, 2);
     for _ in 0..50 {
@@ -236,18 +261,19 @@ fn una_casa_affamata_non_viene_salvata_da_una_seconda_fattoria() {
         w.houses()
             .filter(|(_, h)| !h.servita.get(ServiceKind::Cibo))
             .count(),
-        1,
-        "in M0 la casa resta assegnata alla prima fattoria, che non la sfama"
+        0,
+        "la seconda fattoria rileva le case che la prima non copriva"
     );
+    conservazione(&w).expect("conservazione");
 }
 
 // --- 6. ordine deterministico ------------------------------------------------
 
-/// Con giacenza per due case su tre, mangiano sempre le stesse due: quelle con
-/// `HouseId` minore. Ripetuto, perche' un ordine non deterministico
-/// passerebbe una volta su tante.
+/// Con piu' case di quante il provider ne copra, mangiano sempre le stesse:
+/// quelle che l'ordine di assegnazione mette davanti. Ripetuto, perche' un
+/// ordine non deterministico passerebbe una volta su tante.
 #[test]
-fn a_giacenza_scarsa_mangiano_sempre_le_stesse() {
+fn a_capacita_scarsa_mangiano_sempre_le_stesse() {
     let mut atteso: Option<Vec<bool>> = None;
     for _ in 0..100 {
         let mut w = scenario_fattoria(6);

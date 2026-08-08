@@ -1,0 +1,33 @@
+// Una fattoria che promette piu' di quanto produca. Con consumo 20 milli per
+// abitante e 400 milli prodotti per tick, ne sostiene 20: dichiararne 24
+// significherebbe assegnarsi una casa in piu' di quante ne sfami, e quella
+// casa non mangerebbe mai piu' — la contesa la vince il primo provider,
+// quindi nemmeno una seconda fattoria potrebbe rilevarla.
+//
+// La seconda fattoria in tabella e' identica ma con la giacenza piu' piccola
+// della produzione di un tick: il collo di bottiglia li' non e' quanto
+// produce, ma quanto riesce a tenere.
+(
+    buildings: [
+        (
+            id: "fattoria",
+            footprint: (2, 2),
+            costo: 40,
+            livelli: 1,
+            servizio: Some((kind: "cibo", raggio_per_livello: [10], capacita_per_livello: [24])),
+            servizi_richiesti: [],
+            produzione_per_tick: Some(400),
+            giacenza_max: Some(20000),
+        ),
+        (
+            id: "granaietto",
+            footprint: (2, 2),
+            costo: 40,
+            livelli: 1,
+            servizio: Some((kind: "cibo", raggio_per_livello: [10], capacita_per_livello: [20])),
+            servizi_richiesti: [],
+            produzione_per_tick: Some(400),
+            giacenza_max: Some(100),
+        ),
+    ],
+)

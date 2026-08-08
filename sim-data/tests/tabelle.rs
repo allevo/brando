@@ -81,11 +81,14 @@ fn le_tabelle_di_produzione_caricano() {
     assert!(fattoria.giacenza_max > Some(Milli::ZERO));
 }
 
-/// Il bilanciamento deve rendere raggiungibile sia la sazieta' sia la fame:
-/// se una fattoria bastasse per qualunque numero di case, lo scenario "fame"
-/// della fase 08 non esisterebbe.
+/// La capacita' della fattoria e' **esattamente** cio' che la sua produzione
+/// sostiene: ne' di piu', o le case in eccesso resterebbero coperte e
+/// affamate per sempre; ne' di meno, o dichiarerebbe posti che non usa.
+///
+/// La fame resta raggiungibile — lo scenario "fame" della fase 08 esiste
+/// ancora — ma e' fame per mancanza di copertura: si cura costruendo.
 #[test]
-fn una_fattoria_non_sostiene_la_propria_capacita_massima() {
+fn la_capacita_della_fattoria_e_quella_che_la_produzione_sostiene() {
     let d = sim_data::load_default().expect("tabelle valide");
     let f = d
         .def(d.kind_by_id("fattoria").expect("fattoria"))
@@ -110,10 +113,24 @@ fn una_fattoria_non_sostiene_la_propria_capacita_massima() {
         prodotto > per_casa,
         "una fattoria deve sostenere almeno una casa"
     );
-    assert!(
-        prodotto < domanda_max,
-        "a piena capacita' la fattoria deve andare in deficit: {prodotto} >= {domanda_max}"
+    assert_eq!(
+        domanda_max, prodotto,
+        "a piena capacita' la fattoria deve consumare esattamente cio' che produce"
     );
+    assert_eq!(
+        capacita % abitanti,
+        0,
+        "in M0 le case sono tutte uguali: una capacita' non multipla di {abitanti} \
+         lascerebbe posti che nessuna casa puo' occupare"
+    );
+}
+
+/// Le tabelle di produzione passano il controllo di coerenza, e non solo la
+/// fattoria: qualunque provider di cibo che venisse aggiunto e' coperto.
+#[test]
+fn nessun_provider_di_cibo_promette_piu_di_quanto_produca() {
+    let d = sim_data::load_default().expect("tabelle valide");
+    assert_eq!(d.capacita_cibo_insostenibile(), vec![]);
 }
 
 // --- 2. fixture rotte, una per controllo ---
@@ -160,6 +177,34 @@ fn servizio_sconosciuto() {
     assert_eq!(e.len(), 2, "kind del servizio e servizio richiesto");
     assert_eq!(e[0].0, "buildings[0].servizio.kind");
     assert_eq!(e[1].0, "buildings[0].servizi_richiesti[0]");
+}
+
+/// Il controllo che incrocia `rules` e `buildings`: la capacita' di un
+/// provider di cibo non puo' superare cio' che la sua produzione sostiene.
+#[test]
+fn capacita_oltre_la_produzione() {
+    let e = errori(&fixture_rotta("capacita_insostenibile.ron"));
+    assert_eq!(
+        e,
+        [
+            (
+                "buildings[0].servizio.capacita_per_livello".to_string(),
+                ValidationErrorKind::CapacitaOltreLaProduzione {
+                    capacita: 24,
+                    sostenibili: 20
+                }
+            ),
+            // Qui a limitare non e' la produzione ma il granaio: 100 milli di
+            // giacenza bastano per cinque abitanti, non per venti.
+            (
+                "buildings[1].servizio.capacita_per_livello".to_string(),
+                ValidationErrorKind::CapacitaOltreLaProduzione {
+                    capacita: 20,
+                    sostenibili: 5
+                }
+            ),
+        ]
+    );
 }
 
 #[test]
@@ -254,9 +299,12 @@ fn hash_sensibile_al_bilanciamento() {
 fn hash_copre_tutte_le_tabelle() {
     let base = sim_data::load_default().expect("tabelle valide");
 
+    // 19 e non 21: alzare il consumo renderebbe la capacita' della fattoria
+    // insostenibile e la tabella non passerebbe la validazione. Qui interessa
+    // che l'hash si muova, non far fallire il caricamento.
     let rules_mod = rules_valide().replacen(
         "consumo_cibo_per_abitante: 20",
-        "consumo_cibo_per_abitante: 21",
+        "consumo_cibo_per_abitante: 19",
         1,
     );
     let a = sim_data::from_ron_str(&rules_mod, &terrain_valido(), &leggi_dati("buildings.ron"))

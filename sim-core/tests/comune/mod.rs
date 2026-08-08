@@ -36,7 +36,12 @@ pub const ABITANTI_PER_CASA: u16 = 4;
 // delle case (M1) la popolazione per casa varia. Divise per
 // `ABITANTI_PER_CASA` danno le case che i test si aspettano di vedere servite.
 pub const CAPACITA_POZZO: u16 = 32;
-pub const CAPACITA_FATTORIA: u16 = 24;
+/// Come nelle tabelle vere, e' cio' che la produzione sostiene: 400 / 20 = 20
+/// abitanti, cinque case. La fixture deve rispettare la stessa coerenza del
+/// dataset di produzione, altrimenti i test di `sim-core` girerebbero su un
+/// bilanciamento che la validazione di `sim-data` rifiuterebbe — lo fissa
+/// `invarianti.rs::la_fixture_rispetta_la_coerenza_fra_capacita_e_produzione`.
+pub const CAPACITA_FATTORIA: u16 = 20;
 pub const CAPACITA_POZZETTO: u16 = 4;
 
 pub fn dataset() -> Arc<DataSet> {

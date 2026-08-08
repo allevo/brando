@@ -13,6 +13,7 @@
 //! | Popolazione mai negativa e coerente con le case esistenti | qui, `invarianti_popolazione` |
 //! | Tesoro coerente: iniziale meno la somma dei costi accettati | qui, `invarianti_tesoro` |
 //! | Cibo conservato: prodotto = consumato + perso + giacenza | qui, `invarianti_conservazione_del_cibo` |
+//! | Una casa coperta dal cibo mangia sempre | qui, `invarianti_coperta_significa_sfamata` |
 //! | Un comando rifiutato non muta niente | qui, `invarianti_i_rifiuti_non_mutano` |
 //! | Nessun panic su comandi arbitrari, inclusi malformati | qui, `nessun_panic_su_diecimila_comandi` |
 //! | Copertura incrementale identica a quella da zero | `copertura.rs`, `equivalenza_copertura` |
@@ -131,6 +132,34 @@ fn popolazione_coerente(w: &World) -> Result<(), String> {
     Ok(())
 }
 
+/// Una casa coperta dal servizio cibo ha mangiato in questo tick.
+///
+/// Non e' una proprieta' del codice della copertura da sola: discende dal
+/// **bilanciamento**. Se un provider di cibo potesse assegnarsi piu' abitanti
+/// di quanti ne sfami, le eccedenti resterebbero coperte e affamate per
+/// sempre, perche' la contesa la vince il primo provider. Vale perche' la
+/// capacita' dichiarata non supera cio' che la produzione sostiene — che e'
+/// esattamente cio' che `DataSet::capacita_cibo_insostenibile` presidia, e che
+/// per la fixture di questi test fissa
+/// `la_fixture_rispetta_la_coerenza_fra_capacita_e_produzione`.
+///
+/// `House::servita` per il cibo e' scritto dal passo 4 e vale "ha mangiato";
+/// `Coverage` vale "e' raggiunta da una fattoria". Qui i due devono
+/// coincidere: se divergono, la fame e' tornata a essere uno stato assorbente.
+fn coperta_significa_sfamata(w: &World) -> Result<(), String> {
+    for (id, h) in w.houses() {
+        let coperta = w.coverage().e_servita(id, sim_core::ServiceKind::Cibo);
+        let ha_mangiato = h.servita.get(sim_core::ServiceKind::Cibo);
+        if coperta != ha_mangiato {
+            return Err(format!(
+                "{id:?} in {:?}: coperta dal cibo = {coperta}, ha mangiato = {ha_mangiato}",
+                h.origin
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn tile_del_footprint((w, h): (u8, u8)) -> impl Iterator<Item = (u8, u8)> {
     (0..h).flat_map(move |dy| (0..w).map(move |dx| (dx, dy)))
 }
@@ -244,6 +273,28 @@ proptest! {
         }
     }
 
+    /// Una casa coperta dal cibo mangia: la fame e' mancanza di copertura, mai
+    /// uno stato in cui si resti pur essendo serviti.
+    #[test]
+    fn invarianti_coperta_significa_sfamata(p in partita()) {
+        let mut w = mondo();
+        for cmds in &p {
+            tick(&mut w, cmds);
+            if let Err(e) = coperta_significa_sfamata(&w) {
+                return Err(TestCaseError::fail(e));
+            }
+            // Anche a regime, non solo nel tick della costruzione: una
+            // fattoria appena nata ha la giacenza del primo tick, che
+            // maschererebbe un deficit strutturale.
+            for _ in 0..3 {
+                tick(&mut w, &[]);
+                if let Err(e) = coperta_significa_sfamata(&w) {
+                    return Err(TestCaseError::fail(e));
+                }
+            }
+        }
+    }
+
     /// Un comando rifiutato non muta niente: lo stato dopo un tick di soli
     /// comandi rifiutati e' quello di prima, tick a parte.
     #[test]
@@ -351,6 +402,23 @@ fn comando_casuale(rng: &mut SplitMix64) -> Command {
             at: TilePos::new(x, y),
         },
     }
+}
+
+/// La fixture dev'essere bilanciata come le tabelle vere.
+///
+/// I test di `sim-core` girano su un dataset costruito a mano, che non passa
+/// per la validazione di `sim-data`. Senza questo controllo la fixture
+/// potrebbe scivolare su numeri che in produzione sarebbero rifiutati, e
+/// `invarianti_coperta_significa_sfamata` verificherebbe una proprieta' che il
+/// gioco vero non ha.
+#[test]
+fn la_fixture_rispetta_la_coerenza_fra_capacita_e_produzione() {
+    let d = dataset();
+    assert_eq!(
+        d.capacita_cibo_insostenibile(),
+        vec![],
+        "la fixture dichiara piu' capacita' di quanta la produzione ne sostenga"
+    );
 }
 
 /// Un comando fuori mappa e' sempre rifiutato, mai un panic e mai un

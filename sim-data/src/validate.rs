@@ -46,6 +46,12 @@ pub enum ValidationErrorKind {
     #[error("giacenza_max su un edificio che non produce nulla")]
     GiacenzaSenzaProduzione,
 
+    #[error(
+        "capacita' {capacita} abitanti, ma la produzione ne sostiene {sostenibili}: \
+         le case in eccesso resterebbero assegnate a un provider che non le sfama"
+    )]
+    CapacitaOltreLaProduzione { capacita: u16, sostenibili: u16 },
+
     #[error("terreno assente dalla tabella: {terrain:?}")]
     TerrenoMancante { terrain: Terrain },
 
@@ -114,7 +120,25 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
         return Err(rep);
     }
 
-    Ok(DataSet::new(rules, terrain, buildings))
+    // I controlli **fra** tabelle vengono dopo, e solo se le singole tabelle
+    // sono sane: la coerenza fra la capacita' di un provider di cibo e cio'
+    // che la sua produzione sostiene incrocia `rules` e `buildings`, e su una
+    // tabella gia' rotta produrrebbe rumore invece che informazione.
+    let data = DataSet::new(rules, terrain, buildings);
+    for v in data.capacita_cibo_insostenibile() {
+        rep.push(
+            format!("buildings[{}].servizio.capacita_per_livello", v.building),
+            ValidationErrorKind::CapacitaOltreLaProduzione {
+                capacita: v.capacita,
+                sostenibili: v.sostenibili,
+            },
+        );
+    }
+    if !rep.is_empty() {
+        return Err(rep);
+    }
+
+    Ok(data)
 }
 
 fn valida_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {

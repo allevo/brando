@@ -150,4 +150,77 @@ impl DataSet {
     pub fn hash_hex(&self) -> String {
         self.hash.iter().map(|b| format!("{b:02x}")).collect()
     }
+
+    /// I provider di cibo che dichiarano piu' capacita' di quanta la loro
+    /// produzione ne sostenga.
+    ///
+    /// **Perche' e' un controllo e non una convenzione nei commenti.** Se un
+    /// provider di cibo puo' assegnarsi piu' abitanti di quanti ne sfami, le
+    /// case in eccedenza restano assegnate a lui — la contesa la vince il
+    /// primo provider — e non mangiano piu': la fame diventa uno stato
+    /// **assorbente**, che nemmeno costruire una seconda fattoria scioglie.
+    /// Con questo controllo verde vale invece l'implicazione inversa, ed e' un
+    /// invariante del gioco: *una casa coperta dal servizio cibo mangia
+    /// sempre*.
+    ///
+    /// Il conto e' sul caso peggiore, giacenza a zero all'inizio del tick:
+    /// cio' che il provider puo' distribuire e' il minore fra la produzione di
+    /// un tick e quanto il granaio riesce a tenere.
+    ///
+    /// **Vive quanto A5.** E' la regola giusta finche' la fattoria produce
+    /// nella propria giacenza; in M3 la merce arrivera' da un magazzino con
+    /// walker logistici reali (D3), la capacita' smettera' di dipendere dalla
+    /// produzione locale e questo controllo va tolto insieme alla
+    /// semplificazione che presidia.
+    pub fn capacita_cibo_insostenibile(&self) -> Vec<CapacitaInsostenibile> {
+        let mut out = Vec::new();
+        let consumo = self.rules.consumo_cibo_per_abitante.to_millis();
+        if consumo <= 0 {
+            // Cibo gratis: qualunque capacita' e' sostenibile. Non e' questo
+            // controllo a dire che il dataset non ha senso.
+            return out;
+        }
+
+        for (building, def) in self.buildings.iter().enumerate() {
+            let Some(servizio) = def.servizio.as_ref() else {
+                continue;
+            };
+            if servizio.kind != ServiceKind::Cibo {
+                continue;
+            }
+            let (Some(produzione), Some(giacenza_max)) =
+                (def.produzione_per_tick, def.giacenza_max)
+            else {
+                continue;
+            };
+
+            let distribuibile = produzione.to_millis().min(giacenza_max.to_millis());
+            let sostenibili = u16::try_from(distribuibile / consumo).unwrap_or(u16::MAX);
+            for (i, &capacita) in servizio.capacita_per_livello.iter().enumerate() {
+                if capacita > sostenibili {
+                    out.push(CapacitaInsostenibile {
+                        building,
+                        livello: u8::try_from(i + 1).unwrap_or(u8::MAX),
+                        capacita,
+                        sostenibili,
+                    });
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Un provider di cibo la cui capacita' supera cio' che la sua produzione
+/// sostiene. Lo trova [`DataSet::capacita_cibo_insostenibile`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapacitaInsostenibile {
+    /// Indice in [`DataSet::buildings`].
+    pub building: usize,
+    /// Livello a cui la capacita' sfora, da 1.
+    pub livello: u8,
+    /// Abitanti dichiarati in tabella.
+    pub capacita: u16,
+    /// Abitanti che la produzione sostiene davvero.
+    pub sostenibili: u16,
 }
