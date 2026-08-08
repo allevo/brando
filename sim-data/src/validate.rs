@@ -9,9 +9,8 @@ use std::fmt;
 
 use sim_core::{Coins, Milli, ServiceKind, Terrain};
 
-use crate::dataset::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
-use crate::hash::canonical_hash;
 use crate::raw::{RawBuildingDef, RawDataSet};
+use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 
 /// Un singolo problema, con il percorso logico del campo che lo causa.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,13 +114,7 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
         return Err(rep);
     }
 
-    let hash = canonical_hash(&rules, &terrain, &buildings);
-    Ok(DataSet {
-        rules,
-        terrain,
-        buildings,
-        hash,
-    })
+    Ok(DataSet::new(rules, terrain, buildings))
 }
 
 fn valida_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {

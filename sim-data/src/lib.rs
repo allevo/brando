@@ -6,14 +6,15 @@
 //! (CLAUDE.md, convenzioni). Il caricamento e' I/O e per questo sta qui,
 //! mai dentro `sim-core` (D4).
 
-pub mod dataset;
-mod hash;
 pub mod load;
 pub mod raw;
 pub mod validate;
 
-pub use dataset::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 pub use load::{LoadError, from_ron_str, load_from_dir};
+/// Le definizioni del dataset vivono in `sim-core` (il `World` le tiene in
+/// un `Arc`, A2); qui restano parsing, validazione e I/O. Ri-esportate per
+/// comodita' di chi carica le tabelle.
+pub use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 pub use validate::{ValidationError, ValidationErrorKind, ValidationReport, validate};
 
 /// Directory delle tabelle di produzione, risolta a compile time.

@@ -5,9 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::dataset::DataSet;
 use crate::raw::{RawBuildingTable, RawDataSet, RawRules, RawTerrainTable};
 use crate::validate::{ValidationReport, validate};
+use sim_core::data::DataSet;
 
 const FILE_RULES: &str = "rules.ron";
 const FILE_TERRAIN: &str = "terrain.ron";

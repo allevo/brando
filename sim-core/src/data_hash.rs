@@ -11,9 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use sim_core::Terrain;
+use crate::grid::Terrain;
 
-use crate::dataset::{BuildingDef, Rules, TerrainDef};
+use crate::data::{BuildingDef, Rules, TerrainDef};
 
 /// Prefisso di dominio: separa questo hash da qualunque altro blake3 del
 /// progetto. Cambiarlo rigenera tutti i golden.
@@ -86,7 +86,7 @@ fn hash_u16_slice(h: &mut blake3::Hasher, v: &[u16]) {
     }
 }
 
-fn hash_opt_milli(h: &mut blake3::Hasher, v: Option<sim_core::Milli>) {
+fn hash_opt_milli(h: &mut blake3::Hasher, v: Option<crate::units::Milli>) {
     match v {
         None => {
             h.update(&[0u8]);

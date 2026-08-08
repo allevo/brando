@@ -33,6 +33,20 @@ dopo per un effetto secondario.
 *Alternativa:* passare `&DataSet` come parametro a `step`. Più puro, ma cambia la firma
 dichiarata e propaga un parametro in ogni funzione interna.
 
+**Come è stata risolta davvero (fase 04).** La raccomandazione regge, ma ha una conseguenza
+che la fase 03 non aveva previsto: se il `World` tiene un `Arc<DataSet>`, allora `DataSet` deve
+essere visibile da `sim-core`, e `sim-core` non può dipendere da `sim-data` senza invertire il
+grafo delle dipendenze.
+
+Le **definizioni** (`DataSet`, `Rules`, `BuildingDef`, `ServiceDef`, `TerrainDef`) e l'hash
+canonico sono quindi state spostate in `sim-core::data`: sono struct pure, senza I/O, e
+appartengono al vocabolario del core. In `sim-data` restano il parsing RON, la validazione e
+l'I/O — cioè esattamente ciò che D4 vieta al core. `sim-data` ri-esporta i tipi per comodità di
+chi carica le tabelle, così i chiamanti non devono sapere dove sono definiti.
+
+Il confine resta quello che conta: *nessun numero di bilanciamento nel codice*, e *nessun I/O
+nel core*.
+
 ---
 
 ## A3 — L'hash canonico è scritto a mano, non delegato a serde

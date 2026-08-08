@@ -1,8 +1,17 @@
-//! Il dataset validato: la forma che il core consuma.
+//! Il dataset di bilanciamento: la forma validata che il core consuma.
+//!
+//! Le **definizioni** stanno qui e non in `sim-data` per la direzione delle
+//! dipendenze: il `World` tiene un `Arc<DataSet>` (A2), e sim-core non puo'
+//! dipendere da sim-data. In `sim-data` restano il parsing RON, la
+//! validazione e l'I/O — cioe' tutto cio' che il core non deve fare (D4).
 
 use std::collections::BTreeMap;
 
-use sim_core::{BuildingKindId, Coins, Milli, ServiceKind, Terrain};
+use crate::data_hash::canonical_hash;
+use crate::grid::Terrain;
+use crate::ids::BuildingKindId;
+use crate::service::ServiceKind;
+use crate::units::{Coins, Milli};
 
 /// Costanti globali di simulazione.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,11 +107,27 @@ pub struct DataSet {
     pub buildings: Vec<BuildingDef>,
     /// blake3 del contenuto **validato**, non dei byte dei file: riformattare
     /// un RON o aggiungere un commento non cambia l'hash, cambiare un numero
-    /// si. Entra nell'hash dello stato (A2).
+    /// si. Entra nell'hash dello stato (A2). Lo calcola [`DataSet::new`].
     pub hash: [u8; 32],
 }
 
 impl DataSet {
+    /// Costruisce e calcola l'hash canonico. L'unico modo di ottenere un
+    /// `DataSet`: cosi' l'hash non puo' essere fuori sincrono col contenuto.
+    pub fn new(
+        rules: Rules,
+        terrain: BTreeMap<Terrain, TerrainDef>,
+        buildings: Vec<BuildingDef>,
+    ) -> Self {
+        let hash = canonical_hash(&rules, &terrain, &buildings);
+        Self {
+            rules,
+            terrain,
+            buildings,
+            hash,
+        }
+    }
+
     pub fn def(&self, kind: BuildingKindId) -> Option<&BuildingDef> {
         self.buildings.get(usize::from(kind.get()))
     }
