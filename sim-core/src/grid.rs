@@ -37,8 +37,13 @@ pub struct TileFlags(u8);
 
 impl TileFlags {
     const HAS_ROAD: u8 = 1 << 0;
-    /// Se l'occupante e' una casa; altrimenti, se presente, e' un edificio.
-    const OCCUPANT_IS_HOUSE: u8 = 1 << 1;
+    /// Se il tile e' occupato. Serve un bit dedicato perche' l'indice
+    /// dell'occupante non ha piu' un valore sentinella: qualunque `TileIdx`,
+    /// `u16::MAX` compreso, e' l'origine legittima di un edificio su una
+    /// mappa 256x256.
+    const HAS_OCCUPANT: u8 = 1 << 1;
+    /// Se l'occupante e' una casa; altrimenti e' un edificio.
+    const OCCUPANT_IS_HOUSE: u8 = 1 << 2;
 
     pub const fn empty() -> Self {
         Self(0)
@@ -56,15 +61,15 @@ impl TileFlags {
         self.set(Self::HAS_ROAD, on);
     }
 
+    pub const fn has_occupant(self) -> bool {
+        self.0 & Self::HAS_OCCUPANT != 0
+    }
+
     pub const fn occupant_is_house(self) -> bool {
         self.0 & Self::OCCUPANT_IS_HOUSE != 0
     }
 
-    pub const fn set_occupant_is_house(&mut self, on: bool) {
-        self.set(Self::OCCUPANT_IS_HOUSE, on);
-    }
-
-    const fn set(&mut self, bit: u8, on: bool) {
+    pub(crate) const fn set(&mut self, bit: u8, on: bool) {
         if on {
             self.0 |= bit;
         } else {
@@ -77,49 +82,25 @@ impl std::fmt::Debug for TileFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "TileFlags(road={}, house={})",
+            "TileFlags(road={}, occupato={}, casa={})",
             self.has_road(),
+            self.has_occupant(),
             self.occupant_is_house()
         )
     }
 }
 
-/// Riferimento compatto all'occupante di un tile.
+/// Chi occupa un tile, come riferimento compatto.
 ///
-/// Un `Option<Box<...>>` costerebbe 8 byte e una indirezione: qui c'e' un
-/// `u16` con sentinella. Il tipo dell'occupante (casa o edificio) sta nei
-/// [`TileFlags`]; la mappa da slot a `BuildingId`/`HouseId` sta nel `World`,
-/// non nel tile.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
-pub struct OccupantSlot(u16);
-
-impl OccupantSlot {
-    const VUOTO: u16 = u16::MAX;
-
-    pub const EMPTY: Self = Self(Self::VUOTO);
-
-    /// `None` se l'indice coincide con la sentinella di "vuoto".
-    pub const fn new(index: u16) -> Option<Self> {
-        if index == Self::VUOTO {
-            None
-        } else {
-            Some(Self(index))
-        }
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.0 == Self::VUOTO
-    }
-
-    pub const fn index(self) -> Option<u16> {
-        if self.is_empty() { None } else { Some(self.0) }
-    }
-}
-
-impl Default for OccupantSlot {
-    fn default() -> Self {
-        Self::EMPTY
-    }
+/// L'occupante e' identificato dal **tile di origine** del suo footprint, non
+/// da un indice progressivo assegnato al momento della costruzione: cosi' lo
+/// stato di un tile e' funzione della citta' e non della storia degli
+/// inserimenti, e non serve una free-list di slot da tenere coerente. La mappa
+/// da origine a `BuildingId`/`HouseId` sta nel `World`, non nel tile.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct TileOccupant {
+    pub origin: TileIdx,
+    pub e_casa: bool,
 }
 
 /// Budget: 4 byte. 40.000 tile ⇒ 160 KB, sta in L2.
@@ -127,7 +108,39 @@ impl Default for OccupantSlot {
 pub struct Tile {
     pub terrain: Terrain,
     pub flags: TileFlags,
-    pub occupant: OccupantSlot,
+    /// Valido solo se `flags.has_occupant()`. Privato: leggerlo senza
+    /// guardare il flag darebbe l'origine di un occupante rimosso.
+    occupant_origin: TileIdx,
+}
+
+impl Tile {
+    /// L'occupante del tile, se c'e'.
+    pub const fn occupante(&self) -> Option<TileOccupant> {
+        if self.flags.has_occupant() {
+            Some(TileOccupant {
+                origin: self.occupant_origin,
+                e_casa: self.flags.occupant_is_house(),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub const fn e_libero(&self) -> bool {
+        !self.flags.has_occupant() && !self.flags.has_road()
+    }
+
+    pub const fn set_occupante(&mut self, occ: TileOccupant) {
+        self.occupant_origin = occ.origin;
+        self.flags.set(TileFlags::HAS_OCCUPANT, true);
+        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.e_casa);
+    }
+
+    pub const fn libera_occupante(&mut self) {
+        self.flags.set(TileFlags::HAS_OCCUPANT, false);
+        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
+        self.occupant_origin = TileIdx::new(0);
+    }
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -302,13 +315,26 @@ mod tests {
         assert_eq!(g.pos(ultimo), Some(TilePos::new(255, 255)));
     }
 
+    /// Anche l'ultimo tile di una mappa 256x256 (`TileIdx` = u16::MAX) puo'
+    /// essere l'origine di un occupante: e' il motivo per cui la presenza sta
+    /// in un flag e non in un valore sentinella.
     #[test]
-    fn occupant_slot_distingue_vuoto_da_indice() {
-        assert!(OccupantSlot::EMPTY.is_empty());
-        assert_eq!(OccupantSlot::EMPTY.index(), None);
-        assert_eq!(OccupantSlot::new(0).and_then(OccupantSlot::index), Some(0));
-        assert_eq!(OccupantSlot::new(u16::MAX), None);
-        assert_eq!(OccupantSlot::default(), OccupantSlot::EMPTY);
+    fn l_occupante_usa_il_tile_di_origine() {
+        let mut t = Tile::default();
+        assert_eq!(t.occupante(), None);
+        assert!(t.e_libero());
+
+        let occ = TileOccupant {
+            origin: TileIdx::new(u16::MAX),
+            e_casa: true,
+        };
+        t.set_occupante(occ);
+        assert_eq!(t.occupante(), Some(occ));
+        assert!(!t.e_libero());
+
+        t.libera_occupante();
+        assert_eq!(t.occupante(), None);
+        assert_eq!(t, Tile::default(), "liberare azzera anche l'origine");
     }
 
     #[test]
