@@ -249,8 +249,18 @@ fn rimuovi_casa(world: &mut World, id: HouseId, r: &mut StepReport) {
 
 // --- 2..10: i passi che si riempiono nelle fasi successive ------------------
 
-/// Passo 2 — si riempie nella fase 05.
-fn rebuild_roads(_world: &mut World) {}
+/// Passo 2 — ricostruisce la rete stradale, ma solo se e' sporca.
+///
+/// La topologia della rete cambia le distanze percorse, quindi dopo una
+/// ricostruzione ogni provider va rivalutato (passo 3).
+fn rebuild_roads(world: &mut World) {
+    if !world.dirty.roads {
+        return;
+    }
+    world.roads.rebuild(&world.grid);
+    world.dirty.roads = false;
+    segna_tutti_i_provider(world);
+}
 
 /// Passo 3 — si riempie nella fase 06. E' l'hot path del progetto.
 fn propagate_coverage(_world: &mut World) {}

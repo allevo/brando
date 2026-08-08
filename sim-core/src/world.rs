@@ -13,6 +13,7 @@ use slotmap::SlotMap;
 use crate::data::DataSet;
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::network::RoadNetwork;
 use crate::rng::RngSet;
 use crate::service::ServiceFlags;
 use crate::units::{Coins, Milli};
@@ -102,6 +103,11 @@ pub struct World {
     pub(crate) economy: Economy,
     pub(crate) rng: RngSet,
     pub(crate) dirty: DirtyFlags,
+    /// Struttura **derivata** dalla griglia: non entra nell'hash canonico
+    /// dello stato (fase 08), altrimenti un bug di ricostruzione si
+    /// presenterebbe come divergenza di hash invece che come test di
+    /// equivalenza fallito.
+    pub(crate) roads: RoadNetwork,
     /// Indici da tile di origine a id. Sono `BTreeMap` e non `HashMap` (D4):
     /// l'ordine di iterazione e' un contratto.
     pub(crate) edifici_per_origine: BTreeMap<TileIdx, BuildingId>,
@@ -117,6 +123,7 @@ impl World {
     /// Mondo iniziale: griglia vuota, tesoro dalle `rules`, RNG dal seed.
     pub fn new(grid: Grid, data: Arc<DataSet>, seed: u64) -> Self {
         let tesoro = data.rules.tesoro_iniziale;
+        let tiles = grid.len();
         Self {
             tick: 0,
             grid,
@@ -126,6 +133,7 @@ impl World {
             economy: Economy { tesoro },
             rng: RngSet::from_seed(seed),
             dirty: DirtyFlags::default(),
+            roads: RoadNetwork::new(tiles),
             edifici_per_origine: BTreeMap::new(),
             case_per_origine: BTreeMap::new(),
             data,
@@ -150,6 +158,10 @@ impl World {
 
     pub const fn dirty(&self) -> &DirtyFlags {
         &self.dirty
+    }
+
+    pub const fn roads(&self) -> &RoadNetwork {
+        &self.roads
     }
 
     pub fn data(&self) -> &DataSet {
@@ -204,6 +216,74 @@ impl World {
             }
             None => false,
         }
+    }
+
+    /// I tile strada 4-adiacenti al footprint di un edificio.
+    ///
+    /// **Regola di gioco**: un edificio e' agganciato alla rete se almeno un
+    /// tile del suo footprint tocca ortogonalmente una strada. E' la regola di
+    /// Zeus, dove conta l'ingresso e non l'edificio; in M1 potrebbe diventare
+    /// "un tile d'ingresso designato", e allora questa e' la funzione da
+    /// cambiare.
+    pub fn ingressi_edificio(&self, id: BuildingId) -> Vec<TileIdx> {
+        let Some(b) = self.buildings.get(id) else {
+            return Vec::new();
+        };
+        let footprint = self.data.def(b.kind).map_or((1, 1), |d| d.footprint);
+        self.ingressi(b.origin, footprint)
+    }
+
+    /// Come [`World::ingressi_edificio`], per una casa.
+    pub fn ingressi_casa(&self, id: HouseId) -> Vec<TileIdx> {
+        let Some(h) = self.houses.get(id) else {
+            return Vec::new();
+        };
+        self.ingressi(h.origin, (1, 1))
+    }
+
+    /// I tile strada adiacenti a un footprint, in ordine di `TileIdx`.
+    pub fn ingressi(&self, origin: TilePos, footprint: (u8, u8)) -> Vec<TileIdx> {
+        let mut out = Vec::new();
+        for dy in 0..footprint.1 {
+            for dx in 0..footprint.0 {
+                let (Some(x), Some(y)) = (origin.x.checked_add(dx), origin.y.checked_add(dy))
+                else {
+                    continue;
+                };
+                let Some(idx) = self.grid.idx(TilePos::new(x, y)) else {
+                    continue;
+                };
+                for v in self.grid.neighbors4(idx) {
+                    if self.grid.get(v).is_some_and(|t| t.flags.has_road()) {
+                        out.push(v);
+                    }
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
+    /// Distanza in tile percorsi sulla rete, da un edificio a un altro.
+    ///
+    /// `None` se non sono connessi o se sono oltre `max`. La distanza si conta
+    /// tra i **tile strada di ingresso**: due edifici affacciati sulla stessa
+    /// strada distano 0, e un corridoio di N tile tra i due ingressi vale
+    /// N - 1. E' distanza percorsa, non euclidea (D2).
+    pub fn road_distance(&self, from: BuildingId, to: BuildingId, max: u16) -> Option<u16> {
+        let partenze = self.ingressi_edificio(from);
+        let arrivi = self.ingressi_edificio(to);
+        if partenze.is_empty() || arrivi.is_empty() {
+            return None;
+        }
+        let mut migliore: Option<u16> = None;
+        crate::network::bfs_strade(&self.grid, &partenze, max, |t, d| {
+            if arrivi.binary_search(&t).is_ok() && migliore.is_none_or(|m| d < m) {
+                migliore = Some(d);
+            }
+        });
+        migliore
     }
 
     /// Risolve l'occupante di un tile nel suo id.

@@ -209,7 +209,10 @@ fn la_strada_costa_segna_il_flag_e_sporca_la_rete() {
     );
     let idx = w.grid().idx(pos(2, 2)).expect("in mappa");
     assert!(w.grid().get(idx).expect("tile").flags.has_road());
-    assert!(w.dirty().roads, "la rete va ricostruita (passo 2)");
+    // Il flag e' gia' stato consumato dal passo 2 nello stesso tick: cio' che
+    // resta osservabile e' che la ricostruzione sia avvenuta.
+    assert!(!w.dirty().roads);
+    assert_eq!(w.roads().rebuilds(), 1);
 
     // Due strade sullo stesso tile: la seconda e' rifiutata.
     let r = tick(&mut w, &[Command::PlaceRoad { at: pos(2, 2) }]);
