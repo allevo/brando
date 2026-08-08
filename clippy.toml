@@ -3,8 +3,13 @@ disallowed-types = [
   { path = "std::collections::HashMap", reason = "D4: ordine di iterazione non deterministico, usare BTreeMap o IndexMap" },
   { path = "std::collections::HashSet", reason = "D4: idem" },
 ]
+# `rand` e' compilato con default-features = false: `rand::rng` e
+# `rand::thread_rng` non esistono proprio nel grafo, e le voci qui sotto sono
+# la seconda linea di difesa per il giorno in cui una feature le riportasse
+# dentro. `allow-invalid` serve a non far rumore finche' il path non esiste.
 disallowed-methods = [
-  { path = "rand::rng", reason = "D4: l'RNG vive nello stato ed e' seedato" },
+  { path = "rand::rng", reason = "D4: l'RNG vive nello stato ed e' seedato", allow-invalid = true },
+  { path = "rand::thread_rng", reason = "D4: idem", allow-invalid = true },
   { path = "std::time::Instant::now", reason = "D4: nessun accesso all'orologio nel core" },
   { path = "std::time::SystemTime::now", reason = "D4: idem" },
 ]
