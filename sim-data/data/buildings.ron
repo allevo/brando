@@ -1,0 +1,47 @@
+// I tre edifici di M0. Un solo livello ciascuno: l'evoluzione delle case e'
+// M1, e con essa raggi e capacita' diventeranno vettori di piu' elementi.
+(
+    buildings: [
+        (
+            id: "casa",
+            footprint: (1, 1),
+            costo: 10,
+            livelli: 1,
+            servizio: None,
+            servizi_richiesti: ["acqua", "cibo"],
+        ),
+        (
+            id: "pozzo",
+            footprint: (1, 1),
+            costo: 12,
+            livelli: 1,
+            servizio: Some((
+                kind: "acqua",
+                // Un valore per livello. Raggio in tile percorsi sulla rete
+                // stradale, non in linea d'aria (D2).
+                raggio_per_livello: [12],
+                // Case servite contemporaneamente.
+                capacita_per_livello: [8],
+            )),
+            servizi_richiesti: [],
+        ),
+        (
+            id: "fattoria",
+            footprint: (2, 2),
+            costo: 40,
+            livelli: 1,
+            // A5: in M0 la fattoria copre come un pozzo, consumando da una
+            // giacenza locale. In M3 la merce arrivera' da un magazzino via
+            // walker logistici reali e questi due campi cambieranno: il
+            // raggio resta, la provenienza della merce no.
+            servizio: Some((
+                kind: "cibo",
+                raggio_per_livello: [10],
+                capacita_per_livello: [6],
+            )),
+            servizi_richiesti: [],
+            produzione_per_tick: Some(400),
+            giacenza_max: Some(20000),
+        ),
+    ],
+)

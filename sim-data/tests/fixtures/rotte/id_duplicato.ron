@@ -1,0 +1,7 @@
+// Due edifici con lo stesso id: il secondo non sarebbe mai raggiungibile.
+(
+    buildings: [
+        (id: "casa", footprint: (1, 1), costo: 10, livelli: 1, servizio: None, servizi_richiesti: []),
+        (id: "casa", footprint: (1, 1), costo: 10, livelli: 1, servizio: None, servizi_richiesti: []),
+    ],
+)

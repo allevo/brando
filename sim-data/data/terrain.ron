@@ -1,0 +1,9 @@
+// Proprieta' di gioco dei terreni. L'enum Terrain sta in sim-core, i numeri
+// stanno qui (D6). Ogni variante va elencata esattamente una volta.
+(
+    terrains: [
+        (terrain: Pianura, costruibile: true, attraversabile: true, costo_strada: 2),
+        (terrain: Acqua,   costruibile: false, attraversabile: false, costo_strada: 0),
+        (terrain: Roccia,  costruibile: false, attraversabile: true,  costo_strada: 6),
+    ],
+)

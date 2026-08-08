@@ -9,9 +9,11 @@
 pub mod grid;
 pub mod ids;
 pub mod rng;
+pub mod service;
 pub mod units;
 
 pub use grid::{Grid, GridError, OccupantSlot, Terrain, Tile, TileFlags};
-pub use ids::{BuildingId, HouseId, TileIdx, TilePos};
+pub use ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 pub use rng::{RngDomain, RngSet};
+pub use service::{ServiceFlags, ServiceKind};
 pub use units::{Coins, Milli};

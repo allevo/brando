@@ -33,6 +33,26 @@ impl TileIdx {
     }
 }
 
+/// Tipo di edificio, come indice nella tabella `buildings` del `DataSet`.
+///
+/// Non e' un enum: i tipi di edificio sono dati, non codice (D6). Un id che
+/// non risolve a nessuna riga della tabella e' un errore di comando, non un
+/// panic — l'LLM ne produrra' (CLAUDE.md, interfaccia AI).
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
+)]
+pub struct BuildingKindId(u16);
+
+impl BuildingKindId {
+    pub const fn new(v: u16) -> Self {
+        Self(v)
+    }
+
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+}
+
 /// Posizione su griglia. `x` e `y` stanno in `u8` perche' il lato massimo e'
 /// 256 (A4): le coordinate valide vanno da 0 a 255.
 #[derive(

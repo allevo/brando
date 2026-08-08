@@ -1,0 +1,20 @@
+// Costanti globali della simulazione. Nessuno di questi numeri puo' comparire
+// in un .rs (CLAUDE.md, convenzioni).
+(
+    // A6: 1 tick = 1 giorno, 30 tick = 1 mese, 12 mesi = 1 anno (360 tick).
+    // Gli obiettivi di scenario si esprimono in mesi/anni (M1).
+    tick_per_mese: 30,
+    mesi_per_anno: 12,
+
+    tesoro_iniziale: 1000,
+
+    // Abitanti per livello di casa. In M0 c'e' un solo livello e il valore e'
+    // fisso: la migrazione arriva con M1.
+    abitanti_per_livello_casa: [4],
+
+    // Milli di cibo consumati da un abitante in un tick. Con 4 abitanti per
+    // casa fanno 80 milli/casa/tick: una fattoria da 400 ne sostiene 5, e la
+    // sesta (capacita' della fattoria) resta a bocca asciutta. La carestia
+    // deve essere raggiungibile, e' lo scenario "fame" della fase 08.
+    consumo_cibo_per_abitante: 20,
+)
