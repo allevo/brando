@@ -1,0 +1,152 @@
+Recording(
+  header: Header(
+    format_version: 1,
+    seed: 42,
+    grid: GridSpec(
+      width: 32,
+      height: 32,
+      terrain: Pianura,
+    ),
+    dataset_hash: "6201fbf6ad6c4523d329a1b9491fe22ad94a511879cdd94125c1b2aa2fb5a3bb",
+  ),
+  commands: [
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 1,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 2,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 3,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 4,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 5,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 6,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 7,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 8,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 9,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 10,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 11,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 12,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 13,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 14,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 15,
+        y: 8,
+      ),
+    )),
+    (0, PlaceRoad(
+      at: TilePos(
+        x: 16,
+        y: 8,
+      ),
+    )),
+    (1, PlaceBuilding(
+      kind: BuildingKindId(1),
+      origin: TilePos(
+        x: 2,
+        y: 7,
+      ),
+    )),
+    (1, PlaceBuilding(
+      kind: BuildingKindId(2),
+      origin: TilePos(
+        x: 4,
+        y: 6,
+      ),
+    )),
+    (2, PlaceBuilding(
+      kind: BuildingKindId(0),
+      origin: TilePos(
+        x: 8,
+        y: 9,
+      ),
+    )),
+    (2, PlaceBuilding(
+      kind: BuildingKindId(0),
+      origin: TilePos(
+        x: 9,
+        y: 9,
+      ),
+    )),
+    (2, PlaceBuilding(
+      kind: BuildingKindId(0),
+      origin: TilePos(
+        x: 10,
+        y: 9,
+      ),
+    )),
+    (2, PlaceBuilding(
+      kind: BuildingKindId(0),
+      origin: TilePos(
+        x: 11,
+        y: 9,
+      ),
+    )),
+  ],
+)

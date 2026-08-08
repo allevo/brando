@@ -3,6 +3,8 @@
 //! E' il posto dove il gioco gira senza alcuna dipendenza grafica: `sim-core`
 //! e basta. Se qui servisse Bevy, sarebbe un errore architetturale.
 
+mod bench;
+mod golden;
 mod scenario;
 
 use std::process::ExitCode;
@@ -15,15 +17,22 @@ fn main() -> ExitCode {
     let comando = args.first().map(String::as_str);
 
     match comando {
-        Some("run") => match run(&args[1..]) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(e) => {
-                eprintln!("errore: {e}");
-                ExitCode::FAILURE
-            }
-        },
+        Some("run") => esito(run(&args[1..])),
+        Some("record") => esito(record(&args[1..])),
+        Some("regen-golden") => esito(regen_golden(&args[1..])),
+        Some("bench") => esito(bench::bench(&args[1..])),
         _ => {
             uso();
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn esito(r: Result<(), String>) -> ExitCode {
+    match r {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("errore: {e}");
             ExitCode::FAILURE
         }
     }
@@ -33,8 +42,60 @@ fn uso() {
     eprintln!("uso: cargo xtask <comando>");
     eprintln!();
     eprintln!("  run --scenario <nome> --ticks <n> [--dump-every <n>]");
+    eprintln!("  record --scenario <nome> --out <file.ron>");
+    eprintln!("  regen-golden [--check]");
+    eprintln!("  bench [--lato <n>] [--abitanti <n>] [--ripetizioni <n>]   (usare --release)");
     eprintln!();
     eprintln!("scenari: {}", scenario::NOMI.join(", "));
+}
+
+/// Registra uno scenario in un `.ron` a scelta.
+///
+/// I golden degli scenari noti li scrive `regen-golden`; questo serve a
+/// tirarne fuori uno in un percorso qualunque, per ispezionarlo o per
+/// costruirci sopra un caso nuovo.
+fn record(args: &[String]) -> Result<(), String> {
+    let nome = opzione(args, "--scenario").ok_or("serve --scenario <nome>")?;
+    let out = opzione(args, "--out").ok_or("serve --out <file.ron>")?;
+
+    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tabelle: {e}"))?);
+    let sc =
+        scenario::per_nome(&nome, &data).ok_or_else(|| format!("scenario sconosciuto: {nome}"))?;
+    let rec = golden::registra(&sc, &data);
+
+    let path = std::path::Path::new(&out);
+    rec.save(path).map_err(|e| format!("{out}: {e}"))?;
+    println!("scritto {out} ({} comandi)", rec.commands.len());
+    Ok(())
+}
+
+/// Rigenera i golden, o verifica che non ci sarebbe niente da rigenerare.
+fn regen_golden(args: &[String]) -> Result<(), String> {
+    let check = args.iter().any(|a| a == "--check");
+    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tabelle: {e}"))?);
+    let differenze = golden::regen(&data, check)?;
+
+    if differenze.is_empty() {
+        println!("golden aggiornati, niente da fare");
+        return Ok(());
+    }
+    if check {
+        eprintln!("questi golden sarebbero cambiati:");
+        for d in &differenze {
+            eprintln!("  - {d}");
+        }
+        return Err(
+            "i golden non sono aggiornati. Se il cambiamento e' voluto, esegui \n  \
+             cargo xtask regen-golden\n\
+             e committa il diff; se non lo e', c'e' una fonte di non-determinismo da trovare"
+                .to_string(),
+        );
+    }
+    println!("rigenerati:");
+    for d in &differenze {
+        println!("  - {d}");
+    }
+    Ok(())
 }
 
 fn run(args: &[String]) -> Result<(), String> {

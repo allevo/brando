@@ -364,3 +364,32 @@ pub enum Occupante {
     Edificio(BuildingId),
     Casa(HouseId),
 }
+
+/// Hook di mutazione diretta, dietro la feature `test-util`.
+///
+/// Non fanno parte dell'API normale di proposito: l'unico canale in scrittura
+/// verso il core sono i `Command` (CLAUDE.md, confine core/renderer). Servono
+/// al test della fase 08 che verifica che l'hash canonico copra davvero ogni
+/// campo dello stato — verifica che, per costruzione, deve poter toccare un
+/// campo alla volta.
+#[cfg(feature = "test-util")]
+impl World {
+    pub fn building_mut(&mut self, id: BuildingId) -> Option<&mut Building> {
+        self.buildings.get_mut(id)
+    }
+
+    pub fn house_mut(&mut self, id: HouseId) -> Option<&mut House> {
+        self.houses.get_mut(id)
+    }
+
+    pub const fn economy_mut(&mut self) -> &mut Economy {
+        &mut self.economy
+    }
+
+    /// Consuma un valore dallo stream di un dominio, per verificare che la
+    /// posizione dell'RNG entri nell'hash.
+    pub fn consuma_rng(&mut self, domain: crate::rng::RngDomain) {
+        use rand::RngCore as _;
+        self.rng.get(domain).next_u64();
+    }
+}

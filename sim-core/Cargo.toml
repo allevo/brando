@@ -13,6 +13,12 @@ rand = { workspace = true }
 rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
+# Hook di mutazione diretta dello stato, per i test di altri crate (fase 08).
+# Non e' un'estensione dell'API: l'unico canale in scrittura verso il core
+# restano i Command.
+[features]
+test-util = []
+
 [dev-dependencies]
 proptest = { workspace = true }
 
