@@ -1,14 +1,38 @@
 //! Invarianti del core (CLAUDE.md, Testing punto 1).
 //!
 //! Ognuno di questi ha trovato o trovera' un bug vero; nessuno va silenziato
-//! per far passare la CI. Il file cresce fase per fase ed e' il posto dove si
-//! legge *cosa il progetto garantisce*, indipendentemente da come e'
-//! organizzato il codice.
+//! per far passare la CI. E' il posto dove si legge *cosa il progetto
+//! garantisce*, indipendentemente da come e' organizzato il codice — quello
+//! che un contributore, o un LLM che lavora sul repo, legge per capire cosa
+//! non deve rompere.
+//!
+//! | Invariante | Dove |
+//! |---|---|
+//! | Nessuna sovrapposizione, in entrambe le direzioni tile <-> edificio | qui, `invarianti_nessuna_sovrapposizione` |
+//! | Ogni tile occupato risolve a un id vivo nello slotmap | qui, `invarianti_nessuna_sovrapposizione` |
+//! | Popolazione mai negativa e coerente con le case esistenti | qui, `invarianti_popolazione` |
+//! | Tesoro coerente: iniziale meno la somma dei costi accettati | qui, `invarianti_tesoro` |
+//! | Cibo conservato: prodotto = consumato + perso + giacenza | qui, `invarianti_conservazione_del_cibo` |
+//! | Un comando rifiutato non muta niente | qui, `invarianti_i_rifiuti_non_mutano` |
+//! | Nessun panic su comandi arbitrari, inclusi malformati | qui, `nessun_panic_su_diecimila_comandi` |
+//! | Copertura incrementale identica a quella da zero | `copertura.rs`, `equivalenza_copertura` |
+//! | Etichettatura della rete indipendente dall'ordine di costruzione | `strade.rs`, `rete_etichettatura_non_dipende_dall_ordine` |
+//! | Determinismo: stesso seed e stessi comandi, stesso hash | `sim-replay/tests/golden.rs` |
+//!
+//! Gli ultimi tre stanno accanto al sistema che verificano, non qui: hanno
+//! bisogno di scenari costruiti apposta, e spostarli renderebbe questo file
+//! meno leggibile senza renderli piu' veri.
 //!
 //! Generatore condiviso: sequenze di `Command` arbitrari — inclusi invalidi,
 //! in proporzione significativa — su una griglia 32x32, poi N tick. Un
 //! generatore che produce solo comandi validi verifica un decimo di quello
 //! che sembra verificare.
+//!
+//! **Debito noto.** Un target `cargo-fuzz` vero
+//! (`fuzz/fuzz_targets/commands.rs`) non c'e': `proptest` con molti casi piu'
+//! il fuzz deterministico qui sotto coprono gia' il punto 3 di `CLAUDE.md`, e
+//! un target a meta' sarebbe peggio di nessun target. Da fare quando una
+//! meccanica nuova allarghera' lo spazio dei comandi.
 
 mod comune;
 
@@ -198,6 +222,25 @@ proptest! {
                 .expect("il tesoro non trabocca");
             prop_assert_eq!(w.economy().tesoro, atteso);
             prop_assert!(!w.economy().tesoro.is_negative(), "tesoro negativo");
+        }
+    }
+
+    /// Cibo conservato: `prodotto == consumato + perso + giacenza`, come
+    /// uguaglianza esatta. Il generatore costruisce anche fattorie e le
+    /// demolisce, quindi copre entrambi i termini di perdita.
+    #[test]
+    fn invarianti_conservazione_del_cibo(p in partita()) {
+        let mut w = mondo();
+        for cmds in &p {
+            tick(&mut w, cmds);
+            tick(&mut w, &[]);
+            let l = w.food();
+            prop_assert_eq!(
+                l.atteso_in_giacenza(),
+                w.giacenza_totale(),
+                "prodotto {} != consumato {} + perso_giacenza {} + perso_demolizione {} + giacenza",
+                l.prodotto, l.consumato, l.perso_per_giacenza_piena, l.perso_per_demolizione
+            );
         }
     }
 

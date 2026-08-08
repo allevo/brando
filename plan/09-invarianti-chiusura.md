@@ -45,6 +45,13 @@ raccogliendo quelli già scritti nelle fasi 04–07:
 `cargo-fuzz` vero (`fuzz/fuzz_targets/commands.rs`) è utile ma non è un blocco per M0: se il
 tempo stringe, va annotato in questo file come debito con la motivazione, non fatto a metà.
 
+**Deciso: debito, non fatto.** Oltre ai property test c'è un fuzz deterministico
+(`nessun_panic_su_diecimila_comandi`): 10.000 comandi generati da un PRNG locale con seed fisso
+su 1.000 tick, che verifica a ogni tick gli invarianti strutturali. Riproducibile come un
+golden, e non richiede un toolchain nightly né un'esecuzione separata in CI. Da riprendere
+quando una meccanica nuova allargherà lo spazio dei comandi — con `Intent` e bot (M2/M3) è
+probabilmente il momento giusto.
+
 Il generatore deve produrre comandi **cattivi** in proporzione significativa (coordinate fuori
 mappa, `kind` inesistenti, demolizioni nel vuoto, footprint sovrapposti): un generatore che
 produce solo comandi validi verifica un decimo di quello che sembra verificare.
@@ -52,13 +59,44 @@ produce solo comandi validi verifica un decimo di quello che sembra verificare.
 ### Tripwire di performance
 
 ```sh
-cargo xtask bench-smoke     # 200×200, ~1000 edifici, 3650 tick (10 anni)
+cargo xtask bench          # due profili: 100×100/3.000 ab. e 200×200/15.000 ab.
 ```
 
-Stampa tick/s e il tempo del passo 3 (copertura). **Non impone una soglia** — non si ottimizza
-prima del profiler. Serve a due cose: avere un numero di partenza registrato in questo file, e
-accorgersi se in M1 diventa dieci volte peggiore. Registrare qui il valore misurato, con data e
-macchina.
+**Non impone una soglia** — non si ottimizza prima del profiler. Serve a due cose: avere un
+numero di partenza registrato qui, e accorgersi se in M1 diventa dieci volte peggiore.
+
+#### Misure di partenza
+
+`2026-08-08`, Apple M2 Pro, `--release`, 40 ripetizioni, mediana:
+
+| Misura | 100×100, 3.000 ab. | 200×200, 15.000 ab. |
+|---|---|---|
+| A. tick a vuoto, niente di sporco | 38 µs | 256 µs |
+| B. tick, 1 comando rifiutato | 36 µs | 263 µs |
+| C. tick, 10.000 comandi rifiutati | 61 µs | 291 µs → **2 ns/comando** |
+| D. tick, 1 comando accettato | 3,3 ms | **19,1 ms** |
+| E. tick, 50 comandi accettati | 3,5 ms | 20,5 ms → **1,07× D** |
+
+Città di riferimento a fine partita: 3.750 case, 1.219 provider, 6.541 tile strada.
+
+**Cosa dicono questi numeri.** Rispondono alla prima domanda aperta di
+[10-oltre-m0.md](10-oltre-m0.md) — *il passo 3 è davvero l'hot path, o lo è il rebuild della
+rete?*
+
+1. **Il passo 3 domina, e di molto.** Un tick che accetta un comando costa ~75× un tick a
+   vuoto (19,1 ms contro 256 µs). Non è il costo del comando: applicarne 10.000 rifiutati
+   costa 2 ns l'uno. È il ricalcolo della copertura, che oggi è ingenuo — *qualunque*
+   costruzione invalida tutti i 1.219 provider, e ognuno rifà il proprio BFS.
+2. **Il costo è per tick, non per comando.** Cinquanta comandi accettati nello stesso tick
+   costano 1,07× un comando solo. Un bot che costruisce in blocco paga quanto uno che
+   costruisce un pezzo alla volta — informazione utile all'agente di M2.
+3. **Il tick a vuoto è già la maggioranza del tempo di una partita.** 3.650 tick (10 anni) a
+   256 µs fanno ~0,9 s se il giocatore non costruisce mai: accettabile, ma è il numero che va
+   guardato quando M1 aggiungerà evoluzione, migrazione e tasse al passo 6 e 7.
+
+Nessuno di questi va ottimizzato adesso. Il punto 1 ha già la sua rete di sicurezza: il test di
+equivalenza incrementale/da-zero della fase 06 è scritto perché *qualunque* furbizia futura
+sull'incrementalità sia coperta senza riscriverlo.
 
 ### Aggiornamento della documentazione
 

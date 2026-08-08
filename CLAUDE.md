@@ -177,6 +177,13 @@ L'LLM produrrà comandi invalidi: il core li rifiuta con un errore strutturato.
 Un bot euristico deve completare lo scenario 1 entro N mesi. È il canarino sul bilanciamento:
 se fallisce dopo un cambio di parametri, la curva di difficoltà è rotta.
 
+**Prestazioni — non è un test.** `cargo run --release -p xtask -- bench` misura il costo di
+`step()` su una città alla scala di riferimento, separando l'applicazione dei comandi dai
+ricalcoli che la seguono. Non ha soglie: i tempi assoluti dipendono dalla macchina, e il modo
+di usarlo è eseguirlo prima e dopo una modifica sulla stessa macchina. L'unica cosa che deve
+restare uguale in assoluto è l'hash dello stato che stampa: se si sposta senza che siano
+cambiate le regole o le tabelle, l'ottimizzazione ha cambiato la semantica ed è un bug.
+
 ---
 
 ## Interfaccia AI
@@ -257,9 +264,33 @@ introdotto **insieme alla seconda civiltà**, non prima. Adattatore LLM sopra il
 
 ### Stato attuale
 
-> Milestone: **M0 — non iniziato**
+> Milestone: **M0 — completato** (2026-08-08)
 >
 > Aggiornare questa sezione a ogni milestone completato.
+
+Cosa copre M0, in una riga per crate:
+
+- `sim-core` — `World` con griglia 256×256 max, strade con componenti connesse, copertura dei
+  servizi su distanza percorsa, produzione e consumo di cibo, tick a dieci passi (quattro
+  pieni, sei vuoti in attesa di M1/M3), comandi primitivi con errori strutturati, RNG per
+  dominio. `Tile` sta in 4 byte.
+- `sim-data` — tre tabelle RON validate con report completo degli errori e hash canonico del
+  dataset.
+- `sim-replay` — salvataggio come `seed + Vec<Command>`, hash canonico dello stato, due golden
+  replay con checkpoint ogni 30 tick.
+- `xtask` — `run`, `record`, `regen-golden [--check]`, `bench`.
+
+Quello che M0 **non** ha, di proposito: evoluzione delle case, migrazione, tasse, obiettivi di
+scenario, eventi casuali, walker logistici reali, renderer, agenti. Sono M1–M3.
+
+Due cose imparate implementando, che valgono più delle decisioni prese a tavolino:
+
+1. Il passo 3 (copertura) è l'hot path, confermato da misura e non da ragionamento: un tick che
+   accetta un comando costa ~75× un tick a vuoto, perché l'invalidazione è ingenua. Il costo è
+   **per tick, non per comando**. Numeri in [plan/09-invarianti-chiusura.md](plan/09-invarianti-chiusura.md).
+2. La copertura "prima capacità occupata, primo servito" rende lo stato di fame **assorbente**
+   per una casa già assegnata. È una conseguenza reale della semplificazione A5, ha un test che
+   la fissa, e va sciolta in M1 quando la capacità diventerà "abitanti serviti".
 
 ---
 

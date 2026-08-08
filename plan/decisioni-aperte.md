@@ -3,6 +3,20 @@
 Scelte necessarie per implementare M0 che `CLAUDE.md` non fissa. Per ognuna: la
 raccomandazione che le fasi assumono, e cosa cambia se si decide diversamente.
 
+## Stato a fine M0
+
+| # | Esito | Nota |
+|---|---|---|
+| A1 | **Chiusa**, come raccomandato | `Milli(i32)` e `Coins(i32)` separati, nessun operatore nudo |
+| A2 | **Chiusa, diversamente** | `Arc<DataSet>` nel `World`, ma le *definizioni* sono dovute passare in `sim-core` |
+| A3 | **Chiusa**, come raccomandato | hash a mano, più un test che verifica che copra ogni campo |
+| A4 | **Chiusa**, come raccomandato | lato fino a 256, golden su 32×32, tripwire a 200×200 |
+| A5 | **Chiusa con una scoperta** | la fame risulta uno stato assorbente: vedi sotto |
+| A6 | **Chiusa**, come raccomandato | 30 tick/mese, 360/anno, in `rules.ron` |
+
+Nessuna è rimasta aperta. Le due che meritano di essere lette sono A2 e A5, perché entrambe
+sono finite altrove rispetto a come erano state scritte.
+
 ---
 
 ## A1 — Il denaro non è `Milli`
