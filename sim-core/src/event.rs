@@ -6,6 +6,7 @@
 //! tick: la scelta sbagliata qui costa 40.000 eventi per tick.
 
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TilePos};
+use crate::service::ServiceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
@@ -30,5 +31,11 @@ pub enum Event {
     RoadRemoved {
         at: TilePos,
     },
-    // ServiceCoverageChanged arriva in fase 07, quando la copertura esiste.
+    /// Emesso **solo** sui cambi di stato, mai a ogni tick: e' un delta, non
+    /// un polling. Il polling costerebbe un evento per casa per tick.
+    ServiceCoverageChanged {
+        house: HouseId,
+        service: ServiceKind,
+        served: bool,
+    },
 }

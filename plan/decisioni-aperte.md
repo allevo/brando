@@ -85,6 +85,23 @@ la merce.
 bilanciamento su cui si costruisce M1, e che M3 lo debba smontare. Accettato, e annotato nella
 tabella RON della fattoria.
 
+**Cosa è emerso implementandola (fase 07).** La semplificazione ha una conseguenza che nessuno
+aveva previsto scrivendo il piano: **lo stato di fame è assorbente per una casa già assegnata**.
+La contesa tra provider la vince il primo (fase 06) e la capacità si conta in *case*, non in
+abitanti; quindi una casa coperta da una fattoria in deficit occupa un posto che nessun'altra
+fattoria può rilevarle, e continua a non mangiare per sempre.
+
+Una seconda fattoria aiuta solo le case che la prima aveva lasciato **fuori** dalla propria
+capacità. Entrambi i comportamenti hanno un test che li fissa
+(`una_seconda_fattoria_copre_le_case_lasciate_fuori`,
+`una_casa_affamata_non_viene_salvata_da_una_seconda_fattoria`), il secondo dei quali è scritto
+per **cambiare esito** quando in M1 la capacità diventerà "abitanti serviti": sarà il segnale
+che la semplificazione è stata sciolta, non una regressione.
+
+Aggiunta anche una voce al `FoodLedger`, `perso_per_demolizione`: demolire una fattoria piena
+fa sparire la sua giacenza dal mondo, e senza registrarlo la conservazione smetteva di essere
+un'uguaglianza. Stesso motivo per cui esiste `perso_per_giacenza_piena`.
+
 ---
 
 ## A6 — Ritmo del tempo

@@ -15,6 +15,7 @@ use crate::data::DataSet;
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 use crate::network::RoadNetwork;
+use crate::production::FoodLedger;
 use crate::rng::RngSet;
 use crate::service::ServiceFlags;
 use crate::units::{Coins, Milli};
@@ -129,6 +130,9 @@ pub struct World {
     pub(crate) roads: RoadNetwork,
     /// Derivata come [`RoadNetwork`], e fuori dall'hash per lo stesso motivo.
     pub(crate) coverage: Coverage,
+    /// Contabilita' diagnostica, fuori dall'hash: non influenza nessuna
+    /// decisione di gioco.
+    pub(crate) food: FoodLedger,
     /// Indici da tile di origine a id. Sono `BTreeMap` e non `HashMap` (D4):
     /// l'ordine di iterazione e' un contratto.
     pub(crate) edifici_per_origine: BTreeMap<TileIdx, BuildingId>,
@@ -156,6 +160,7 @@ impl World {
             dirty: DirtyFlags::default(),
             roads: RoadNetwork::new(tiles),
             coverage: Coverage::default(),
+            food: FoodLedger::default(),
             edifici_per_origine: BTreeMap::new(),
             case_per_origine: BTreeMap::new(),
             data,
@@ -188,6 +193,26 @@ impl World {
 
     pub const fn coverage(&self) -> &Coverage {
         &self.coverage
+    }
+
+    pub const fn food(&self) -> &FoodLedger {
+        &self.food
+    }
+
+    /// Somma delle giacenze di tutti i produttori, in millesimi.
+    ///
+    /// `i64` come il [`FoodLedger`]: e' il termine con cui si chiude
+    /// l'uguaglianza di conservazione, e deve poter reggere lo stesso range.
+    pub fn giacenza_totale(&self) -> i64 {
+        self.buildings
+            .values()
+            .filter(|b| {
+                self.data
+                    .def(b.kind)
+                    .is_some_and(crate::data::BuildingDef::e_un_produttore)
+            })
+            .map(|b| i64::from(b.stock.to_millis()))
+            .sum()
     }
 
     pub fn data(&self) -> &DataSet {

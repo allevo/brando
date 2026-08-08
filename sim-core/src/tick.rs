@@ -10,6 +10,7 @@
 use crate::command::{Command, CommandError, Occupato};
 use crate::event::Event;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
 use crate::world::{Building, House, Occupante, World};
 
@@ -32,6 +33,9 @@ impl StepReport {
 /// Avanza il mondo di un tick applicando i comandi in arrivo.
 pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     let mut r = StepReport::default();
+    // Fotografia dei servizi a inizio tick: e' il riferimento rispetto al
+    // quale il passo 10 emette i delta.
+    let servizi_prima = snapshot_servizi(world);
     apply_commands(world, cmds, &mut r); // 1
     rebuild_roads(world); // 2
     propagate_coverage(world); // 3
@@ -41,7 +45,7 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     finance(world); // 7
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
-    emit_events(world, &mut r); // 10
+    emit_events(world, &servizi_prima, &mut r); // 10
     world.tick = world.tick.saturating_add(1);
     r
 }
@@ -220,6 +224,11 @@ fn rimuovi_edificio(world: &mut World, id: BuildingId, r: &mut StepReport) {
         return;
     };
     let footprint = def.footprint;
+    // La giacenza sparisce col produttore: va registrata, altrimenti la
+    // conservazione del cibo smette di essere un'uguaglianza (fase 07).
+    if def.e_un_produttore() {
+        world.food.perso_per_demolizione += i64::from(b.stock.to_millis());
+    }
     libera_footprint(world, b.origin, footprint);
     if let Some(idx) = world.grid.idx(b.origin) {
         world.edifici_per_origine.remove(&idx);
@@ -271,8 +280,10 @@ fn propagate_coverage(world: &mut World) {
     crate::coverage::propagate_coverage(world);
 }
 
-/// Passo 4 — si riempie nella fase 07.
-fn production(_world: &mut World) {}
+/// Passo 4 — produzione e consumo delle catene.
+fn production(world: &mut World) {
+    crate::production::production(world);
+}
 
 /// Passo 5 — walker logistici reali, M3 (D3).
 fn step_walkers(_world: &mut World) {}
@@ -289,9 +300,44 @@ fn random_events(_world: &mut World) {}
 /// Passo 9 — obiettivi di scenario, M1 (serve `sim-scenario`).
 fn check_objectives(_world: &mut World, _r: &mut StepReport) {}
 
-/// Passo 10 — in M0 gli eventi sono gia' stati accodati dai passi che li
-/// generano; qui si aggiungeranno i delta di copertura (fase 07).
-fn emit_events(_world: &mut World, _r: &mut StepReport) {}
+/// Passo 10 — emette i delta di copertura.
+///
+/// Solo i **cambiamenti** rispetto all'inizio del tick: una casa affamata da
+/// dieci tick genera un evento al primo, non dieci. E' il confine con il
+/// renderer, e la scelta sbagliata qui costerebbe 40.000 eventi per tick.
+fn emit_events(world: &mut World, prima: &[(HouseId, ServiceFlags)], r: &mut StepReport) {
+    for (house, _) in world.houses() {
+        let adesso = world
+            .house(house)
+            .map_or(ServiceFlags::empty(), |h| h.servita);
+        // Una casa nata in questo tick non ha un "prima": parte da scoperta,
+        // quindi se e' servita l'evento c'e'.
+        let precedente = prima
+            .binary_search_by_key(&house, |(h, _)| *h)
+            .map_or(ServiceFlags::empty(), |i| prima[i].1);
+        if adesso == precedente {
+            continue;
+        }
+        for service in ServiceKind::TUTTI {
+            if adesso.get(service) != precedente.get(service) {
+                r.events.push(Event::ServiceCoverageChanged {
+                    house,
+                    service,
+                    served: adesso.get(service),
+                });
+            }
+        }
+    }
+}
+
+/// I flag di servizio di ogni casa, ordinati per `HouseId` cosi' che il
+/// confronto del passo 10 sia una ricerca binaria e non una scansione.
+fn snapshot_servizi(world: &World) -> Vec<(HouseId, ServiceFlags)> {
+    let mut v: Vec<(HouseId, ServiceFlags)> =
+        world.houses().map(|(id, h)| (id, h.servita)).collect();
+    v.sort_unstable_by_key(|(id, _)| *id);
+    v
+}
 
 // --- helper ----------------------------------------------------------------
 
