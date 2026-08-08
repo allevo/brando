@@ -20,7 +20,7 @@ pub const CASA: BuildingKindId = BuildingKindId::new(0);
 pub const POZZO: BuildingKindId = BuildingKindId::new(1);
 pub const FATTORIA: BuildingKindId = BuildingKindId::new(2);
 /// Pozzo da una casa sola: serve a far mordere la capacita' nei test, che con
-/// capacita' 8 non si osserverebbe.
+/// trentadue abitanti non si osserverebbe.
 pub const POZZETTO: BuildingKindId = BuildingKindId::new(3);
 /// Tipo che non esiste in tabella: e' cio' che produrra' l'LLM.
 pub const INESISTENTE: BuildingKindId = BuildingKindId::new(99);
@@ -31,6 +31,13 @@ pub const COSTO_FATTORIA: i32 = 40;
 pub const COSTO_STRADA_PIANURA: i32 = 2;
 pub const TESORO_INIZIALE: i32 = 1000;
 pub const ABITANTI_PER_CASA: u16 = 4;
+
+// Capacita' dei provider, in **abitanti serviti** e non in case: con i livelli
+// delle case (M1) la popolazione per casa varia. Divise per
+// `ABITANTI_PER_CASA` danno le case che i test si aspettano di vedere servite.
+pub const CAPACITA_POZZO: u16 = 32;
+pub const CAPACITA_FATTORIA: u16 = 24;
+pub const CAPACITA_POZZETTO: u16 = 4;
 
 pub fn dataset() -> Arc<DataSet> {
     let rules = Rules {
@@ -86,7 +93,8 @@ pub fn dataset() -> Arc<DataSet> {
             servizio: Some(ServiceDef {
                 kind: ServiceKind::Acqua,
                 raggio_per_livello: vec![12],
-                capacita_per_livello: vec![8],
+                // Abitanti, non case: otto case da quattro.
+                capacita_per_livello: vec![CAPACITA_POZZO],
             }),
             servizi_richiesti: vec![],
             produzione_per_tick: None,
@@ -100,7 +108,7 @@ pub fn dataset() -> Arc<DataSet> {
             servizio: Some(ServiceDef {
                 kind: ServiceKind::Cibo,
                 raggio_per_livello: vec![10],
-                capacita_per_livello: vec![6],
+                capacita_per_livello: vec![CAPACITA_FATTORIA],
             }),
             servizi_richiesti: vec![],
             produzione_per_tick: Some(Milli::from_millis(400)),
@@ -114,7 +122,7 @@ pub fn dataset() -> Arc<DataSet> {
             servizio: Some(ServiceDef {
                 kind: ServiceKind::Acqua,
                 raggio_per_livello: vec![12],
-                capacita_per_livello: vec![1],
+                capacita_per_livello: vec![CAPACITA_POZZETTO],
             }),
             servizi_richiesti: vec![],
             produzione_per_tick: None,

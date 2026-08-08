@@ -7,7 +7,7 @@ Recording(
       height: 32,
       terrain: Pianura,
     ),
-    dataset_hash: "6201fbf6ad6c4523d329a1b9491fe22ad94a511879cdd94125c1b2aa2fb5a3bb",
+    dataset_hash: "0349e5826e8cf3c066bc7ea2af01adffe9ab1487946e8644cf842e5d84493068",
   ),
   commands: [
     (0, PlaceRoad(

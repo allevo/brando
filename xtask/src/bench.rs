@@ -252,12 +252,16 @@ impl Piano {
             return Err("una casa con zero abitanti non fa una citta'".into());
         }
         let n_case = abitanti.div_ceil(per_casa);
-        let consumo_casa = i64::from(data.rules.consumo_cibo_per_abitante.to_millis())
-            * i64::from(per_casa).max(1);
+        // Gli abitanti effettivamente insediati: `abitanti` arrotondato in su
+        // all'ultima casa piena. E' su questo, non su `n_case`, che si contano
+        // sia la capacita' dei provider sia il consumo.
+        let popolazione = n_case * per_casa;
+        let consumo_abitante = i64::from(data.rules.consumo_cibo_per_abitante.to_millis());
 
         // Le quote dei provider escono dalle tabelle, non da qui: quanti ne
-        // servono per coprire `n_case` alla capacita' dichiarata, e — per chi
-        // produce — quanti per sostenerne il consumo.
+        // servono per coprire la popolazione alla capacita' dichiarata — che
+        // e' in abitanti — e, per chi produce, quanti per sostenerne il
+        // consumo.
         let mut piccoli = Vec::new();
         let mut grandi = Vec::new();
         for (i, def) in data.buildings.iter().enumerate() {
@@ -274,12 +278,12 @@ impl Piano {
             if capacita == 0 {
                 return Err(format!("'{}' ha capacita' 0", def.id));
             }
-            let mut quanti = n_case.div_ceil(capacita);
+            let mut quanti = popolazione.div_ceil(capacita);
             if let Some(prod) = def.produzione_per_tick {
-                let per_provider = i64::from(prod.to_millis()) / consumo_casa.max(1);
+                let per_provider = i64::from(prod.to_millis()) / consumo_abitante.max(1);
                 if per_provider > 0 {
                     let sostenibili = u32::try_from(per_provider).unwrap_or(u32::MAX);
-                    quanti = quanti.max(n_case.div_ceil(sostenibili));
+                    quanti = quanti.max(popolazione.div_ceil(sostenibili));
                 }
             }
             match def.footprint {

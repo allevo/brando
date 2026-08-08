@@ -139,15 +139,21 @@ fn la_capacita_serve_le_piu_vicine() {
     strade(&mut w, &celle);
     costruisci(&mut w, POZZO, 1, 4);
 
-    // Il pozzo della fixture ha capacita' 8: ne mettiamo dieci a distanze
-    // crescenti, tutte entro raggio 12.
+    // Il pozzo della fixture serve 32 abitanti, cioe' otto case da quattro:
+    // ne mettiamo dieci a distanze crescenti, tutte entro raggio 12.
+    let entro_capacita = CAPACITA_POZZO / ABITANTI_PER_CASA;
+    assert_eq!(entro_capacita, 8);
     for x in 2..=11u8 {
         costruisci(&mut w, CASA, x, 4);
     }
 
     let pozzo = unico_pozzo(&w);
     let servite = w.coverage().case_servite_da(pozzo);
-    assert_eq!(servite.len(), 8, "capacita' del pozzo");
+    assert_eq!(
+        servite.len(),
+        usize::from(entro_capacita),
+        "capacita' del pozzo"
+    );
 
     // Le due escluse sono le piu' lontane: x = 10 e x = 11.
     for (id, h) in w.houses() {
@@ -194,8 +200,36 @@ fn a_parita_di_distanza_vince_il_tile_minore() {
     assert!(w.coverage().e_servita(vicina, ServiceKind::Acqua));
     assert!(
         !w.coverage().e_servita(lontana, ServiceKind::Acqua),
-        "la capacita' e' 1: la seconda resta scoperta"
+        "la capacita' del pozzetto e' una casa sola: la seconda resta scoperta"
     );
+}
+
+/// La capacita' si conta in abitanti, e questo test lo osserva dall'esterno:
+/// il pozzetto ne dichiara quattro, cioe' esattamente una casa, e la seconda
+/// casa candidata non ci sta nemmeno se e' l'unica rimasta.
+///
+/// In M0 tutte le case hanno quattro abitanti, quindi da fuori la differenza
+/// fra "una casa" e "quattro abitanti" non e' ancora visibile: cio' che
+/// distingue le due unita' e' fissato dal test tabellare di
+/// `sim-core/src/coverage.rs`.
+#[test]
+fn la_capacita_si_esaurisce_in_abitanti() {
+    assert_eq!(CAPACITA_POZZETTO, ABITANTI_PER_CASA);
+
+    let mut w = mondo();
+    strade(&mut w, &[(4, 5), (5, 5), (6, 5)]);
+    costruisci(&mut w, POZZETTO, 5, 6);
+    costruisci(&mut w, CASA, 4, 4);
+    costruisci(&mut w, CASA, 6, 4);
+
+    let pozzetto = w.buildings().next().map(|(id, _)| id).expect("il pozzetto");
+    let servite = w.coverage().case_servite_da(pozzetto);
+    assert_eq!(servite.len(), 1);
+    let abitanti: u16 = servite
+        .iter()
+        .map(|h| w.house(*h).expect("viva").abitanti)
+        .sum();
+    assert_eq!(abitanti, CAPACITA_POZZETTO, "la capacita' e' satura");
 }
 
 /// Due provider che coprono la stessa casa: in M0 la casa e' servita e basta,

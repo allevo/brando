@@ -20,8 +20,10 @@
                 // Un valore per livello. Raggio in tile percorsi sulla rete
                 // stradale, non in linea d'aria (D2).
                 raggio_per_livello: [12],
-                // Case servite contemporaneamente.
-                capacita_per_livello: [8],
+                // Abitanti serviti contemporaneamente, non case: con i livelli
+                // delle case (M1) la popolazione per casa varia. Trentadue
+                // sono otto case da quattro.
+                capacita_per_livello: [32],
             )),
             servizi_richiesti: [],
         ),
@@ -37,7 +39,8 @@
             servizio: Some((
                 kind: "cibo",
                 raggio_per_livello: [10],
-                capacita_per_livello: [6],
+                // Abitanti serviti contemporaneamente: sei case da quattro.
+                capacita_per_livello: [24],
             )),
             servizi_richiesti: [],
             produzione_per_tick: Some(400),

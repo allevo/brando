@@ -66,7 +66,11 @@ fn le_tabelle_di_produzione_caricano() {
         .expect("il pozzo fornisce un servizio");
     assert_eq!(s.kind, ServiceKind::Acqua);
     assert_eq!(s.raggio(1), Some(12));
-    assert_eq!(s.capacita(1), Some(8));
+    assert_eq!(
+        s.capacita(1),
+        Some(8 * d.rules.abitanti_per_livello_casa[0]),
+        "la capacita' e' in abitanti: otto case da quattro"
+    );
     assert_eq!(s.raggio(2), None, "il pozzo ha un solo livello in M0");
     assert_eq!(s.raggio(0), None, "i livelli partono da 1");
 
@@ -95,7 +99,11 @@ fn una_fattoria_non_sostiene_la_propria_capacita_massima() {
         .checked_mul_int(abitanti)
         .expect("consumo di una casa");
     let capacita = i32::from(s.capacita(1).expect("capacita"));
-    let domanda_max = per_casa.checked_mul_int(capacita).expect("domanda massima");
+    let domanda_max = d
+        .rules
+        .consumo_cibo_per_abitante
+        .checked_mul_int(capacita)
+        .expect("domanda massima");
     let prodotto = f.produzione_per_tick.expect("produzione");
 
     assert!(

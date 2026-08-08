@@ -171,7 +171,8 @@ fn a_regime_la_fattoria_non_sfama_tutta_la_sua_capacita() {
 /// mangiare.
 #[test]
 fn una_seconda_fattoria_copre_le_case_lasciate_fuori() {
-    // Otto case, capacita' della fattoria sei: due restano scoperte.
+    // Otto case; la fattoria ne copre quante ne stanno nella sua capacita'.
+    let coperte = CAPACITA_FATTORIA / ABITANTI_PER_CASA;
     let mut w = scenario_fattoria(8);
     for _ in 0..200 {
         tick(&mut w, &[]);
@@ -181,7 +182,11 @@ fn una_seconda_fattoria_copre_le_case_lasciate_fuori() {
         .filter(|(id, _)| !w.coverage().e_servita(*id, ServiceKind::Cibo))
         .map(|(id, _)| id)
         .collect();
-    assert_eq!(scoperte.len(), 2, "otto case, capacita' sei");
+    assert_eq!(
+        scoperte.len(),
+        8 - usize::from(coperte),
+        "otto case, la fattoria ne copre {coperte}"
+    );
 
     costruisci(&mut w, FATTORIA, 12, 2);
     for _ in 0..50 {
@@ -203,12 +208,13 @@ fn una_seconda_fattoria_copre_le_case_lasciate_fuori() {
 
 /// **Limite noto di M0, non un bug.** Una casa gia' assegnata a una fattoria
 /// in deficit non viene salvata da una seconda fattoria: la contesa la vince
-/// il primo provider (fase 06) e la capacita' si conta in case, non in
-/// abitanti, quindi il posto resta occupato da chi non riesce a mangiare.
+/// il primo provider (fase 06) e il posto resta occupato da chi non riesce a
+/// mangiare.
 ///
-/// Il giorno in cui la capacita' diventera' "abitanti serviti" (M1) questo
-/// test cambiera' esito, e sara' il segnale che la semplificazione e' stata
-/// sciolta — non una regressione.
+/// Contare la capacita' in abitanti invece che in case non basta a scioglierlo
+/// — riesprime lo stesso vincolo in un'altra unita'. Serve che la capacita'
+/// dichiarata sia coerente con cio' che la produzione sostiene: allora una
+/// casa coperta mangia sempre e questo test cambia esito.
 #[test]
 fn una_casa_affamata_non_viene_salvata_da_una_seconda_fattoria() {
     let mut w = scenario_fattoria(6);

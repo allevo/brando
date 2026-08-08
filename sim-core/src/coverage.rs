@@ -1,7 +1,8 @@
 //! Copertura aggregata dei servizi (D2).
 //!
 //! Un provider serve le case entro un raggio misurato **sulla rete stradale**,
-//! con capacita' limitata. Non ci sono walker: i portatori d'acqua che il
+//! fino a esaurire una capacita' contata in **abitanti serviti**
+//! ([`scelte_entro_capacita`]). Non ci sono walker: i portatori d'acqua che il
 //! giocatore vedra' camminare sono decorativi, vivono nel renderer e sono
 //! derivati da questa struttura. **Se un `Walker` compare in questo modulo,
 //! e' un bug.**
@@ -118,7 +119,7 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
             }
         });
 
-        // **Regola di assegnazione**, semantica di gioco: quando le candidate
+        // **Ordine di priorita'**, semantica di gioco: quando le candidate
         // superano la capacita' si servono le piu' vicine; a parita' di
         // distanza vince il `TileIdx` minore. E' un ordine totale — senza il
         // secondo criterio due case equidistanti sarebbero ordinate
@@ -134,25 +135,57 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
             .collect();
         ordinate.sort_unstable();
 
-        let mut assegnate = 0u16;
-        for (_, _, h) in ordinate {
-            if assegnate >= capacita {
-                break;
-            }
-            let slot = &mut cov.served_by.entry(h).or_default()[kind.index()];
-            if slot.is_some() {
-                // Contesa: in M0 la casa e' servita e basta, vince il primo
-                // provider nell'ordine di iterazione. Semplificazione da
-                // riaprire se in M1 la capacita' diventera' "abitanti
-                // serviti" invece di "case servite".
-                continue;
-            }
-            *slot = Some(provider);
-            assegnate += 1;
+        // Contesa: in M0 la casa e' servita e basta, vince il primo provider
+        // nell'ordine di iterazione. Le case gia' prese si tolgono **prima**
+        // del riempimento, non dentro: una casa contesa non deve consumare la
+        // capacita' di chi arriva secondo.
+        let libere = ordinate
+            .iter()
+            .filter(|(_, _, h)| cov.provider(*h, kind).is_none())
+            .filter_map(|(_, _, h)| Some((*h, world.house(*h)?.abitanti)));
+        let scelte: Vec<HouseId> = scelte_entro_capacita(libere, capacita).collect();
+
+        for h in scelte {
+            cov.served_by.entry(h).or_default()[kind.index()] = Some(provider);
         }
     }
 
     cov
+}
+
+/// Riempie la capacita' di un provider scorrendo le candidate **gia' ordinate
+/// per priorita'**, e restituisce quelle servite.
+///
+/// La capacita' si conta in **abitanti**, non in case: con i livelli delle
+/// case (M1) la popolazione varia da casa a casa, e una capacita' in case non
+/// direbbe piu' quanta gente il provider riesce davvero a servire.
+///
+/// **Semantica di gioco, due regole in una.**
+///
+/// *Niente assegnazione parziale.* Una casa entra con tutti i suoi abitanti o
+/// non entra: mezza casa servita non e' uno stato che il gioco sappia
+/// rappresentare. E' la stessa scelta del consumo di cibo (fase 07).
+///
+/// *Chi non ci sta viene saltato, non fa da barriera.* Se restano due posti e
+/// la candidata ne chiede quattro, la scansione prosegue con la successiva,
+/// che puo' essere piu' lontana. L'alternativa — fermarsi alla prima che non
+/// ci sta — terrebbe la distanza come priorita' assoluta, ma lascerebbe posti
+/// inutilizzati: un provider dichiarato per venti abitanti ne servirebbe
+/// sedici, e la capacita' in tabella smetterebbe di dire il vero. Peggio, una
+/// casa grande costruita vicino al provider taglierebbe fuori *tutte* quelle
+/// oltre, pur restando dei posti liberi.
+///
+/// La distanza resta comunque l'ordine di priorita': nessuna candidata viene
+/// scavalcata per preferenza, solo per impossibilita'.
+fn scelte_entro_capacita<T>(
+    candidate: impl IntoIterator<Item = (T, u16)>,
+    capacita: u16,
+) -> impl Iterator<Item = T> {
+    let mut residua = capacita;
+    candidate.into_iter().filter_map(move |(id, abitanti)| {
+        residua = residua.checked_sub(abitanti)?;
+        Some(id)
+    })
 }
 
 /// Passo 3 del tick.
@@ -181,6 +214,50 @@ pub(crate) fn propagate_coverage(world: &mut World) {
     for (id, f) in flags {
         if let Some(h) = world.houses.get_mut(id) {
             h.servita = f;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scelte_entro_capacita;
+
+    /// La regola di riempimento, riga per riga.
+    ///
+    /// In M0 tutte le case hanno gli stessi abitanti, quindi le righe con
+    /// popolazioni miste non sono ancora osservabili in una partita: la scelta
+    /// va fissata **adesso** perche' e' oggi che la si puo' fare senza
+    /// rigenerare niente, e i livelli delle case (M1) la renderanno visibile.
+    /// Capacita', candidate in ordine di priorita' come `(id, abitanti)`, e
+    /// gli id che devono risultare serviti.
+    type Caso = (u16, &'static [(u8, u16)], &'static [u8]);
+
+    #[test]
+    fn il_riempimento_salta_chi_non_ci_sta_invece_di_fermarsi() {
+        let casi: &[Caso] = &[
+            (0, &[(1, 4)], &[]),
+            (8, &[(1, 4), (2, 4)], &[1, 2]),
+            // Oltre la capacita' non si serve nessuno.
+            (8, &[(1, 4), (2, 4), (3, 4)], &[1, 2]),
+            // Niente parziale: restano due posti, la candidata ne chiede
+            // quattro e resta fuori intera.
+            (6, &[(1, 4), (2, 4)], &[1]),
+            // Chi non ci sta viene saltato: la terza, piu' lontana ma piu'
+            // piccola, prende i due posti che la seconda non poteva usare.
+            (6, &[(1, 4), (2, 4), (3, 2)], &[1, 3]),
+            // E la scansione prosegue anche dopo piu' salti di fila.
+            (6, &[(1, 4), (2, 4), (3, 3), (4, 1), (5, 1)], &[1, 4, 5]),
+            // Una candidata piu' grande dell'intera capacita' non blocca nulla.
+            (4, &[(1, 9), (2, 4)], &[2]),
+        ];
+
+        for (capacita, candidate, servite) in casi {
+            let scelte: Vec<u8> =
+                scelte_entro_capacita(candidate.iter().copied(), *capacita).collect();
+            assert_eq!(
+                scelte, *servite,
+                "capacita' {capacita}, candidate {candidate:?}"
+            );
         }
     }
 }

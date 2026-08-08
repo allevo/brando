@@ -44,7 +44,11 @@ pub struct ServiceDef {
     pub kind: ServiceKind,
     /// Raggio in tile percorsi sulla rete stradale (D2), uno per livello.
     pub raggio_per_livello: Vec<u16>,
-    /// Case servite contemporaneamente, uno per livello.
+    /// **Abitanti** serviti contemporaneamente, uno per livello.
+    ///
+    /// Non case: con i livelli delle case (M1) la popolazione varia da casa a
+    /// casa, e una capacita' in case non direbbe piu' quanta gente il provider
+    /// riesce davvero a servire.
     pub capacita_per_livello: Vec<u16>,
 }
 
@@ -56,7 +60,7 @@ impl ServiceDef {
             .copied()
     }
 
-    /// Capacita' al livello dato, `None` fuori range.
+    /// Capacita' in abitanti al livello dato, `None` fuori range.
     pub fn capacita(&self, livello: u8) -> Option<u16> {
         self.capacita_per_livello
             .get(usize::from(livello).checked_sub(1)?)
