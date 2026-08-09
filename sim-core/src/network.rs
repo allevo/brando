@@ -95,8 +95,8 @@ impl RoadNetwork {
                 continue;
             }
             // The root is the first tile not yet labelled in increasing order,
-            // so it is the smallest of its component: the canonical id falls
-            // out of the scan, with no second pass.
+            // so it is the smallest of its component: the id falls out of
+            // the scan itself, with no second pass.
             let id = ComponentId(root);
             self.component[root.as_usize()] = Some(id);
             queue.clear();

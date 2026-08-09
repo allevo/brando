@@ -1,15 +1,15 @@
-# I divieti di CLAUDE.md (D4) come errori del linter, non come convenzioni.
+# CLAUDE.md's prohibitions (D4) as linter errors, not as conventions.
 disallowed-types = [
-  { path = "std::collections::HashMap", reason = "D4: ordine di iterazione non deterministico, usare BTreeMap o IndexMap" },
-  { path = "std::collections::HashSet", reason = "D4: idem" },
+  { path = "std::collections::HashMap", reason = "D4: non-deterministic iteration order, use BTreeMap or IndexMap" },
+  { path = "std::collections::HashSet", reason = "D4: same" },
 ]
-# `rand` e' compilato con default-features = false: `rand::rng` e
-# `rand::thread_rng` non esistono proprio nel grafo, e le voci qui sotto sono
-# la seconda linea di difesa per il giorno in cui una feature le riportasse
-# dentro. `allow-invalid` serve a non far rumore finche' il path non esiste.
+# `rand` is compiled with default-features = false: `rand::rng` and
+# `rand::thread_rng` do not exist in the graph at all, and the entries below are
+# the second line of defence for the day a feature brings them back in.
+# `allow-invalid` keeps them quiet as long as the path does not exist.
 disallowed-methods = [
-  { path = "rand::rng", reason = "D4: l'RNG vive nello stato ed e' seedato", allow-invalid = true },
-  { path = "rand::thread_rng", reason = "D4: idem", allow-invalid = true },
-  { path = "std::time::Instant::now", reason = "D4: nessun accesso all'orologio nel core" },
-  { path = "std::time::SystemTime::now", reason = "D4: idem" },
+  { path = "rand::rng", reason = "D4: the RNG lives in the state and is seeded", allow-invalid = true },
+  { path = "rand::thread_rng", reason = "D4: same", allow-invalid = true },
+  { path = "std::time::Instant::now", reason = "D4: no access to the clock in the core" },
+  { path = "std::time::SystemTime::now", reason = "D4: same" },
 ]

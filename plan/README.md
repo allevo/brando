@@ -1,79 +1,79 @@
-# Piano dei primi sviluppi — Brando
+# Plan for the first stages of development — Brando
 
-Questo piano copre **M0 — Fondamenta** (fasi 00–09, completate) e **M1 — Loop di gioco minimo**
-(fasi 11–19) della roadmap in `CLAUDE.md`, spezzate in fasi piccole.
+This plan covers **M0 — Foundations** (phases 00–09, complete) and **M1 — A minimal game loop**
+(phases 11–19) of the roadmap in `CLAUDE.md`, broken into small phases.
 
-M1 è stata pianificata dopo la chiusura di M0, non prima: farlo prima avrebbe significato
-decidere sul bilanciamento senza aver visto un tick girare. [10-oltre-m0.md](10-oltre-m0.md)
-resta il documento che traccia M2 e M3 con la stessa regola.
+M1 was planned after M0 closed, not before: doing it earlier would have meant deciding on the
+balancing without having watched a single tick run. [10-beyond-m0.md](10-beyond-m0.md) remains the
+document that sketches M2 and M3 by the same rule.
 
-## Principio guida
+## The guiding principle
 
-Ogni fase ha **un solo goal**, chiuso da un comando che si esegue e che dà una risposta
-binaria. Se una fase finisce e non si sa dire se ha funzionato, la fase è mal definita.
+Every phase has **one goal only**, closed by a command you run that gives a yes-or-no answer. If a
+phase ends and you cannot say whether it worked, the phase is badly defined.
 
-Regola operativa: una fase = un commit (o una PR). Non si inizia la fase N+1 con la N rossa.
+An operating rule: one phase = one commit (or one PR). You do not start phase N+1 with N red.
 
-## Le fasi di M0 — Fondamenta
+## The phases of M0 — Foundations
 
-| #  | Fase | Goal verificabile in una riga | Dim. |
-|----|------|-------------------------------|------|
-| 00 | [Workspace e guardrail](00-workspace.md) | Il workspace compila e i divieti di `CLAUDE.md` (float, `HashMap`, `thread_rng`, `unsafe`) sono errori del compilatore/linter, non convenzioni | S |
-| 01 | [Tipi fondamentali e griglia](01-tipi-base.md) | `Milli`, gli id newtype e la `Grid` esistono; `size_of::<Tile>()` è sotto il budget e la conversione pos↔indice è biiettiva su tutta la mappa | M |
-| 02 | [RNG per dominio](02-rng-determinismo.md) | Stesso seed ⇒ stessa sequenza per ogni dominio, e aggiungere un dominio nuovo non sfasa quelli esistenti | S |
-| 03 | [sim-data: tabelle RON validate](03-sim-data.md) | Una tabella valida carica, una rotta produce un report con **tutti** gli errori; il dataset ha un hash stabile | M |
-| 04 | [World, tick, comandi](04-world-tick-comandi.md) | `step()` avanza il tick, applica comandi validi, rifiuta gli invalidi con errore strutturato, e non panica su 10.000 comandi casuali | M |
-| 05 | [Strade e rete stradale](05-strade-rete.md) | La rete si ricostruisce solo se `dirty` e la sua etichettatura è indipendente dall'ordine di costruzione | M |
-| 06 | [Copertura servizi aggregata](06-copertura-servizi.md) | Il pozzo serve le case entro raggio **su strada**; il calcolo incrementale coincide con quello da zero | L |
-| 07 | [Fattoria, cibo, primo loop](07-fattoria-cibo.md) | Il cibo prodotto è conservato (prodotto = consumato + giacenza) e le case restano scoperte a magazzino vuoto | M |
-| 08 | [Replay, hash canonico, xtask](08-replay-golden.md) | `seed + Vec<Command>` rigioca allo stesso hash; `regen-golden` è idempotente | L |
-| 09 | [Suite invarianti e chiusura M0](09-invarianti-chiusura.md) | Gli invarianti di `CLAUDE.md` sono property test verdi; `CLAUDE.md` dice "M0 completato" | M |
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 00 | [Workspace and guardrails](00-workspace.md) | The workspace compiles and `CLAUDE.md`'s prohibitions (floats, `HashMap`, `thread_rng`, `unsafe`) are compiler/linter errors, not conventions | S |
+| 01 | [Core types and the grid](01-core-types.md) | `Milli`, the newtype ids and the `Grid` exist; `size_of::<Tile>()` is within budget and the position↔index conversion round-trips over the whole map | M |
+| 02 | [One RNG per domain](02-rng-determinism.md) | The same seed ⇒ the same sequence for every domain, and adding a new domain does not knock the existing ones out of phase | S |
+| 03 | [sim-data: validated RON tables](03-sim-data.md) | A valid table loads, a broken one produces a report with **every** error; the dataset has a stable hash | M |
+| 04 | [World, tick, commands](04-world-tick-commands.md) | `step()` advances the tick, applies valid commands, rejects invalid ones with a structured error, and does not panic on 10,000 random commands | M |
+| 05 | [Roads and the road network](05-roads-network.md) | The network is rebuilt only if `dirty` and its labelling is independent of the build order | M |
+| 06 | [Aggregate service coverage](06-service-coverage.md) | The well serves the houses within range **along the roads**; the incremental computation matches the from-scratch one | L |
+| 07 | [The farm, food, the first loop](07-farm-food.md) | The food produced is conserved (produced = consumed + stock) and the houses go uncovered on an empty store | M |
+| 08 | [Replay, the state hash, xtask](08-replay-expected.md) | `seed + Vec<Command>` replays to the same hash; `regen-expected` is idempotent | L |
+| 09 | [The invariant suite and closing M0](09-invariants-closeout.md) | `CLAUDE.md`'s invariants are green property tests; `CLAUDE.md` says "M0 complete" | M |
 
-Dipendenze: la catena è sequenziale, con due eccezioni.
-La **03** è indipendente dalla **02** (si possono fare in parallelo dopo la 01).
-La **08** ha bisogno solo che esista *qualche* stato che evolve: se serve, la si anticipa dopo
-la **05** con una griglia di sole strade, e si arricchisce il golden man mano.
+Dependencies: the chain is sequential, with two exceptions.
+**03** is independent of **02** (they can be done in parallel after 01).
+**08** only needs *some* state that evolves: if need be it can be brought forward after **05** with a
+grid of nothing but roads, and the recording enriched as you go.
 
-Fra M0 e M1 c'è un lotto di lavoro senza file di fase, documentato in
-[decisioni-aperte.md](decisioni-aperte.md): la coerenza fra capacità e produzione
-(**A5**), lo smarcamento di `dubbi.md` (**A7–A10**) e le ottimizzazioni del passo 3 (**A11**).
+Between M0 and M1 there is a batch of work with no phase file, documented in
+[open-decisions.md](open-decisions.md): the consistency between capacity and output (**A5**), the
+clearing up of a since-deleted `dubbi.md` ("open questions", **A7–A10**) and the step 3
+optimisations (**A11**).
 
-## Le fasi di M1 — Loop di gioco minimo
+## The phases of M1 — A minimal game loop
 
-| #  | Fase | Goal verificabile in una riga | Dim. |
-|----|------|-------------------------------|------|
-| 11 | [Difficoltà](11-difficolta.md) | Stesso seed e stessi comandi, difficoltà diverse ⇒ hash diversi; la difficoltà sta nell'header del replay e nell'hash | S |
-| 12 | [Soddisfazione](12-soddisfazione.md) | Una casa servita arriva al massimo in `massimo/passo_su` tick calcolati dal `DataSet`; tolta l'acqua torna a zero in `massimo/passo_giu` | M |
-| 13 | [Livelli delle case](13-livelli-case.md) | Una casa servita raggiunge il livello 2 in un numero di tick calcolabile dal `DataSet`; togliendo l'acqua torna al livello 1, e non oscilla | L |
-| 14 | [Nascite e morti](14-nascite-morti.md) | Una città servita cresce fino a saturare le capienze, una che perde i servizi si spopola; il test di sensibilità al seed si riattiva | L |
-| 15 | [Immigrazione ed emigrazione](15-migrazione.md) | Due città identiche tranne per la copertura ricevono flussi diversi; e il ciclo copertura↔popolazione **smorza** | M |
-| 16 | [Tesoro e tasse](16-tesoro-tasse.md) | L'invariante del tesoro resta un'**uguaglianza esatta** con le entrate dentro | M |
-| 17 | [`sim-scenario`](17-sim-scenario.md) | "500 abitanti entro 5 anni" si dichiara completato al tick giusto, e non prima | L |
-| 18 | [Invarianti e chiusura M1](18-invarianti-chiusura-m1.md) | Gli invarianti nuovi sono property test verdi, il costo di A12 è misurato e attribuito, `CLAUDE.md` dice M1 completato | M |
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 11 | [Difficulty](11-difficulty.md) | The same seed and the same commands at different difficulties ⇒ different hashes; the difficulty is in the replay's header and in the hash | S |
+| 12 | [Satisfaction](12-satisfaction.md) | A served house reaches the maximum in `max/step_up` ticks computed from the `DataSet`; take the water away and it goes back to zero in `max/step_down` | M |
+| 13 | [House levels](13-house-levels.md) | A served house reaches level 2 in a number of ticks computable from the `DataSet`; take the water away and it goes back to level 1, and it does not oscillate | L |
+| 14 | [Births and deaths](14-births-deaths.md) | A served city grows until it fills up, one that loses its services empties out; the seed-sensitivity test is re-enabled | L |
+| 15 | [Immigration and emigration](15-migration.md) | Two cities identical except for their coverage receive different flows; and the coverage↔population loop **damps** | M |
+| 16 | [Treasury and taxes](16-treasury-taxes.md) | The treasury invariant stays an **exact equality** with the income in it | M |
+| 17 | [`sim-scenario`](17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | L |
+| 18 | [Invariants and closing M1](18-invariants-closeout-m1.md) | The new invariants are green property tests, A12's cost is measured and attributed, `CLAUDE.md` says M1 complete | M |
 
-Catena sequenziale, nessuna eccezione: ogni fase legge lo stato che la precedente introduce.
-Accorpamenti accettabili se otto fasi sembrano troppe: **14+15** se la demografia risulta più
-piccola del previsto. Mai 12+13, mai 16 con altro, e mai la 14 con niente — è quella che tocca
-l'hot path.
+A sequential chain, no exceptions: every phase reads the state the previous one introduces.
+Merges are acceptable if eight phases feel like too many: **14+15** if the demographics turn out
+smaller than expected. Never 12+13, never 16 with anything, and never 14 with nothing — it is the one
+that touches the hot path.
 
-La decisione su cui poggia tutta M1 è [A12](decisioni-aperte.md): **i servizi rincorrono la
-popolazione**. La capacità di un provider si conta sugli abitanti presenti, quindi la copertura
-si ricalcola quando qualcuno si muove — cioè quasi a ogni tick. È una scelta di gioco che si
-paga in tempo di calcolo, presa sapendolo, e il debito che apre è
-[A17](decisioni-aperte.md): **l'unica decisione aperta del progetto**, da chiudere prima di M2.
-Vale la pena leggere entrambe prima della fase 13.
+The decision all of M1 rests on is [A12](open-decisions.md): **the services chase the population**. A
+provider's capacity is counted on the residents present, so the coverage is recomputed when anyone
+moves — that is, on almost every tick. It is a gameplay choice paid for in computation time, taken in
+full knowledge, and the debt it opens is [A17](open-decisions.md): **the project's only open
+decision**, to be closed before M2. Both are worth reading before phase 13.
 
-## Cosa si costruisce e cosa no
+## What gets built and what does not
 
-Dei nove crate previsti in `CLAUDE.md`, M0 ne fa nascere quattro — `sim-core`, `sim-data`,
-`sim-replay`, `xtask` — e M1 un quinto, `sim-scenario`, nella fase 18. `game-bevy` e `agent-*`
-arrivano con M2, `sim-civ` con M3 e la seconda civiltà (D6). Crate vuoti scaffoldati in
-anticipo sono superficie che invita a riempirla.
+Of the nine crates planned in `CLAUDE.md`, M0 brings four into being — `sim-core`, `sim-data`,
+`sim-replay`, `xtask` — and M1 a fifth, `sim-scenario`, in phase 18. `game-bevy` and `agent-*` arrive
+with M2, `sim-civ` with M3 and the second civilisation (D6). Empty crates scaffolded in advance are
+surface that invites you to fill it.
 
-## Come si verifica una fase
+## How a phase gets verified
 
-Ogni file di fase chiude con una sezione **Verifica**: i comandi da eseguire e cosa deve
-succedere. Il baseline che deve restare verde in ogni fase è:
+Every phase file closes with a **Verification** section: the commands to run and what has to happen.
+The baseline that has to stay green in every phase is:
 
 ```sh
 cargo build --workspace
@@ -82,37 +82,40 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-## Rigenerare i golden senza perdere il segnale
+Every identifier in this repository is in English. Any word you do not recognise is in
+[GLOSSARY.md](../GLOSSARY.md), together with the Italian it replaced.
 
-Ogni fase di M1 tranne la 11 rigenera i golden, e quello è il momento in cui il test più
-prezioso del progetto rischia di diventare un rito. Il messaggio in testa a ogni `.hashes` dice
-già la regola — *se cambia senza che sia cambiato il bilanciamento, è stata introdotta una
-fonte di non-determinismo: fermarsi e trovarla, non rigenerare* — ma applicarla richiede un
-protocollo, e ogni file di fase lo cita invece di ripeterlo.
+## Regenerating the recordings without losing the signal
 
-1. **Verde prima di cominciare.** `cargo xtask regen-golden --check` dev'essere verde *prima*
-   di toccare il codice. Se non lo è, l'albero è già sporco per altro e il segnale è perso.
-2. **Esattamente i file previsti.** Dopo la modifica, `--check` deve elencare i file che la
-   fase dichiara di rigenerare, né uno di più. Un `.ron` che cambia in una fase che non tocca
-   l'header è già l'indizio.
-3. **Idempotenza.** `regen-golden` due volte di fila: la seconda deve dire "niente da fare". È
-   dove il non-determinismo intra-processo si vede per primo.
-4. **Processo separato.** `cargo test -p sim-replay` coglie ciò che il punto 3 non può:
-   indirizzi di memoria, `RandomState`, ordini di iterazione di collezioni hash.
-5. **Guardare il primo tick divergente** nel diff degli `.hashes`. È il controllo che nessuno
-   fa e che vale più degli altri quattro: se la meccanica nuova non può agire prima del tick 60
-   e il diff comincia al 30, la causa è un'altra e va trovata prima di committare. Il formato
-   testuale del golden esiste per questo.
-6. **Un solo motivo di rigenerazione per commit.** Un commit che rigenera i golden e cambia due
-   meccaniche non è più diffabile.
+Every phase of M1 except 11 regenerates the recordings, and that is the moment the project's most
+valuable test risks becoming a ritual. The message at the top of every `.hashes` already states the
+rule — *if it changes without the balancing having changed, a source of non-determinism has been
+introduced: stop and find it, do not regenerate* — but applying it takes a protocol, and every phase
+file cites this one instead of repeating it.
 
-## Decisioni
+1. **Green before you start.** `cargo xtask regen-expected --check` has to be green *before* you touch
+   the code. If it is not, the tree is already dirty for other reasons and the signal is lost.
+2. **Exactly the files you expected.** After the change, `--check` has to list the files the phase
+   declares it regenerates, not one more. A `.ron` that changes in a phase that does not touch the
+   header is already the clue.
+3. **Idempotence.** `regen-expected` twice in a row: the second has to say "nothing to do". It is
+   where non-determinism within a process shows up first.
+4. **A separate process.** `cargo test -p sim-replay` catches what point 3 cannot: memory addresses,
+   `RandomState`, the iteration order of hash collections.
+5. **Look at the first diverging tick** in the `.hashes` diff. It is the check nobody does and it is
+   worth more than the other four: if the new mechanic cannot act before tick 60 and the diff starts
+   at 30, the cause is something else and has to be found before committing. The recording's textual
+   format exists for this.
+6. **One reason to regenerate per commit.** A commit that regenerates the recordings and changes two
+   mechanics is no longer diffable.
 
-Alcune scelte sono necessarie per implementare ma non sono fissate da `CLAUDE.md`: sono
-raccolte in [decisioni-aperte.md](decisioni-aperte.md) con una raccomandazione per ciascuna.
-Le fasi 01, 03 e 08 assumono la raccomandazione; se una viene ribaltata, cambia il contenuto
-di quella fase, non l'ordine del piano.
+## Decisions
 
-Il documento continua oltre M0: A7–A11 sono nate smarcando `dubbi.md`, A12–A16 pianificando M1.
-Per ognuna, oltre alla raccomandazione, c'è **come è andata davvero** — che è quasi sempre
-l'informazione più utile, perché diverge.
+Some choices are necessary in order to implement but are not fixed by `CLAUDE.md`: they are gathered
+in [open-decisions.md](open-decisions.md) with a recommendation for each. Phases 01, 03 and 08 assume
+the recommendation; if one gets overturned, it changes the content of that phase, not the order of the
+plan.
+
+The document carries on past M0: A7–A11 came out of clearing up that same `dubbi.md`, A12–A16 out of planning
+M1. For each one, alongside the recommendation, there is **how it really went** — which is almost
+always the more useful information, because it diverges.

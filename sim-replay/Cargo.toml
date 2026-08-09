@@ -12,7 +12,7 @@ ron = { workspace = true }
 blake3 = { workspace = true }
 
 [dev-dependencies]
-# La feature test-util serve solo al test che verifica la copertura dell'hash.
+# The test-util feature is only needed by the test that checks the hash's coverage.
 sim-core = { path = "../sim-core", features = ["test-util"] }
 
 [lints]

@@ -2,7 +2,7 @@
 resolver = "3"
 members = ["sim-core", "sim-data", "sim-replay", "xtask"]
 
-# Versioni pinnate qui: i crate figli usano { workspace = true }.
+# Versions pinned here: the child crates use { workspace = true }.
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
@@ -22,5 +22,5 @@ version = "0.1.0"
 unsafe_code = "forbid"
 
 [workspace.lints.clippy]
-# I float restano nel renderer (D4): nello stato non entrano.
+# Floats stay in the renderer (D4): they do not enter the state.
 float_arithmetic = "deny"

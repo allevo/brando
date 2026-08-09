@@ -1,30 +1,30 @@
-# Fase 00 — Workspace e guardrail
+# Phase 00 — Workspace and guardrails
 
-**Goal:** il workspace compila vuoto, e i divieti di `CLAUDE.md` sono applicati dal toolchain,
-non dalla buona volontà di chi scrive.
-**Dipende da:** niente.
-**Dimensione:** S.
-**Decisioni coinvolte:** D1 (core puro), D4 (determinismo), convenzioni di codice.
+**Goal:** the workspace compiles empty, and the prohibitions in `CLAUDE.md` are enforced by the
+toolchain, not by the good intentions of whoever is writing.
+**Depends on:** nothing.
+**Size:** S.
+**Decisions involved:** D1 (a pure core), D4 (determinism), code conventions.
 
-## Perché adesso
+## Why now
 
-I divieti di D4 (`HashMap` iterati, `thread_rng`, float nello stato) sono facili da violare per
-distrazione e costosi da scoprire dopo: si scoprono come un golden replay che cambia hash senza
-motivo, tre fasi più tardi. Renderli errori di compilazione costa mezz'ora ora e azzera quella
-classe di bug.
+D4's prohibitions (iterated `HashMap`s, `thread_rng`, floats in the state) are easy to break by
+accident and expensive to discover later: you discover them as a recorded replay whose hash
+changes for no reason, three phases further on. Turning them into compile errors costs half an
+hour now and wipes out that whole class of bug.
 
-## Cosa si costruisce
+## What gets built
 
-**Manifest di workspace virtuale** alla radice (il `src/main.rs` corrente va rimosso: il runner
-headless è `xtask`, non un binario alla radice).
+**A virtual workspace manifest** at the root (the current `src/main.rs` has to go: the headless
+runner is `xtask`, not a binary at the root).
 
 ```toml
 [workspace]
-resolver = "3"                     # richiesto da edition 2024
+resolver = "3"                     # required by edition 2024
 members = ["sim-core", "sim-data", "sim-replay", "xtask"]
 
 [workspace.dependencies]
-# versioni pinnate qui, i crate figli usano { workspace = true }
+# versions pinned here, the child crates use { workspace = true }
 serde     = { version = "1", features = ["derive"] }
 thiserror = "2"
 slotmap   = { version = "1", features = ["serde"] }
@@ -39,83 +39,82 @@ insta     = "1"
 unsafe_code = "forbid"
 
 [workspace.lints.clippy]
-float_arithmetic = "deny"          # i float restano nel renderer
+float_arithmetic = "deny"          # floats stay in the renderer
 ```
 
-Attenzione a `rand` / `rand_pcg`: devono condividere la stessa major di `rand_core`, altrimenti
-`Pcg64` non implementa il `RngCore` che il resto del codice si aspetta. Verificare con
-`cargo tree -d` che `rand_core` compaia una sola volta.
+Watch out for `rand` / `rand_pcg`: they have to share the same major of `rand_core`, otherwise
+`Pcg64` does not implement the `RngCore` the rest of the code expects. Check with
+`cargo tree -d` that `rand_core` shows up exactly once.
 
-**`clippy.toml`** alla radice — è qui che i divieti diventano meccanici:
+**The four crates**, each with `#![forbid(unsafe_code)]` at the top of `lib.rs` (explicit as
+`CLAUDE.md` asks, even though it is redundant with the workspace lint) and
+`lints.workspace = true` in its own manifest.
+
+- `sim-core` — a library, dependencies: `serde`, `thiserror`, `slotmap`, `rand`, `rand_pcg`, `blake3`
+- `sim-data` — a library, depends on `sim-core` + `ron`, `serde`, `thiserror`
+- `sim-replay` — a library, depends on `sim-core`, `sim-data` + `ron`, `blake3`
+- `xtask` — a binary, depends on all three
+
+The graph always points towards `sim-core`. It is worth a comment in `sim-core`'s manifest saying
+that its dependency list does not grow without discussion.
+
+**`clippy.toml`** at the root — this is where the prohibitions become mechanical:
 
 ```toml
 disallowed-types = [
-  { path = "std::collections::HashMap", reason = "D4: ordine di iterazione non deterministico, usare BTreeMap o IndexMap" },
-  { path = "std::collections::HashSet", reason = "D4: idem" },
+  { path = "std::collections::HashMap", reason = "D4: non-deterministic iteration order, use BTreeMap or IndexMap" },
+  { path = "std::collections::HashSet", reason = "D4: same" },
 ]
 disallowed-methods = [
-  { path = "rand::thread_rng", reason = "D4: l'RNG vive nello stato ed è seedato" },
-  { path = "rand::rng",        reason = "D4: idem" },
-  { path = "std::time::Instant::now",     reason = "D4: nessun accesso all'orologio nel core" },
-  { path = "std::time::SystemTime::now",  reason = "D4: idem" },
+  { path = "rand::thread_rng", reason = "D4: the RNG lives in the state and is seeded" },
+  { path = "rand::rng",        reason = "D4: same" },
+  { path = "std::time::Instant::now",     reason = "D4: no access to the clock in the core" },
+  { path = "std::time::SystemTime::now",  reason = "D4: same" },
 ]
 ```
 
-**I quattro crate**, ognuno con `#![forbid(unsafe_code)]` in testa a `lib.rs` (esplicito come
-chiede `CLAUDE.md`, anche se ridondante con la lint di workspace) e `lints.workspace = true`
-nel proprio manifest.
+## Out of scope
 
-- `sim-core` — libreria, dipendenze: `serde`, `thiserror`, `slotmap`, `rand`, `rand_pcg`, `blake3`
-- `sim-data` — libreria, dipende da `sim-core` + `ron`, `serde`, `thiserror`
-- `sim-replay` — libreria, dipende da `sim-core`, `sim-data` + `ron`, `blake3`
-- `xtask` — binario, dipende da tutti e tre
+`sim-civ`, `sim-scenario`, `agent-bot`, `agent-eval`, `agent-llm`, `game-bevy`. They come into
+being when there is code to put in them (M1–M3).
 
-Il grafo punta sempre verso `sim-core`. Vale la pena un commento nel manifest di `sim-core` che
-dica che quella lista di dipendenze non cresce senza discussione.
+## Tests
 
-## Fuori scope
+One test per crate checking that the crate exists is noise. What is needed is checking that the
+guardrails **bite**, and that is done once by hand (see Verification), not with a permanent test.
 
-`sim-civ`, `sim-scenario`, `agent-bot`, `agent-eval`, `agent-llm`, `game-bevy`. Nascono quando
-c'è codice da metterci dentro (M1–M3).
-
-## Test
-
-Un test per crate che verifichi che il crate esiste è rumore. Quello che serve è verificare che
-i guardrail **mordano**, e si fa una volta a mano (vedi Verifica), non con un test permanente.
-
-Utile invece un test in `sim-core` che documenti l'intento:
+What is useful instead is a test in `sim-core` that documents the intent:
 
 ```rust
-/// D4: nessun tipo pubblico del core deve esporre float.
-/// Sentinella minima, non una prova: la lint clippy::float_arithmetic è il vero vincolo.
+/// D4: no public type of the core may expose a float.
+/// A minimal sentinel, not a proof: the clippy::float_arithmetic lint is the real constraint.
 #[test]
-fn milli_non_e_un_float() {
+fn milli_is_not_a_float() {
     assert_eq!(core::mem::size_of::<crate::Milli>(), 4);
 }
 ```
 
-(da attivare nella fase 01, quando `Milli` esiste)
+(to be switched on in phase 01, once `Milli` exists)
 
-## Verifica
+## Verification
 
 ```sh
 cargo build --workspace
-cargo test  --workspace          # 0 test, verde
+cargo test  --workspace          # 0 tests, green
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-cargo tree -d                    # nessun duplicato di rand_core
+cargo tree -d                    # no duplicate rand_core
 ```
 
-Poi la verifica che conta, da fare **una volta e annullare**: aggiungere in `sim-core/src/lib.rs`
+Then the check that matters, to be done **once and undone**: add to `sim-core/src/lib.rs`
 
 ```rust
-fn prova() -> std::collections::HashMap<u8, u8> { std::collections::HashMap::new() }
-fn prova2(a: f32) -> f32 { a * 2.0 }
+fn probe() -> std::collections::HashMap<u8, u8> { std::collections::HashMap::new() }
+fn probe2(a: f32) -> f32 { a * 2.0 }
 ```
 
-`cargo clippy` deve fallire con i due messaggi configurati. Se passa, `clippy.toml` non viene
-letto (di solito: file nel posto sbagliato, o clippy invocato da una sottodirectory).
-Rimuovere le due funzioni e committare.
+`cargo clippy` has to fail with the two configured messages. If it passes, `clippy.toml` is not
+being read (usually: the file is in the wrong place, or clippy was invoked from a subdirectory).
+Remove the two functions and commit.
 
-**Fatto quando:** i quattro comandi sono verdi e la violazione deliberata è stata vista
-fallire.
+**Done when:** the four commands are green and the deliberate violation has been seen to fail.

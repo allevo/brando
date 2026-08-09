@@ -1,172 +1,171 @@
-# Fase 17 — `sim-scenario` e obiettivi
+# Phase 17 — `sim-scenario` and objectives
 
-**Goal:** lo scenario "500 abitanti entro 5 anni" si dichiara completato al tick giusto, e non
-prima.
-**Dipende da:** 16.
-**Dimensione:** L.
-**Decisioni coinvolte:** [A16](decisioni-aperte.md), A2, A6, D7.
+**Goal:** the scenario "500 residents within 5 years" declares itself complete on the right tick, and
+not before.
+**Depends on:** 16.
+**Size:** L.
+**Decisions involved:** [A16](open-decisions.md), A2, A6, D7.
 
-## Perché adesso
+## Why now
 
-Perché è l'ultima fase che aggiunge una meccanica, e perché un obiettivo ha senso solo quando
-c'è un gioco sotto: prima della fase 16 la città non poteva finanziare la propria crescita, e
-"500 abitanti entro 5 anni" sarebbe stato vinto o perso dal bilanciamento invece che dal
-giocatore.
+Because it is the last phase that adds a mechanic, and because an objective only makes sense once
+there is a game underneath: before phase 16 the city could not finance its own growth, and "500
+residents within 5 years" would have been won or lost by the balancing rather than by the player.
 
-È anche il primo crate nuovo dopo M0. Nasce adesso e non prima perché
-[plan/README](README.md) è esplicito: *crate vuoti scaffoldati in anticipo sono superficie che
-invita a riempirla*.
+It is also the first new crate since M0. It comes into being now and not earlier because
+[plan/README](README.md) is explicit: *empty crates scaffolded in advance are surface that invites
+you to fill it*.
 
-## Cosa si costruisce
+## What gets built
 
-### Dove vive cosa — il grafo delle dipendenze decide
+### Where what lives — the dependency graph decides
 
-`CLAUDE.md` mette la verifica degli obiettivi come **passo 9 del tick**, dentro `step`. Ma le
-dipendenze puntano verso `sim-core`, quindi `sim-scenario` dipende dal core e il core non può
-chiamarlo. La divisione è obbligata, ed è la stessa di [A2](decisioni-aperte.md):
+`CLAUDE.md` puts checking the objectives at **step 9 of the tick**, inside `step`. But the
+dependencies point towards `sim-core`, so `sim-scenario` depends on the core and the core cannot call
+it. The split is forced, and it is the same one as [A2](open-decisions.md):
 
-- In **`sim-core`**: l'enum `Objective`, la sua valutazione, e lo stato di avanzamento. Sono
-  struct pure senza I/O, e appartengono al vocabolario del core come `ServiceKind`.
-- In **`sim-scenario`**: la definizione degli scenari (mappa iniziale, comandi, difficoltà,
-  obiettivi obbligatori e opzionali), il caricamento da file, la composizione.
+- In **`sim-core`**: the `Objective` enum, its evaluation, and the progress state. They are pure
+  structs with no I/O, and they belong to the core's vocabulary like `ServiceKind`.
+- In **`sim-scenario`**: the definition of the scenarios (initial map, commands, difficulty,
+  mandatory and optional objectives), loading from a file, composition.
 
-È la seconda volta che il grafo detta il confine, e vale la pena scriverlo: la prima è stata
-il `DataSet`, e chi legge deve poter riconoscere il pattern invece di riscoprirlo.
+It is the second time the graph has dictated the boundary, and it is worth writing down: the first
+was the `DataSet`, and whoever reads has to be able to recognise the pattern instead of rediscovering
+it.
 
-### Gli obiettivi vivono nel `World`
+### The objectives live in the `World`
 
 ```rust
 // sim-core
 pub enum Objective {
-    /// Popolazione minima entro una scadenza. La scadenza e' in **mesi**, mai
-    /// in tick (A6): e' l'unita' in cui il giocatore ragiona e in cui D7 vuole
-    /// gli obiettivi.
-    Popolazione { almeno: u32, entro_mesi: Option<u32> },
-    Tesoro { almeno: Coins, entro_mesi: Option<u32> },
-    /// Tutte le case al livello dato o superiore.
-    LivelloCase { livello: u8, quante: u32, entro_mesi: Option<u32> },
+    /// A minimum population by a deadline. The deadline is in **months**, never
+    /// in ticks (A6): it is the unit the player reasons in and the one D7 wants
+    /// the objectives in.
+    Population { at_least: u32, within_months: Option<u32> },
+    Treasury { at_least: Coins, within_months: Option<u32> },
+    /// This many houses at the given level or above.
+    HouseLevel { level: u8, how_many: u32, within_months: Option<u32> },
 }
 
-pub struct Obiettivi {
-    pub obbligatori: Vec<Objective>,
-    pub opzionali: Vec<Objective>,
+pub struct Objectives {
+    pub mandatory: Vec<Objective>,
+    pub optional: Vec<Objective>,
 }
 
-/// Avanzamento, uno per obiettivo, nell'ordine in cui sono dichiarati.
-pub struct StatoObiettivi {
-    /// Tick in cui l'obiettivo e' stato completato, o `None`.
+/// Progress, one entry per objective, in the order they are declared.
+pub struct ObjectiveState {
+    /// The tick the objective was completed on, or `None`.
     ///
-    /// Una volta completato **resta** completato: un obiettivo che si
-    /// scompleta perche' la popolazione e' scesa renderebbe la vittoria
-    /// reversibile, e nessuno scenario di campagna funziona cosi'.
-    completati: Vec<Option<u32>>,
-    esito: Esito,
+    /// Once completed it **stays** completed: an objective that un-completes
+    /// because the population has fallen would make victory reversible, and no
+    /// campaign scenario works like that.
+    completed: Vec<Option<u32>>,
+    outcome: Outcome,
 }
 
-pub enum Esito { InCorso, Vinto, Perso }
+pub enum Outcome { InProgress, Won, Lost }
 ```
 
-**Perché nel `World` e non passati a `step`.** Tenerli nello stato mantiene la firma
-`step(&mut World, &[Command])` che D4 dichiara, e — soprattutto — mette il **tick di
-completamento dentro l'hash canonico**. È l'unica cosa che rende un golden capace di verificare
-il goal di questa fase: "si dichiara completato al tick giusto" diventa un hash che diverge se
-il tick cambia, invece di un `assert` in un test che qualcuno deve ricordarsi di scrivere.
+**Why in the `World` and not passed to `step`.** Keeping them in the state preserves the
+`step(&mut World, &[Command])` signature D4 declares, and — above all — puts the **tick of
+completion inside the state hash**. It is the only thing that makes a recording able to check this
+phase's goal: "it declares itself complete on the right tick" becomes a hash that diverges if the
+tick changes, instead of an `assert` in a test somebody has to remember to write.
 
-`World::new` guadagna gli obiettivi, o un `World::con_obiettivi`. Sono dato validato come il
-`DataSet`, e come quello arrivano dall'esterno già controllati.
+`World::new` gains the objectives, or a `World::with_objectives`. They are validated data like the
+`DataSet`, and like it they arrive from outside already checked.
 
-### Il passo 9
+### Step 9
 
 ```rust
-/// Passo 9 — obiettivi di scenario.
+/// Step 9 — scenario objectives.
 ///
-/// Dopo la finanza e prima dell'emissione degli eventi: valuta lo stato di
-/// fine tick, che e' quello che il giocatore vede.
+/// After the finance and before the events are emitted: it evaluates the state
+/// at the end of the tick, which is what the player sees.
 fn check_objectives(world: &mut World, r: &mut StepReport) { .. }
 ```
 
-Un obiettivo si completa quando la condizione è vera e non è già completato; la scadenza si
-valuta in `tick / tick_per_mese`. Lo scenario è **vinto** quando tutti gli obbligatori sono
-completati, **perso** quando uno di essi ha una scadenza superata.
+An objective is completed when the condition is true and it is not already completed; the deadline is
+evaluated in `tick / ticks_per_month`. The scenario is **won** when every mandatory objective is
+completed, **lost** when one of them has a deadline that has passed.
 
 ```rust
-Event::ObjectiveCompleted { indice: u16, obbligatorio: bool },
-Event::ScenarioEnded { esito: Esito },
+Event::ObjectiveCompleted { index: u16, mandatory: bool },
+Event::ScenarioEnded { outcome: Outcome },
 ```
 
-Entrambi si emettono una volta sola: sono cambi di stato, non polling.
+Both are emitted exactly once: they are changes of state, not polling.
 
 ### `sim-scenario`
 
-Nuovo membro del workspace, `#![forbid(unsafe_code)]`, `lints.workspace = true`, dipendenze
-`sim-core` + `serde`/`ron`/`thiserror`. Contiene la descrizione di uno scenario — griglia
-iniziale, terreni, difficoltà proposta, comandi di partenza, obiettivi — con caricamento da RON
-e validazione con report completo, esattamente come `sim-data`.
+A new workspace member, `#![forbid(unsafe_code)]`, `lints.workspace = true`, dependencies `sim-core`
++ `serde`/`ron`/`thiserror`. It contains the description of a scenario — the initial grid, terrains,
+proposed difficulty, starting commands, objectives — with loading from RON and validation with a
+complete report, exactly like `sim-data`.
 
-**Un obiettivo va validato contro il `DataSet`**: "tutte le case al livello 4" con `livelli: 3`
-in tabella è uno scenario invincibile, e va rifiutato al caricamento invece che scoperto dopo
-cinque anni di gioco simulato. Stesso spirito di `DataSet::incoerenze()`.
+**An objective has to be validated against the `DataSet`**: "every house at level 4" with `levels: 3`
+in the table is an unwinnable scenario, and it should be rejected at load time instead of discovered
+after five years of simulated play. The same spirit as `DataSet::inconsistencies()`.
 
-### Il nome `Scenario` è già preso
+### The name `Scenario` is already taken
 
-`xtask/src/scenario.rs` ha una struct `Scenario` che è un'altra cosa: una situazione costruita a
-mano per il runner e per dare contenuto ai golden, senza obiettivi — il suo doc comment lo dice
-già. Va rinominata (`Situazione`, o `Prova`) **in questa fase**, prima che diventino tre e prima
-che qualcuno importi la sbagliata.
+`xtask/src/scenario.rs` has a `Scenario` struct that is a different thing: a situation built by hand
+for the runner and to give the recordings some content, with no objectives — its doc comment already
+says so. It has to be renamed (`Situation`, or `TestCase`) **in this phase**, before there are three
+of them and before somebody imports the wrong one.
 
-### Il golden dello scenario
+### The scenario's recording
 
-Uno scenario nuovo che **arriva** all'obiettivo, con il suo `.ron` e i suoi `.hashes`. È il
-canarino sul bilanciamento che `CLAUDE.md` chiede al punto 4 del Testing, nella versione che M1
-può avere: il bot euristico è M2, ma un golden che raggiunge l'obiettivo al tick N fallisce
-appena il bilanciamento si muove, e il diff dice **di quanto**.
+A new scenario that **reaches** its objective, with its `.ron` and its `.hashes`. It is the canary on
+the balancing that `CLAUDE.md` asks for at Testing point 4, in the version M1 can have: the heuristic
+bot is M2, but a recording that reaches the objective at tick N fails as soon as the balancing moves,
+and the diff says **by how much**.
 
-**La lista degli scenari è duplicata a mano** fra `xtask/src/scenario.rs::NOMI` e
-`sim-replay/tests/golden.rs::SCENARI`, e con uno scenario nuovo la dimenticanza è quasi certa —
-e si manifesta come "il golden nuovo non viene mai verificato", cioè silenzio invece che rosso.
-Rimedio a costo zero, da fare qui: `golden.rs` elenca i `*.ron` di `dir_golden()` invece di
-avere una costante, e **fallisce se un `.ron` non ha il suo `.hashes`**. Toglie la duplicazione
-e aggiunge un controllo che oggi non c'è.
+**The list of scenarios is duplicated by hand** between `xtask/src/scenario.rs::NAMES` and
+`sim-replay/tests/expected.rs::SCENARIOS`, and with a new scenario forgetting one is almost certain —
+and it shows up as "the new recording is never checked", i.e. silence instead of red. A zero-cost
+remedy, to be done here: `expected.rs` lists the `*.ron` files in `expected_dir()` instead of having
+a constant, and **fails if a `.ron` has no matching `.hashes`**. It removes the duplication and adds
+a check that does not exist today.
 
-## Fuori scope
+## Out of scope
 
-Il bot euristico e l'evaluator: sono M2, e l'evaluator produrrà un *vettore* di metriche di cui
-`StatoObiettivi` è solo il primo elemento. Campagne, scenari concatenati, sblocchi. Obiettivi
-che dipendono da eventi (incendi spenti, invasioni respinte): gli eventi casuali sono fuori da
+The heuristic bot and the evaluator: they are M2, and the evaluator will produce a *vector* of
+metrics of which `ObjectiveState` is only the first element. Campaigns, chained scenarios, unlocks.
+Objectives that depend on events (fires put out, invasions repelled): the random events are outside
 M1.
 
-## Test
+## Tests
 
-1. **Il goal**: lo scenario si dichiara vinto al tick atteso, e `Esito::InCorso` al tick
-   precedente. Le due metà valgono uguale — "non prima" è metà del goal.
-2. **Scadenza mancata**: stesso scenario con `entro_mesi` stretto ⇒ `Esito::Perso` al tick
-   della scadenza, non dopo.
-3. **Un obiettivo completato resta completato** anche se la popolazione poi scende. Fissa la
-   scelta, che è arbitraria e va documentata.
-4. **Opzionali**: non completarli non impedisce la vittoria; completarli si vede in
-   `StatoObiettivi`. È il dato su cui l'evaluator di M2 costruirà lo score.
-5. **Obiettivo invincibile rifiutato** al caricamento: livello oltre `livelli` in tabella ⇒
-   errore di validazione con il path giusto.
-6. **Golden dello scenario**: il tick di completamento è nell'hash, quindi il golden lo
-   protegge. Cambiando un numero di bilanciamento, il golden diverge — ed è il segnale che il
-   canarino funziona.
-7. **`ObjectiveCompleted` emesso una volta sola**, non a ogni tick in cui la condizione resta
-   vera. Stessa regola di `ServiceCoverageChanged` (fase 07).
-8. **`golden.rs` scopre i file da solo**: un `.ron` senza `.hashes` fa fallire il test invece di
-   passare inosservato.
+1. **The goal**: the scenario declares itself won on the expected tick, and `Outcome::InProgress` on
+   the previous one. The two halves count equally — "not before" is half the goal.
+2. **A missed deadline**: the same scenario with a tight `within_months` ⇒ `Outcome::Lost` on the
+   deadline's tick, not later.
+3. **A completed objective stays completed** even if the population later falls. It pins down the
+   choice, which is arbitrary and has to be documented.
+4. **Optional ones**: not completing them does not prevent victory; completing them shows up in
+   `ObjectiveState`. It is the data M2's evaluator will build its score on.
+5. **An unwinnable objective is rejected** at load time: a level beyond `levels` in the table ⇒ a
+   validation error with the right path.
+6. **The scenario's recording**: the completion tick is in the hash, so the recording protects it.
+   Change one balancing number and the recording diverges — and that is the signal the canary works.
+7. **`ObjectiveCompleted` emitted exactly once**, not on every tick the condition stays true. The
+   same rule as `ServiceCoverageChanged` (phase 07).
+8. **`expected.rs` discovers the files itself**: a `.ron` with no `.hashes` makes the test fail
+   instead of going unnoticed.
 
-## Verifica
+## Verification
 
 ```sh
 cargo test -p sim-scenario
 cargo test -p sim-replay
-cargo xtask run --scenario crescita --ticks 1800 --dump-every 90
-cargo xtask regen-golden --check
+cargo xtask run --scenario growth --ticks 1800 --dump-every 90
+cargo xtask regen-expected --check
 ```
 
-Il dump dello scenario nuovo è la prova che chiude la fase: la riga in cui l'obiettivo si
-completa dev'essere **leggibile** e cadere dove ha senso — non al tick 30 e non al 1799. Se
-arriva troppo presto lo scenario è banale, se non arriva è invincibile; in entrambi i casi è
-bilanciamento (`sim-data`), non codice, e va sistemato prima che il golden lo congeli.
+The new scenario's dump is the proof that closes the phase: the line where the objective completes
+has to be **readable** and to fall somewhere sensible — not at tick 30 and not at 1799. If it comes
+too early the scenario is trivial, if it never comes it is unwinnable; either way it is balancing
+(`sim-data`), not code, and it has to be sorted out before the recording freezes it.
 
-**Fatto quando:** il test 1 passa in entrambe le metà e il golden dello scenario è committato.
+**Done when:** test 1 passes in both its halves and the scenario's recording is committed.

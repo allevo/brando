@@ -3,8 +3,8 @@ name = "sim-core"
 edition.workspace = true
 version.workspace = true
 
-# ATTENZIONE: questa lista non cresce senza discussione (D1).
-# sim-core e' un crate Rust puro: niente ECS, niente Bevy, niente I/O.
+# WARNING: this list does not grow without discussion (D1).
+# sim-core is a pure Rust crate: no ECS, no Bevy, no I/O.
 [dependencies]
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -13,9 +13,9 @@ rand = { workspace = true }
 rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
-# Hook di mutazione diretta dello stato, per i test di altri crate (fase 08).
-# Non e' un'estensione dell'API: l'unico canale in scrittura verso il core
-# restano i Command.
+# Direct-mutation hooks on the state, for other crates' tests (phase 08).
+# Not an extension of the API: the only write channel into the core is still
+# the Command queue.
 [features]
 test-util = []
 

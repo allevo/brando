@@ -251,8 +251,8 @@ impl Grid {
         self.get_mut(idx)
     }
 
-    /// Every valid index, in increasing order. This is the canonical scan
-    /// order: rebuilding the road network (phase 05) relies on it.
+    /// Every valid index, in increasing order. It is the scan order the rest of
+    /// the core assumes: rebuilding the road network (phase 05) relies on it.
     pub fn indices(&self) -> impl Iterator<Item = TileIdx> {
         (0..self.len()).map(|i| TileIdx::new(i as u16))
     }
