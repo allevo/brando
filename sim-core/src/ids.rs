@@ -1,19 +1,19 @@
-//! Identificatori newtype. Nelle firme pubbliche non compare mai un `usize`
-//! nudo (CLAUDE.md, convenzioni).
+//! Newtype identifiers. A bare `usize` never appears in a public signature
+//! (CLAUDE.md, conventions).
 
 use serde::{Deserialize, Serialize};
 
 slotmap::new_key_type! {
-    /// Id di un edificio nello `SlotMap` del `World`.
+    /// Id of a building in the `World`'s `SlotMap`.
     pub struct BuildingId;
-    /// Id di una casa nello `SlotMap` del `World`.
+    /// Id of a house in the `World`'s `SlotMap`.
     pub struct HouseId;
 }
 
-/// Indice lineare di tile: `y * width + x`.
+/// Linear tile index: `y * width + x`.
 ///
-/// La mappa e' al massimo 256x256 (A4), quindi 65.536 tile: l'ultimo indice e'
-/// `u16::MAX` e ci sta esatto.
+/// The map is at most 256x256 (A4), so 65,536 tiles: the last index is
+/// `u16::MAX` and fits exactly.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
@@ -33,11 +33,11 @@ impl TileIdx {
     }
 }
 
-/// Tipo di edificio, come indice nella tabella `buildings` del `DataSet`.
+/// A kind of building, as an index into the `DataSet`'s `buildings` table.
 ///
-/// Non e' un enum: i tipi di edificio sono dati, non codice (D6). Un id che
-/// non risolve a nessuna riga della tabella e' un errore di comando, non un
-/// panic — l'LLM ne produrra' (CLAUDE.md, interfaccia AI).
+/// Not an enum: building kinds are data, not code (D6). An id that resolves to
+/// no row of the table is a command error, not a panic — the LLM will produce
+/// some (CLAUDE.md, AI interface).
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
@@ -53,8 +53,8 @@ impl BuildingKindId {
     }
 }
 
-/// Posizione su griglia. `x` e `y` stanno in `u8` perche' il lato massimo e'
-/// 256 (A4): le coordinate valide vanno da 0 a 255.
+/// A position on the grid. `x` and `y` are `u8` because the maximum side is
+/// 256 (A4): valid coordinates run from 0 to 255.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
@@ -68,8 +68,8 @@ impl TilePos {
         Self { x, y }
     }
 
-    /// Distanza di Manhattan. In linea d'aria: **non** e' la distanza usata
-    /// dalla copertura dei servizi, che si misura sulla rete stradale (D2).
+    /// Manhattan distance, as the crow flies. This is **not** the distance
+    /// used by service coverage, which is measured along the road network (D2).
     pub const fn manhattan(self, other: Self) -> u16 {
         let dx = self.x.abs_diff(other.x) as u16;
         let dy = self.y.abs_diff(other.y) as u16;
@@ -82,7 +82,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn manhattan_e_simmetrica_e_non_wrappa() {
+    fn manhattan_is_symmetric_and_does_not_wrap() {
         let a = TilePos::new(0, 0);
         let b = TilePos::new(255, 255);
         assert_eq!(a.manhattan(b), 510);

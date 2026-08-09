@@ -1,0 +1,12 @@
+(
+    buildings: [
+        (
+            id: "temple",
+            size: (1, 1),
+            cost: 30,
+            levels: 1,
+            service: Some((kind: "astral_transport", range_per_level: [5], capacity_per_level: [5])),
+            required_services: ["ambrosia"],
+        ),
+    ],
+)

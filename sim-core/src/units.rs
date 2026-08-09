@@ -1,53 +1,53 @@
-//! Quantita' numeriche dello stato. Nessun float (D4).
+//! Numeric quantities held in the state. No floats (D4).
 //!
-//! Due tipi distinti e non convertibili tra loro:
-//! - [`Milli`] per le quantita' frazionarie (cibo, lavoro, usura), in millesimi;
-//! - [`Coins`] per il denaro, che non ha frazioni di gioco (A1).
+//! Two distinct types that cannot be converted into one another:
+//! - [`Milli`] for fractional quantities (food, labour, wear), in thousandths;
+//! - [`Coins`] for money, which has no in-game fractions (A1).
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Millesimi in una unita'.
-const MILLI_PER_UNITA: i32 = 1000;
+/// Thousandths in one unit.
+const MILLI_PER_UNIT: i32 = 1000;
 
-/// Quantita' in millesimi di unita'. Niente float nello stato (D4).
+/// A quantity in thousandths of a unit. No floats in the state (D4).
 ///
-/// Copre circa +/- 2.147.483 unita': abbastanza per cibo e popolazione al
-/// target di scala di D5. Il denaro sta fuori di proposito, vedi [`Coins`].
+/// Covers roughly +/- 2,147,483 units: enough for food and population at D5's
+/// target scale. Money is deliberately left out, see [`Coins`].
 ///
-/// Non implementa `Add`/`Sub`: l'operatore invita a ignorare l'overflow, e in
-/// un core che non puo' panicare l'overflow silenzioso e' peggio del rumore
-/// visivo di `checked_add`.
+/// Does not implement `Add`/`Sub`: the operator invites you to ignore
+/// overflow, and in a core that must not panic a silent overflow is worse than
+/// the visual noise of `checked_add`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
 pub struct Milli(i32);
 
 impl Milli {
-    /// Zero unita'.
+    /// Zero units.
     pub const ZERO: Self = Self(0);
 
-    /// Costruisce da unita' intere. `None` se il valore non ci sta:
-    /// 3.000.000 di unita' non sono rappresentabili.
+    /// Builds from whole units. `None` if the value does not fit: 3,000,000
+    /// units are not representable.
     pub const fn from_units(units: i32) -> Option<Self> {
-        match units.checked_mul(MILLI_PER_UNITA) {
+        match units.checked_mul(MILLI_PER_UNIT) {
             Some(v) => Some(Self(v)),
             None => None,
         }
     }
 
-    /// Costruisce direttamente da millesimi.
+    /// Builds directly from thousandths.
     pub const fn from_millis(millis: i32) -> Self {
         Self(millis)
     }
 
-    /// Valore grezzo in millesimi.
+    /// The raw value in thousandths.
     pub const fn to_millis(self) -> i32 {
         self.0
     }
 
-    /// Parte intera, troncata verso zero.
+    /// The whole part, truncated towards zero.
     pub const fn to_units_trunc(self) -> i32 {
-        self.0 / MILLI_PER_UNITA
+        self.0 / MILLI_PER_UNIT
     }
 
     pub const fn is_zero(self) -> bool {
@@ -79,21 +79,21 @@ impl Milli {
         }
     }
 
-    /// Somma saturante. Ammessa solo dove la saturazione **e'** la semantica di
-    /// gioco voluta (es. una giacenza che si ferma al massimo del granaio), mai
-    /// come scorciatoia contro l'overflow: in quel caso serve `checked_add`.
+    /// Saturating addition. Allowed only where saturating **is** the intended
+    /// game rule (e.g. a stock that stops at the granary's maximum), never as
+    /// a shortcut against overflow: that case needs `checked_add`.
     pub const fn saturating_add(self, other: Self) -> Self {
         Self(self.0.saturating_add(other.0))
     }
 
-    /// Sottrazione saturante. Stessa avvertenza di [`Milli::saturating_add`].
+    /// Saturating subtraction. Same warning as [`Milli::saturating_add`].
     pub const fn saturating_sub(self, other: Self) -> Self {
         Self(self.0.saturating_sub(other.0))
     }
 
-    /// Divisione intera con **troncamento verso zero**: `-1501 / 2` fa `-750`,
-    /// non `-751`. `None` se il divisore e' zero o se il risultato non e'
-    /// rappresentabile (`i32::MIN / -1`).
+    /// Integer division **truncated towards zero**: `-1501 / 2` is `-750`, not
+    /// `-751`. `None` if the divisor is zero or if the result is not
+    /// representable (`i32::MIN / -1`).
     pub const fn div_int(self, d: i32) -> Option<Self> {
         match self.0.checked_div(d) {
             Some(v) => Some(Self(v)),
@@ -111,14 +111,14 @@ impl Milli {
 }
 
 impl fmt::Display for Milli {
-    /// Stampa `12.500` — per gli snapshot e la mappa ASCII destinata all'LLM.
+    /// Prints `12.500` — for snapshots and for the ASCII map meant for the LLM.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let v = i64::from(self.0);
-        let segno = if v < 0 { "-" } else { "" };
+        let sign = if v < 0 { "-" } else { "" };
         let abs = v.unsigned_abs();
-        let unita = abs / 1000;
-        let resto = abs % 1000;
-        write!(f, "{segno}{unita}.{resto:03}")
+        let units = abs / 1000;
+        let millis = abs % 1000;
+        write!(f, "{sign}{units}.{millis:03}")
     }
 }
 
@@ -128,8 +128,9 @@ impl fmt::Debug for Milli {
     }
 }
 
-/// Denaro. Intero, senza millesimi: il tesoro non ha frazioni di gioco e
-/// usare i millesimi dimezzerebbe il range utile per niente (A1).
+/// Money. A whole number, with no thousandths: the treasury has no in-game
+/// fractions, and using thousandths would halve the useful range for nothing
+/// (A1).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
 pub struct Coins(i32);
 
@@ -169,8 +170,8 @@ impl Coins {
         }
     }
 
-    /// Stessa avvertenza di [`Milli::saturating_add`]: solo dove saturare e'
-    /// la regola di gioco.
+    /// Same warning as [`Milli::saturating_add`]: only where saturating is the
+    /// game rule.
     pub const fn saturating_add(self, other: Self) -> Self {
         Self(self.0.saturating_add(other.0))
     }
@@ -197,26 +198,26 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    /// D4: nessun tipo pubblico del core deve esporre float.
-    /// Sentinella minima, non una prova: la lint `clippy::float_arithmetic`
-    /// e' il vero vincolo.
+    /// D4: no public type of the core may expose a float.
+    /// A minimal sentinel, not a proof: the `clippy::float_arithmetic` lint is
+    /// the real constraint.
     #[test]
-    fn milli_non_e_un_float() {
+    fn milli_is_not_a_float() {
         assert_eq!(size_of::<Milli>(), 4);
         assert_eq!(size_of::<Coins>(), 4);
     }
 
     #[test]
-    fn from_units_e_checked() {
+    fn from_units_is_checked() {
         assert_eq!(Milli::from_units(3), Some(Milli::from_millis(3000)));
         assert_eq!(Milli::from_units(3_000_000), None);
         assert_eq!(Milli::from_units(-3_000_000), None);
     }
 
-    /// `div_int` tronca verso zero anche per operandi negativi.
+    /// `div_int` truncates towards zero for negative operands too.
     #[test]
-    fn div_int_tronca_verso_zero() {
-        let casi = [
+    fn div_int_truncates_towards_zero() {
+        let cases = [
             (1500, 2, Some(750)),
             (1501, 2, Some(750)),
             (-1500, 2, Some(-750)),
@@ -225,17 +226,17 @@ mod tests {
             (1000, 0, None),
             (i32::MIN, -1, None),
         ];
-        for (v, d, atteso) in casi {
+        for (v, d, expected) in cases {
             assert_eq!(
                 Milli::from_millis(v).div_int(d),
-                atteso.map(Milli::from_millis),
+                expected.map(Milli::from_millis),
                 "div_int({v}, {d})"
             );
         }
     }
 
     #[test]
-    fn display_stampa_i_millesimi() {
+    fn display_prints_the_thousandths() {
         assert_eq!(Milli::from_millis(12_500).to_string(), "12.500");
         assert_eq!(Milli::from_millis(0).to_string(), "0.000");
         assert_eq!(Milli::from_millis(7).to_string(), "0.007");
@@ -245,45 +246,45 @@ mod tests {
     }
 
     proptest! {
-        /// Le operazioni checked non panicano mai e coincidono con l'oracolo i64.
+        /// The checked operations never panic and agree with the i64 oracle.
         #[test]
-        fn milli_checked_mai_panic(a: i32, b: i32) {
+        fn milli_checked_never_panics(a: i32, b: i32) {
             let (ma, mb) = (Milli::from_millis(a), Milli::from_millis(b));
-            let oracolo = |v: i64| {
+            let oracle = |v: i64| {
                 if v >= i64::from(i32::MIN) && v <= i64::from(i32::MAX) {
                     Some(Milli::from_millis(v as i32))
                 } else {
                     None
                 }
             };
-            prop_assert_eq!(ma.checked_add(mb), oracolo(i64::from(a) + i64::from(b)));
-            prop_assert_eq!(ma.checked_sub(mb), oracolo(i64::from(a) - i64::from(b)));
-            prop_assert_eq!(ma.checked_mul_int(b), oracolo(i64::from(a) * i64::from(b)));
+            prop_assert_eq!(ma.checked_add(mb), oracle(i64::from(a) + i64::from(b)));
+            prop_assert_eq!(ma.checked_sub(mb), oracle(i64::from(a) - i64::from(b)));
+            prop_assert_eq!(ma.checked_mul_int(b), oracle(i64::from(a) * i64::from(b)));
         }
 
-        /// La saturazione non esce mai dal range e conserva l'ordine.
+        /// Saturating never leaves the range and preserves the ordering.
         #[test]
-        fn milli_saturating_resta_nel_range(a: i32, b: i32) {
+        fn milli_saturating_stays_in_range(a: i32, b: i32) {
             let (ma, mb) = (Milli::from_millis(a), Milli::from_millis(b));
-            let somma = i64::from(a) + i64::from(b);
-            let atteso = somma.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
-            prop_assert_eq!(ma.saturating_add(mb), Milli::from_millis(atteso));
+            let sum = i64::from(a) + i64::from(b);
+            let expected = sum.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+            prop_assert_eq!(ma.saturating_add(mb), Milli::from_millis(expected));
         }
 
-        /// div_int e' sempre troncamento verso zero, mai floor.
+        /// div_int always truncates towards zero, never floors.
         #[test]
-        fn milli_div_int_mai_panic(a: i32, d: i32) {
+        fn milli_div_int_never_panics(a: i32, d: i32) {
             let r = Milli::from_millis(a).div_int(d);
             if d == 0 || (a == i32::MIN && d == -1) {
                 prop_assert_eq!(r, None);
             } else {
-                let atteso = i64::from(a) / i64::from(d);
-                prop_assert_eq!(r, Some(Milli::from_millis(atteso as i32)));
+                let expected = i64::from(a) / i64::from(d);
+                prop_assert_eq!(r, Some(Milli::from_millis(expected as i32)));
             }
         }
 
         #[test]
-        fn coins_checked_mai_panic(a: i32, b: i32) {
+        fn coins_checked_never_panics(a: i32, b: i32) {
             let (ca, cb) = (Coins::new(a), Coins::new(b));
             prop_assert_eq!(
                 ca.checked_add(cb).map(Coins::get),

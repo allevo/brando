@@ -1,9 +1,8 @@
-//! Lo stato del gioco.
+//! The game state.
 //!
-//! Struct concreta con `SlotMap` e `Vec`, non un `World` ECS (D1): l'ordine di
-//! iterazione delle query di un ECS non e' un contratto stabile, e per i run
-//! di bilanciamento un loop stretto su array densi e' ordini di grandezza piu'
-//! veloce.
+//! A concrete struct with `SlotMap`s and `Vec`s, not an ECS `World` (D1): the
+//! iteration order of an ECS's queries is not a stable contract, and for
+//! balancing runs a tight loop over dense arrays is orders of magnitude faster.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -15,40 +14,40 @@ use crate::data::DataSet;
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 use crate::network::RoadNetwork;
-use crate::production::FoodLedger;
+use crate::production::FoodTotals;
 use crate::rng::RngSet;
 use crate::service::ServiceFlags;
 use crate::units::{Coins, Milli};
 
-/// Un edificio che fornisce un servizio o produce merce.
+/// A building that provides a service or produces goods.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Building {
     pub kind: BuildingKindId,
     pub origin: TilePos,
-    /// Livello di evoluzione, da 1. In M0 resta sempre 1.
+    /// Level, counting from 1. In M0 it always stays 1.
     pub level: u8,
-    /// Giacenza locale, solo per i produttori (fase 07).
+    /// Local stock, only for producers (phase 07).
     pub stock: Milli,
 }
 
-/// Una casa: l'unita' di simulazione della popolazione (D5).
+/// A house: the unit of population simulation (D5).
 ///
-/// Non si simulano individui. In M0 gli abitanti sono un valore fisso dalle
-/// `rules` e la casa non evolve: migrazione ed evoluzione sono M1.
+/// Individuals are not simulated. In M0 the residents are a fixed value from
+/// the `rules` and the house does not level up: migration and levelling are M1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct House {
     pub origin: TilePos,
     pub level: u8,
-    pub abitanti: u16,
-    /// Quali servizi la raggiungono in questo tick.
-    pub servita: ServiceFlags,
+    pub residents: u16,
+    /// Which services reach it this tick.
+    pub served: ServiceFlags,
 }
 
-/// Walker logistico reale (D3): trasporto merci, carovane, immigranti.
+/// A real logistics walker (D3): goods transport, trade caravans, immigrants.
 ///
-/// Vuoto in M0 e per tutto M1: i walker veri arrivano con M3. I portatori
-/// d'acqua che il giocatore vedra' camminare sono decorativi, vivono nel
-/// renderer e non compaiono mai qui (D2).
+/// Empty in M0 and for all of M1: the real walkers arrive with M3. The water
+/// carriers the player will see wandering around are decorative, live in the
+/// renderer and never show up here (D2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Walker {
     pub at: TilePos,
@@ -56,112 +55,110 @@ pub struct Walker {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Economy {
-    pub tesoro: Coins,
+    pub treasury: Coins,
 }
 
-/// Cosa va ricalcolato al prossimo tick.
+/// What has to be recomputed on the next tick.
 ///
-/// I flag esistono da subito per scelta esplicita: retrofittarli dopo e'
-/// doloroso (CLAUDE.md, ordine del tick). In M0 l'uso e' ingenuo — quando
-/// cambiano le strade, tutti i provider tornano dirty — ma la struttura e'
-/// quella definitiva.
+/// The flags exist from the start as a deliberate choice: retrofitting them
+/// later is painful (CLAUDE.md, tick order). In M0 the use is naive — when the
+/// roads change, every provider goes dirty — but the structure is the final one.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DirtyFlags {
     pub roads: bool,
-    /// Provider la cui copertura va ricalcolata. `Vec` ordinato, non un
+    /// Providers whose coverage has to be recomputed. An ordered `Vec`, not a
     /// `HashSet` (D4).
     ///
-    /// **Oggi nessuno ne legge il contenuto**: il passo 3 ricalcola tutto e
-    /// guarda solo [`DirtyFlags::coverage_da_rivedere`]. La lista esiste per
-    /// l'invalidazione mirata, che e' l'ottimizzazione vera del passo 3 —
-    /// tenerla popolata adesso costa poco e dice quale informazione servira'.
-    /// Per questo "tutti dirty" **non** si esprime elencando tutti i provider
-    /// ma con [`DirtyFlags::invalida_coverage`]: il giorno in cui la lista
-    /// verra' letta, "tutti" e' esattamente il caso da evitare, non da
-    /// enumerare.
+    /// **Nobody reads its contents today**: step 3 recomputes everything and
+    /// only looks at [`DirtyFlags::coverage_needs_recompute`]. The list exists
+    /// for targeted invalidation, which is the real optimisation of step 3 —
+    /// keeping it filled now costs little and says which information will be
+    /// needed. That is why "everything dirty" is **not** expressed by listing
+    /// every provider but with [`DirtyFlags::invalidate_coverage`]: the day the
+    /// list does get read, "everything" is precisely the case to avoid, not the
+    /// one to enumerate.
     pub coverage: Vec<BuildingId>,
-    /// La copertura va rivista anche se nessun provider e' nella lista.
+    /// Coverage has to be revisited even if no provider is in the list.
     ///
-    /// Serve al caso che la sola lista non sa esprimere: demolito l'ultimo
-    /// provider, non resta nessuno da segnare come dirty, ma le assegnazioni
-    /// esistenti vanno comunque buttate. Senza questo flag le case restavano
-    /// servite da un pozzo che non c'e' piu' — un bug trovato dal test di
-    /// demolizione della fase 06.
-    pub coverage_invalidata: bool,
+    /// It covers the case the list alone cannot express: once the last provider
+    /// is demolished nobody is left to mark as dirty, but the existing
+    /// assignments still have to be thrown away. Without this flag, houses
+    /// stayed served by a well that no longer existed — a bug found by the
+    /// demolition test in phase 06.
+    pub coverage_invalidated: bool,
 }
 
 impl DirtyFlags {
-    /// Segna un provider come da ricalcolare, senza duplicati e in ordine di
-    /// `BuildingId`.
+    /// Marks a provider for recomputation, without duplicates and in
+    /// `BuildingId` order.
     ///
-    /// L'ordine qui e' igiene, non semantica: e' l'ordine di iterazione di
-    /// `World::buildings` a decidere chi vince le case contese (fase 06), e
-    /// questa lista non viene ancora letta da nessuno. Tenerla ordinata serve
-    /// a renderla confrontabile e a rendere l'inserimento una push in coda,
-    /// visto che i provider arrivano quasi sempre in ordine crescente.
-    pub fn segna_coverage(&mut self, id: BuildingId) {
-        self.coverage_invalidata = true;
+    /// The order here is hygiene, not semantics: it is the iteration order of
+    /// `World::buildings` that decides who wins a contested house (phase 06),
+    /// and nobody reads this list yet. Keeping it sorted makes it comparable
+    /// and turns insertion into a push at the end, since providers almost
+    /// always arrive in increasing order.
+    pub fn mark_coverage(&mut self, id: BuildingId) {
+        self.coverage_invalidated = true;
         if let Err(pos) = self.coverage.binary_search(&id) {
             self.coverage.insert(pos, id);
         }
     }
 
-    /// La copertura va rivista, senza indicare un provider specifico.
-    pub fn invalida_coverage(&mut self) {
-        self.coverage_invalidata = true;
+    /// Coverage has to be revisited, without naming a specific provider.
+    pub fn invalidate_coverage(&mut self) {
+        self.coverage_invalidated = true;
     }
 
-    pub fn coverage_da_rivedere(&self) -> bool {
-        self.coverage_invalidata || !self.coverage.is_empty()
+    pub fn coverage_needs_recompute(&self) -> bool {
+        self.coverage_invalidated || !self.coverage.is_empty()
     }
 
-    pub fn dimentica_coverage(&mut self, id: BuildingId) {
+    pub fn forget_coverage(&mut self, id: BuildingId) {
         if let Ok(pos) = self.coverage.binary_search(&id) {
             self.coverage.remove(pos);
         }
     }
 }
 
-/// Lo stato completo della partita.
+/// The complete state of a game.
 #[derive(Debug, Clone)]
 pub struct World {
     pub(crate) tick: u32,
     pub(crate) grid: Grid,
-    /// L'iterazione di uno `SlotMap` e' per indice di slot, quindi
-    /// deterministica a parita' di sequenza di inserimenti e rimozioni — che
-    /// e' garantita dal log dei comandi (D4). E' un invariante non ovvio da
-    /// cui dipende l'hash canonico dello stato.
+    /// Iterating a `SlotMap` goes by slot index, so it is deterministic given
+    /// the same sequence of insertions and removals — which the command log
+    /// guarantees (D4). It is a non-obvious invariant the state hash depends on.
     pub(crate) buildings: SlotMap<BuildingId, Building>,
     pub(crate) houses: SlotMap<HouseId, House>,
     pub(crate) walkers: Vec<Walker>,
     pub(crate) economy: Economy,
     pub(crate) rng: RngSet,
     pub(crate) dirty: DirtyFlags,
-    /// Struttura **derivata** dalla griglia: non entra nell'hash canonico
-    /// dello stato (fase 08), altrimenti un bug di ricostruzione si
-    /// presenterebbe come divergenza di hash invece che come test di
-    /// equivalenza fallito.
+    /// A structure **derived** from the grid: it does not enter the state hash
+    /// (phase 08), otherwise a rebuild bug would show up as a hash divergence
+    /// instead of a failing equivalence test.
     pub(crate) roads: RoadNetwork,
-    /// Derivata come [`RoadNetwork`], e fuori dall'hash per lo stesso motivo.
+    /// Derived like [`RoadNetwork`], and outside the hash for the same reason.
     pub(crate) coverage: Coverage,
-    /// Contabilita' diagnostica, fuori dall'hash: non influenza nessuna
-    /// decisione di gioco.
-    pub(crate) food: FoodLedger,
-    /// Indici da tile di origine a id. Sono `BTreeMap` e non `HashMap` (D4):
-    /// l'ordine di iterazione e' un contratto.
-    pub(crate) edifici_per_origine: BTreeMap<TileIdx, BuildingId>,
-    pub(crate) case_per_origine: BTreeMap<TileIdx, HouseId>,
-    /// Le tabelle di bilanciamento (A2). Sono dentro lo stato e non un
-    /// parametro di `step` per non propagarle in ogni funzione interna; il
-    /// loro hash entra nell'hash dello stato, cosi' un cambio di
-    /// bilanciamento fa fallire il replay subito e per il motivo giusto.
+    /// Diagnostic bookkeeping, outside the hash: it influences no game
+    /// decision.
+    pub(crate) food: FoodTotals,
+    /// Indexes from origin tile to id. They are `BTreeMap`s and not `HashMap`s
+    /// (D4): the iteration order is a contract.
+    pub(crate) buildings_by_origin: BTreeMap<TileIdx, BuildingId>,
+    pub(crate) houses_by_origin: BTreeMap<TileIdx, HouseId>,
+    /// The balancing tables (A2). They live inside the state rather than being
+    /// a parameter of `step` so they need not be threaded through every
+    /// internal function; their hash feeds the state hash, so a balance change
+    /// makes the replay fail immediately and for the right reason.
     pub(crate) data: Arc<DataSet>,
 }
 
 impl World {
-    /// Mondo iniziale: griglia vuota, tesoro dalle `rules`, RNG dal seed.
+    /// The initial world: an empty grid, the treasury from the `rules`, the RNG
+    /// from the seed.
     pub fn new(grid: Grid, data: Arc<DataSet>, seed: u64) -> Self {
-        let tesoro = data.rules.tesoro_iniziale;
+        let treasury = data.rules.starting_treasury;
         let tiles = grid.len();
         Self {
             tick: 0,
@@ -169,14 +166,14 @@ impl World {
             buildings: SlotMap::with_key(),
             houses: SlotMap::with_key(),
             walkers: Vec::new(),
-            economy: Economy { tesoro },
+            economy: Economy { treasury },
             rng: RngSet::from_seed(seed),
             dirty: DirtyFlags::default(),
             roads: RoadNetwork::new(tiles),
             coverage: Coverage::default(),
-            food: FoodLedger::default(),
-            edifici_per_origine: BTreeMap::new(),
-            case_per_origine: BTreeMap::new(),
+            food: FoodTotals::default(),
+            buildings_by_origin: BTreeMap::new(),
+            houses_by_origin: BTreeMap::new(),
             data,
         }
     }
@@ -209,21 +206,21 @@ impl World {
         &self.coverage
     }
 
-    pub const fn food(&self) -> &FoodLedger {
+    pub const fn food(&self) -> &FoodTotals {
         &self.food
     }
 
-    /// Somma delle giacenze di tutti i produttori, in millesimi.
+    /// The sum of every producer's stock, in thousandths.
     ///
-    /// `i64` come il [`FoodLedger`]: e' il termine con cui si chiude
-    /// l'uguaglianza di conservazione, e deve poter reggere lo stesso range.
-    pub fn giacenza_totale(&self) -> i64 {
+    /// `i64` like [`FoodTotals`]: it is the term that closes the conservation
+    /// equality, and it has to cope with the same range.
+    pub fn total_stock(&self) -> i64 {
         self.buildings
             .values()
             .filter(|b| {
                 self.data
                     .def(b.kind)
-                    .is_some_and(crate::data::BuildingDef::e_un_produttore)
+                    .is_some_and(crate::data::BuildingDef::is_producer)
             })
             .map(|b| i64::from(b.stock.to_millis()))
             .sum()
@@ -253,26 +250,26 @@ impl World {
         &self.walkers
     }
 
-    pub fn n_edifici(&self) -> usize {
+    pub fn building_count(&self) -> usize {
         self.buildings.len()
     }
 
-    pub fn n_case(&self) -> usize {
+    pub fn house_count(&self) -> usize {
         self.houses.len()
     }
 
-    /// Popolazione totale.
-    pub fn popolazione(&self) -> u32 {
-        self.houses.values().map(|h| u32::from(h.abitanti)).sum()
+    /// Total population.
+    pub fn population(&self) -> u32 {
+        self.houses.values().map(|h| u32::from(h.residents)).sum()
     }
 
-    /// Imposta il terreno di un tile.
+    /// Sets the terrain of a tile.
     ///
-    /// Serve alla **costruzione dello scenario**, prima che la partita
-    /// cominci: e' l'unica mutazione dello stato che non passa da un
-    /// `Command`, perche' la mappa non e' una mossa del giocatore. Non e' un
-    /// canale per il renderer, che verso il core scrive solo comandi.
-    /// `false` se la posizione e' fuori dalla mappa.
+    /// It serves **scenario setup**, before the game begins: it is the only
+    /// mutation of the state that does not go through a `Command`, because the
+    /// map is not a move by the player. It is not a channel for the renderer,
+    /// which only ever writes commands into the core.
+    /// `false` if the position is off the map.
     pub fn set_terrain(&mut self, pos: TilePos, terrain: crate::grid::Terrain) -> bool {
         match self.grid.at_mut(pos) {
             Some(t) => {
@@ -283,61 +280,61 @@ impl World {
         }
     }
 
-    /// I tile strada 4-adiacenti al footprint di un edificio.
+    /// The road tiles orthogonally adjacent to a building's area.
     ///
-    /// **Regola di gioco**: un edificio e' agganciato alla rete se almeno un
-    /// tile del suo footprint tocca ortogonalmente una strada. E' la regola di
-    /// Zeus, dove conta l'ingresso e non l'edificio; in M1 potrebbe diventare
-    /// "un tile d'ingresso designato", e allora questa e' la funzione da
-    /// cambiare.
-    pub fn ingressi_edificio(&self, id: BuildingId) -> Vec<TileIdx> {
+    /// **Game rule**: a building is hooked up to the network if at least one
+    /// tile of its area touches a road orthogonally. It is the Zeus rule, where
+    /// what counts is the entrance and not the building; in M1 it might become
+    /// "one designated entrance tile", and then this is the function to change.
+    pub fn building_entrances(&self, id: BuildingId) -> Vec<TileIdx> {
         let mut out = Vec::new();
-        self.ingressi_edificio_in(id, &mut out);
+        self.building_entrances_into(id, &mut out);
         out
     }
 
-    /// Come [`World::ingressi_edificio`], scrivendo in un buffer riusabile.
-    pub fn ingressi_edificio_in(&self, id: BuildingId, out: &mut Vec<TileIdx>) {
+    /// Like [`World::building_entrances`], writing into a reusable buffer.
+    pub fn building_entrances_into(&self, id: BuildingId, out: &mut Vec<TileIdx>) {
         out.clear();
         let Some(b) = self.buildings.get(id) else {
             return;
         };
-        let footprint = self.data.def(b.kind).map_or((1, 1), |d| d.footprint);
-        self.ingressi_in(b.origin, footprint, out);
+        let size = self.data.def(b.kind).map_or((1, 1), |d| d.size);
+        self.entrances_into(b.origin, size, out);
     }
 
-    /// Come [`World::ingressi_edificio`], per una casa.
-    pub fn ingressi_casa(&self, id: HouseId) -> Vec<TileIdx> {
+    /// Like [`World::building_entrances`], for a house.
+    pub fn house_entrances(&self, id: HouseId) -> Vec<TileIdx> {
         let mut out = Vec::new();
-        self.ingressi_casa_in(id, &mut out);
+        self.house_entrances_into(id, &mut out);
         out
     }
 
-    /// Come [`World::ingressi_casa`], scrivendo in un buffer riusabile.
+    /// Like [`World::house_entrances`], writing into a reusable buffer.
     ///
-    /// Esiste per il passo 3, che la chiama una volta per casa a ogni
-    /// ricalcolo: restituire un `Vec` nuovo ogni volta erano 3.750 allocazioni
-    /// per ricalcolo alla scala di riferimento, tutte di due elementi scarsi.
-    pub fn ingressi_casa_in(&self, id: HouseId, out: &mut Vec<TileIdx>) {
+    /// It exists for step 3, which calls it once per house on every
+    /// recomputation: returning a fresh `Vec` every time meant 3,750
+    /// allocations per recomputation at the reference scale, all of barely two
+    /// elements.
+    pub fn house_entrances_into(&self, id: HouseId, out: &mut Vec<TileIdx>) {
         out.clear();
         let Some(h) = self.houses.get(id) else {
             return;
         };
-        self.ingressi_in(h.origin, (1, 1), out);
+        self.entrances_into(h.origin, (1, 1), out);
     }
 
-    /// I tile strada adiacenti a un footprint, in ordine di `TileIdx`.
-    pub fn ingressi(&self, origin: TilePos, footprint: (u8, u8)) -> Vec<TileIdx> {
+    /// The road tiles adjacent to an area, in `TileIdx` order.
+    pub fn entrances(&self, origin: TilePos, size: (u8, u8)) -> Vec<TileIdx> {
         let mut out = Vec::new();
-        self.ingressi_in(origin, footprint, &mut out);
+        self.entrances_into(origin, size, &mut out);
         out
     }
 
-    /// Come [`World::ingressi`], scrivendo in un buffer riusabile.
-    pub fn ingressi_in(&self, origin: TilePos, footprint: (u8, u8), out: &mut Vec<TileIdx>) {
+    /// Like [`World::entrances`], writing into a reusable buffer.
+    pub fn entrances_into(&self, origin: TilePos, size: (u8, u8), out: &mut Vec<TileIdx>) {
         out.clear();
-        for dy in 0..footprint.1 {
-            for dx in 0..footprint.0 {
+        for dy in 0..size.1 {
+            for dx in 0..size.0 {
                 let (Some(x), Some(y)) = (origin.x.checked_add(dx), origin.y.checked_add(dy))
                 else {
                     continue;
@@ -356,65 +353,67 @@ impl World {
         out.dedup();
     }
 
-    /// Distanza in tile percorsi sulla rete, da un edificio a un altro.
+    /// The distance in tiles walked along the network, from one building to
+    /// another.
     ///
-    /// `None` se non sono connessi o se sono oltre `max`. La distanza si conta
-    /// tra i **tile strada di ingresso**: due edifici affacciati sulla stessa
-    /// strada distano 0, e un corridoio di N tile tra i due ingressi vale
-    /// N - 1. E' distanza percorsa, non euclidea (D2).
+    /// `None` if they are not connected or if they are further apart than
+    /// `max`. The distance is counted between the **entrance road tiles**: two
+    /// buildings facing the same road are 0 apart, and a corridor of N tiles
+    /// between the two entrances counts as N - 1. It is walked distance, not
+    /// Euclidean (D2).
     pub fn road_distance(&self, from: BuildingId, to: BuildingId, max: u16) -> Option<u16> {
-        let partenze = self.ingressi_edificio(from);
-        let arrivi = self.ingressi_edificio(to);
-        if partenze.is_empty() || arrivi.is_empty() {
+        let starts = self.building_entrances(from);
+        let targets = self.building_entrances(to);
+        if starts.is_empty() || targets.is_empty() {
             return None;
         }
-        let mut migliore: Option<u16> = None;
-        // Uno scratch locale: questa non e' l'hot path — il passo 3 usa il
-        // proprio, riusato fra i provider.
-        let mut visitati = crate::network::Visitati::nuovo(self.grid.len());
-        crate::network::bfs_strade(&self.grid, &partenze, max, &mut visitati, |t, d| {
-            if arrivi.binary_search(&t).is_ok() && migliore.is_none_or(|m| d < m) {
-                migliore = Some(d);
+        let mut best: Option<u16> = None;
+        // A local scratch buffer: this is not the hot path — step 3 uses its
+        // own, reused across providers.
+        let mut visited = crate::network::Visited::new(self.grid.len());
+        crate::network::bfs_roads(&self.grid, &starts, max, &mut visited, |t, d| {
+            if targets.binary_search(&t).is_ok() && best.is_none_or(|m| d < m) {
+                best = Some(d);
             }
         });
-        migliore
+        best
     }
 
-    /// Risolve l'occupante di un tile nel suo id.
+    /// Resolves a tile's occupant into its id.
     ///
-    /// `None` se il tile e' libero. Un tile occupato che non risolve a un id
-    /// vivo e' un bug, ed e' l'invariante che coglie gli errori di
-    /// demolizione (fase 09).
-    pub fn occupante(&self, idx: TileIdx) -> Option<Occupante> {
-        let occ = self.grid.get(idx)?.occupante()?;
-        if occ.e_casa {
-            self.case_per_origine
+    /// `None` if the tile is free. An occupied tile that does not resolve to a
+    /// live id is a bug, and it is the invariant that catches demolition
+    /// mistakes (phase 09).
+    pub fn occupant(&self, idx: TileIdx) -> Option<Occupant> {
+        let occ = self.grid.get(idx)?.occupant()?;
+        if occ.is_house {
+            self.houses_by_origin
                 .get(&occ.origin)
                 .copied()
-                .map(Occupante::Casa)
+                .map(Occupant::House)
         } else {
-            self.edifici_per_origine
+            self.buildings_by_origin
                 .get(&occ.origin)
                 .copied()
-                .map(Occupante::Edificio)
+                .map(Occupant::Building)
         }
     }
 }
 
-/// Chi occupa un tile, risolto in un id dello stato.
+/// Whoever occupies a tile, resolved into an id in the state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Occupante {
-    Edificio(BuildingId),
-    Casa(HouseId),
+pub enum Occupant {
+    Building(BuildingId),
+    House(HouseId),
 }
 
-/// Hook di mutazione diretta, dietro la feature `test-util`.
+/// Direct-mutation hooks, behind the `test-util` feature.
 ///
-/// Non fanno parte dell'API normale di proposito: l'unico canale in scrittura
-/// verso il core sono i `Command` (CLAUDE.md, confine core/renderer). Servono
-/// al test della fase 08 che verifica che l'hash canonico copra davvero ogni
-/// campo dello stato — verifica che, per costruzione, deve poter toccare un
-/// campo alla volta.
+/// They are deliberately not part of the normal API: the only write channel
+/// into the core is `Command` (CLAUDE.md, core/renderer boundary). They serve
+/// the phase 08 test that checks the state hash really covers every field of
+/// the state — a check that by construction has to be able to touch one field
+/// at a time.
 #[cfg(feature = "test-util")]
 impl World {
     pub fn building_mut(&mut self, id: BuildingId) -> Option<&mut Building> {
@@ -429,9 +428,9 @@ impl World {
         &mut self.economy
     }
 
-    /// Consuma un valore dallo stream di un dominio, per verificare che la
-    /// posizione dell'RNG entri nell'hash.
-    pub fn consuma_rng(&mut self, domain: crate::rng::RngDomain) {
+    /// Consumes one value from a domain's stream, to check that the RNG's
+    /// position enters the hash.
+    pub fn consume_rng(&mut self, domain: crate::rng::RngDomain) {
         use rand::RngCore as _;
         self.rng.get(domain).next_u64();
     }

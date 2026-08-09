@@ -1,53 +1,53 @@
-//! I servizi cittadini, che funzionano per **copertura aggregata** (D2).
+//! City services, which work by **aggregate coverage** (D2).
 //!
-//! Un edificio provider serve le case entro un raggio misurato sulla rete
-//! stradale, non in linea d'aria. I walker che il giocatore vedra' camminare
-//! per questi servizi sono decorativi, vivono nel renderer e non possono
-//! influenzare lo stato del core.
+//! A provider building serves the houses within a range measured along the
+//! road network, not as the crow flies. The walkers the player will see
+//! wandering around for these services are decorative, live in the renderer
+//! and cannot influence the core's state.
 
 use serde::{Deserialize, Serialize};
 
-/// Tipi di servizio noti al core.
+/// The service kinds the core knows about.
 ///
-/// A differenza dei tipi di edificio, che sono dati (D6), i servizi sono un
-/// enum: il core deve poterli indicizzare in array a dimensione fissa
-/// (`ServiceFlags`, `Coverage`) e i loro effetti sono regole, non numeri.
+/// Unlike building kinds, which are data (D6), services are an enum: the core
+/// has to index them into fixed-size arrays (`ServiceFlags`, `Coverage`) and
+/// their effects are rules, not numbers.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub enum ServiceKind {
-    Acqua,
-    Cibo,
+    Water,
+    Food,
 }
 
 impl ServiceKind {
-    pub const TUTTI: [ServiceKind; 2] = [ServiceKind::Acqua, ServiceKind::Cibo];
+    pub const ALL: [ServiceKind; 2] = [ServiceKind::Water, ServiceKind::Food];
 
-    pub const COUNT: usize = Self::TUTTI.len();
+    pub const COUNT: usize = Self::ALL.len();
 
-    /// Nome usato nelle tabelle RON. E' parte del contratto con `sim-data`:
-    /// rinominarlo invalida i file di dati.
+    /// The name used in the RON tables. It is part of the contract with
+    /// `sim-data`: renaming it invalidates the data files.
     pub const fn as_id(self) -> &'static str {
         match self {
-            Self::Acqua => "acqua",
-            Self::Cibo => "cibo",
+            Self::Water => "water",
+            Self::Food => "food",
         }
     }
 
-    /// `None` se il nome non corrisponde a nessun servizio noto: e' un errore
-    /// di validazione della tabella, non un panic.
+    /// `None` if the name matches no known service: that is a table validation
+    /// error, not a panic.
     pub fn from_id(s: &str) -> Option<Self> {
-        Self::TUTTI.into_iter().find(|k| k.as_id() == s)
+        Self::ALL.into_iter().find(|k| k.as_id() == s)
     }
 
-    /// Posizione negli array indicizzati per servizio.
+    /// Position in the arrays indexed by service.
     pub const fn index(self) -> usize {
         match self {
-            Self::Acqua => 0,
-            Self::Cibo => 1,
+            Self::Water => 0,
+            Self::Food => 1,
         }
     }
 }
 
-/// Per ogni servizio, se la casa e' servita in questo tick.
+/// For each service, whether the house is served this tick.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct ServiceFlags(u8);
 
@@ -77,7 +77,7 @@ impl ServiceFlags {
 impl std::fmt::Debug for ServiceFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut d = f.debug_struct("ServiceFlags");
-        for k in ServiceKind::TUTTI {
+        for k in ServiceKind::ALL {
             d.field(k.as_id(), &self.get(k));
         }
         d.finish()
@@ -89,31 +89,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gli_id_fanno_round_trip() {
-        for k in ServiceKind::TUTTI {
+    fn the_ids_round_trip() {
+        for k in ServiceKind::ALL {
             assert_eq!(ServiceKind::from_id(k.as_id()), Some(k));
             assert!(k.index() < ServiceKind::COUNT);
         }
-        assert_eq!(ServiceKind::from_id("trasporto_astrale"), None);
+        assert_eq!(ServiceKind::from_id("astral_transport"), None);
     }
 
     #[test]
-    fn gli_indici_sono_distinti() {
-        let mut visti = Vec::new();
-        for k in ServiceKind::TUTTI {
-            assert!(!visti.contains(&k.index()), "indice duplicato per {k:?}");
-            visti.push(k.index());
+    fn the_indices_are_distinct() {
+        let mut seen = Vec::new();
+        for k in ServiceKind::ALL {
+            assert!(!seen.contains(&k.index()), "duplicate index for {k:?}");
+            seen.push(k.index());
         }
     }
 
     #[test]
-    fn i_flag_sono_indipendenti() {
+    fn the_flags_are_independent() {
         let mut f = ServiceFlags::empty();
-        assert!(!f.get(ServiceKind::Acqua));
-        f.set(ServiceKind::Acqua, true);
-        assert!(f.get(ServiceKind::Acqua));
-        assert!(!f.get(ServiceKind::Cibo));
-        f.set(ServiceKind::Acqua, false);
+        assert!(!f.get(ServiceKind::Water));
+        f.set(ServiceKind::Water, true);
+        assert!(f.get(ServiceKind::Water));
+        assert!(!f.get(ServiceKind::Food));
+        f.set(ServiceKind::Water, false);
         assert_eq!(f, ServiceFlags::empty());
     }
 }

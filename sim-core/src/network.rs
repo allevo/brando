@@ -1,23 +1,23 @@
-//! La rete stradale: componenti connesse e distanze percorse.
+//! The road network: connected components and walked distances.
 //!
-//! Struttura **derivata**: ricostruibile in qualunque momento dalla `Grid`.
-//! Non entra nell'hash canonico dello stato — se ci entrasse, un bug nella
-//! ricostruzione si mostrerebbe come divergenza di hash invece che come test
-//! di equivalenza fallito, e la divergenza non direbbe *dove* e' il problema.
+//! A **derived** structure: rebuildable at any moment from the `Grid`. It does
+//! not enter the state hash — if it did, a bug in the rebuild would show up as
+//! a diverging hash instead of a failing equivalence test, and the divergence
+//! would not say *where* the problem is.
 //!
-//! Ogni tile strada costa 1: nessun costo di attraversamento variabile, nessun
-//! livello di strada, nessun senso di marcia. Sono cose di M1 o oltre.
+//! Every road tile costs 1: no variable crossing cost, no road levels, no
+//! one-way streets. Those are M1 or later.
 
 use crate::grid::Grid;
 use crate::ids::TileIdx;
 
-/// Identificatore di componente connessa: il `TileIdx` **minimo** tra i suoi
-/// tile.
+/// Identifier of a connected component: the **smallest** `TileIdx` among its
+/// tiles.
 ///
-/// Non un contatore incrementale. Costa uguale — la scansione e' gia' in
-/// ordine crescente — e rende l'etichettatura una funzione del solo insieme
-/// di strade, non della storia degli inserimenti. Senza, due partite che
-/// costruiscono le stesse strade in ordine diverso avrebbero stati diversi.
+/// Not a running counter. It costs the same — the scan is already in
+/// increasing order — and it makes the labelling a function of the set of
+/// roads alone, not of the order they were placed in. Without it, two games
+/// that build the same roads in a different order would have different states.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ComponentId(TileIdx);
 
@@ -27,17 +27,17 @@ impl ComponentId {
     }
 }
 
-/// Etichettatura delle strade in componenti connesse.
+/// The roads labelled into connected components.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct RoadNetwork {
-    /// Per ogni tile: la componente, o `None` se non e' strada.
+    /// For each tile: its component, or `None` if it is not a road.
     ///
-    /// `Option<ComponentId>` costa 4 byte per tile invece di 2, cioe' 256 KB
-    /// sulla mappa massima. E' una struttura derivata e diagnostica, non lo
-    /// stato: il budget stretto e' quello di `Tile`, non questo.
+    /// `Option<ComponentId>` costs 4 bytes per tile instead of 2, i.e. 256 KB
+    /// on the largest map. This is a derived, diagnostic structure, not the
+    /// state: the tight budget is `Tile`'s, not this one's.
     component: Vec<Option<ComponentId>>,
-    /// Quante ricostruzioni complete sono state eseguite. Serve ai test del
-    /// dirty flag, non al gioco.
+    /// How many full rebuilds have been performed. It serves the dirty-flag
+    /// tests, not the game.
     rebuilds: u32,
 }
 
@@ -57,55 +57,55 @@ impl RoadNetwork {
         self.rebuilds
     }
 
-    pub fn e_strada(&self, idx: TileIdx) -> bool {
+    pub fn is_road(&self, idx: TileIdx) -> bool {
         self.component(idx).is_some()
     }
 
-    /// Due tile strada sono connessi se stanno nella stessa componente.
-    pub fn connessi(&self, a: TileIdx, b: TileIdx) -> bool {
+    /// Two road tiles are connected if they are in the same component.
+    pub fn connected(&self, a: TileIdx, b: TileIdx) -> bool {
         match (self.component(a), self.component(b)) {
             (Some(x), Some(y)) => x == y,
             _ => false,
         }
     }
 
-    /// Numero di componenti distinte.
-    pub fn n_componenti(&self) -> usize {
-        let mut viste: Vec<ComponentId> = self.component.iter().flatten().copied().collect();
-        viste.sort_unstable();
-        viste.dedup();
-        viste.len()
+    /// Number of distinct components.
+    pub fn component_count(&self) -> usize {
+        let mut seen: Vec<ComponentId> = self.component.iter().flatten().copied().collect();
+        seen.sort_unstable();
+        seen.dedup();
+        seen.len()
     }
 
-    /// Rietichetta tutto da zero, scandendo i tile in ordine di `TileIdx`
-    /// crescente.
+    /// Relabels everything from scratch, scanning the tiles in increasing
+    /// `TileIdx` order.
     ///
-    /// Ricostruzione completa e non incrementale, deliberatamente: 40.000 tile
-    /// scanditi una volta sono irrilevanti finche' non lo dice un profiler, e
-    /// il dirty flag evita gia' di farlo a ogni tick. Cio' che serviva subito
-    /// era il *flag*, non l'algoritmo furbo.
+    /// A full rebuild rather than an incremental one, deliberately: scanning
+    /// 40,000 tiles once is irrelevant until a profiler says otherwise, and the
+    /// dirty flag already avoids doing it every tick. What was needed straight
+    /// away was the *flag*, not the clever algorithm.
     pub(crate) fn rebuild(&mut self, grid: &Grid) {
         self.component.clear();
         self.component.resize(grid.len() as usize, None);
         self.rebuilds = self.rebuilds.wrapping_add(1);
 
-        let mut coda: Vec<TileIdx> = Vec::new();
-        for seme in grid.indices() {
-            if !e_strada(grid, seme) || self.component(seme).is_some() {
+        let mut queue: Vec<TileIdx> = Vec::new();
+        for root in grid.indices() {
+            if !is_road(grid, root) || self.component(root).is_some() {
                 continue;
             }
-            // Il seme e' il primo tile non ancora etichettato in ordine
-            // crescente, quindi e' il minimo della sua componente: l'id
-            // canonico esce dalla scansione, senza un secondo passaggio.
-            let id = ComponentId(seme);
-            self.component[seme.as_usize()] = Some(id);
-            coda.clear();
-            coda.push(seme);
-            while let Some(t) = coda.pop() {
+            // The root is the first tile not yet labelled in increasing order,
+            // so it is the smallest of its component: the canonical id falls
+            // out of the scan, with no second pass.
+            let id = ComponentId(root);
+            self.component[root.as_usize()] = Some(id);
+            queue.clear();
+            queue.push(root);
+            while let Some(t) = queue.pop() {
                 for v in grid.neighbors4(t) {
-                    if e_strada(grid, v) && self.component(v).is_none() {
+                    if is_road(grid, v) && self.component(v).is_none() {
                         self.component[v.as_usize()] = Some(id);
-                        coda.push(v);
+                        queue.push(v);
                     }
                 }
             }
@@ -113,140 +113,140 @@ impl RoadNetwork {
     }
 }
 
-fn e_strada(grid: &Grid, idx: TileIdx) -> bool {
+fn is_road(grid: &Grid, idx: TileIdx) -> bool {
     grid.get(idx).is_some_and(|t| t.flags.has_road())
 }
 
-/// Insieme dei tile gia' visitati da un BFS, riusabile fra una chiamata e
-/// l'altra.
+/// The set of tiles already visited by a BFS, reusable between one call and
+/// the next.
 ///
-/// Non e' stato e non e' una struttura derivata: e' un appunto temporaneo, e
-/// vive nel chiamante. Esiste perche' `bfs_strade` allocava un buffer grande
-/// quanto la griglia **a ogni chiamata**, cioe' una volta per provider: 156 KB
-/// per 1.219 provider alla scala di riferimento, su memoria che il BFS poi
-/// tocca all'1%.
+/// It is neither state nor a derived structure: it is a temporary note, and it
+/// lives in the caller. It exists because `bfs_roads` used to allocate a
+/// buffer the size of the grid **on every call**, i.e. once per provider:
+/// 156 KB for 1,219 providers at the reference scale, on memory the BFS then
+/// touches 1% of.
 ///
-/// La marca di generazione evita di doverlo ripulire: "visitato" significa
-/// `epoche[i] == corrente`, quindi una voce rimasta dal giro precedente e'
-/// invisibile **per costruzione**. L'alternativa — ripulire i soli tile toccati
-/// — costa meno memoria ma dipende dall'invariante "marcati ≡ visitati", che
-/// oggi vale e domani potrebbe non valere piu' per una modifica innocua al
-/// ciclo qui sotto. E sarebbe un bug che il test di equivalenza **non**
-/// coglierebbe, perche' anche `calcola_da_zero` userebbe uno scratch condiviso
-/// e sbaglierebbe allo stesso modo: l'oracolo diventerebbe cieco proprio su
-/// questa classe.
+/// The generation marker saves having to clear it: "visited" means
+/// `epochs[i] == current`, so an entry left over from the previous round is
+/// invisible **by construction**. The alternative — clearing only the tiles
+/// touched — costs less memory but depends on the invariant "marked ≡ visited",
+/// which holds today and might stop holding tomorrow after an innocuous change
+/// to the loop below. And it would be a bug the equivalence test would **not**
+/// catch, because `compute_from_scratch` would use a shared scratch buffer too
+/// and would get it wrong in the same way: the oracle would go blind on
+/// exactly this class of bug.
 #[derive(Debug, Clone, Default)]
-pub struct Visitati {
-    epoche: Vec<u32>,
-    corrente: u32,
+pub struct Visited {
+    epochs: Vec<u32>,
+    current: u32,
 }
 
-impl Visitati {
-    pub fn nuovo(tiles: u32) -> Self {
+impl Visited {
+    pub fn new(tiles: u32) -> Self {
         Self {
-            epoche: vec![0; tiles as usize],
-            corrente: 0,
+            epochs: vec![0; tiles as usize],
+            current: 0,
         }
     }
 
-    /// Apre un giro nuovo: da qui in poi nessun tile risulta visitato.
-    fn apri(&mut self, tiles: usize) {
-        if self.epoche.len() != tiles {
-            self.epoche.clear();
-            self.epoche.resize(tiles, 0);
-            self.corrente = 0;
+    /// Opens a fresh round: from here on no tile counts as visited.
+    fn begin(&mut self, tiles: usize) {
+        if self.epochs.len() != tiles {
+            self.epochs.clear();
+            self.epochs.resize(tiles, 0);
+            self.current = 0;
         }
-        // Al wrap si riazzera e si riparte da 1: `corrente` non e' mai 0, che
-        // e' il valore con cui l'array nasce.
-        self.corrente = match self.corrente.checked_add(1) {
+        // On wrap it resets and restarts from 1: `current` is never 0, which is
+        // the value the array is born with.
+        self.current = match self.current.checked_add(1) {
             Some(c) => c,
             None => {
-                self.epoche.fill(0);
+                self.epochs.fill(0);
                 1
             }
         };
     }
 
-    fn visto(&self, i: usize) -> bool {
-        self.epoche.get(i) == Some(&self.corrente)
+    fn is_seen(&self, i: usize) -> bool {
+        self.epochs.get(i) == Some(&self.current)
     }
 
-    fn segna(&mut self, i: usize) {
-        if let Some(e) = self.epoche.get_mut(i) {
-            *e = self.corrente;
+    fn mark(&mut self, i: usize) {
+        if let Some(e) = self.epochs.get_mut(i) {
+            *e = self.current;
         }
     }
 }
 
-/// BFS troncato sulla rete stradale.
+/// A BFS over the road network, cut off at a maximum distance.
 ///
-/// Parte dai tile in `start` a distanza 0 e visita solo tile strada, fermandosi
-/// oltre `max`. Il troncamento non e' un'ottimizzazione opzionale: senza, un
-/// raggio 12 su una citta' grande visiterebbe tutta la rete.
+/// It starts from the tiles in `start` at distance 0 and visits only road
+/// tiles, stopping beyond `max`. The cutoff is not an optional optimisation:
+/// without it, a range of 12 in a large city would visit the whole network.
 ///
-/// `visita` riceve ogni tile raggiunto **una sola volta**, con la distanza
-/// minima. L'ordine di visita e' per distanza crescente e, a parita' di
-/// distanza, per `TileIdx` crescente: e' un ordine totale, e chi ci costruisce
-/// sopra una regola di gioco (fase 06) non dipende da dettagli del BFS.
+/// `visit` receives each reached tile **exactly once**, with the smallest
+/// distance. The visit order is by increasing distance and, at equal distance,
+/// by increasing `TileIdx`: it is a total order, so whoever builds a game rule
+/// on top of it (phase 06) does not depend on BFS internals.
 ///
-/// `visitati` viene aperto in un giro nuovo a ogni chiamata: il suo contenuto
-/// precedente non influenza il risultato, e passarne uno gia' usato e' il modo
-/// previsto di usarlo.
-pub fn bfs_strade(
+/// `visited` is opened in a fresh round on every call: its previous contents do
+/// not affect the result, and passing in one already used is the intended way
+/// to use it.
+pub fn bfs_roads(
     grid: &Grid,
     start: &[TileIdx],
     max: u16,
-    visitati: &mut Visitati,
-    mut visita: impl FnMut(TileIdx, u16),
+    visited: &mut Visited,
+    mut visit: impl FnMut(TileIdx, u16),
 ) {
-    visitati.apri(grid.len() as usize);
+    visited.begin(grid.len() as usize);
 
-    let mut livello: Vec<TileIdx> = start
+    let mut level: Vec<TileIdx> = start
         .iter()
         .copied()
-        .filter(|t| e_strada(grid, *t))
+        .filter(|t| is_road(grid, *t))
         .collect();
-    livello.sort_unstable();
-    livello.dedup();
-    for t in &livello {
-        visitati.segna(t.as_usize());
+    level.sort_unstable();
+    level.dedup();
+    for t in &level {
+        visited.mark(t.as_usize());
     }
 
     let mut d = 0u16;
-    let mut prossimo: Vec<TileIdx> = Vec::new();
-    while !livello.is_empty() {
-        for t in &livello {
-            visita(*t, d);
+    let mut next: Vec<TileIdx> = Vec::new();
+    while !level.is_empty() {
+        for t in &level {
+            visit(*t, d);
         }
         if d == max {
             break;
         }
-        prossimo.clear();
-        for t in &livello {
+        next.clear();
+        for t in &level {
             for v in grid.neighbors4(*t) {
-                if e_strada(grid, v) && !visitati.visto(v.as_usize()) {
-                    visitati.segna(v.as_usize());
-                    prossimo.push(v);
+                if is_road(grid, v) && !visited.is_seen(v.as_usize()) {
+                    visited.mark(v.as_usize());
+                    next.push(v);
                 }
             }
         }
-        prossimo.sort_unstable();
-        std::mem::swap(&mut livello, &mut prossimo);
+        next.sort_unstable();
+        std::mem::swap(&mut level, &mut next);
         d += 1;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Visitati, bfs_strade};
+    use super::{Visited, bfs_roads};
     use crate::grid::{Grid, Terrain};
     use crate::ids::{TileIdx, TilePos};
 
-    /// Griglia 8x8 con una strada orizzontale sulla riga `y`.
-    fn con_strada(y: u8) -> Grid {
-        let mut g = Grid::new(8, 8, Terrain::Pianura).expect("griglia valida");
+    /// An 8x8 grid with a horizontal road along row `y`.
+    fn with_road(y: u8) -> Grid {
+        let mut g = Grid::new(8, 8, Terrain::Plain).expect("valid grid");
         for x in 0..8u8 {
-            let idx = g.idx(TilePos::new(x, y)).expect("in mappa");
+            let idx = g.idx(TilePos::new(x, y)).expect("on the map");
             if let Some(t) = g.get_mut(idx) {
                 t.flags.set_road(true);
             }
@@ -254,79 +254,84 @@ mod tests {
         g
     }
 
-    fn raggiunti(grid: &Grid, da: TileIdx, max: u16, v: &mut Visitati) -> Vec<(TileIdx, u16)> {
+    fn reached(grid: &Grid, from: TileIdx, max: u16, v: &mut Visited) -> Vec<(TileIdx, u16)> {
         let mut out = Vec::new();
-        bfs_strade(grid, &[da], max, v, |t, d| out.push((t, d)));
+        bfs_roads(grid, &[from], max, v, |t, d| out.push((t, d)));
         out
     }
 
-    /// **Il test che presidia il modo in cui lo scratch riusato puo' rompersi.**
+    /// **The test that guards the way a reused scratch buffer can break.**
     ///
-    /// Se un giro lasciasse tracce visibili al successivo, il secondo BFS
-    /// crederebbe gia' visitati dei tile che non lo sono e ne salterebbe una
-    /// parte. Non ci sarebbe nessun panic: solo una copertura silenziosamente
-    /// piu' piccola. E `equivalenza_copertura` non lo coglierebbe, perche'
-    /// anche `calcola_da_zero` riusa uno scratch fra i suoi provider e
-    /// sbaglierebbe allo stesso modo — l'oracolo sarebbe cieco su questa
-    /// classe, e questo test e' cio' che la copre.
+    /// If one round left traces visible to the next, the second BFS would
+    /// believe tiles were already visited when they were not, and would skip
+    /// part of them. There would be no panic: only silently smaller coverage.
+    /// And `coverage_equivalence` would not catch it, because
+    /// `compute_from_scratch` also reuses one scratch buffer across its
+    /// providers and would get it wrong the same way — the oracle would be
+    /// blind on this class, and this test is what covers it.
     #[test]
-    fn riusare_lo_scratch_da_lo_stesso_risultato_di_uno_nuovo() {
-        let grid = con_strada(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("in mappa");
-        let b = grid.idx(TilePos::new(7, 3)).expect("in mappa");
+    fn reusing_the_scratch_gives_the_same_result_as_a_fresh_one() {
+        let grid = with_road(3);
+        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
+        let b = grid.idx(TilePos::new(7, 3)).expect("on the map");
 
-        let atteso_a = raggiunti(&grid, a, 4, &mut Visitati::nuovo(grid.len()));
-        let atteso_b = raggiunti(&grid, b, 4, &mut Visitati::nuovo(grid.len()));
-        assert!(!atteso_a.is_empty() && !atteso_b.is_empty());
+        let expected_a = reached(&grid, a, 4, &mut Visited::new(grid.len()));
+        let expected_b = reached(&grid, b, 4, &mut Visited::new(grid.len()));
+        assert!(!expected_a.is_empty() && !expected_b.is_empty());
 
-        // Gli stessi due BFS, in fila sullo stesso scratch, e per tre giri:
-        // uno solo non distinguerebbe "pulisce" da "non sporca ancora".
-        let mut riusato = Visitati::nuovo(grid.len());
-        for giro in 0..3 {
+        // The same two BFS runs, back to back on the same scratch, for three
+        // rounds: one alone would not tell "it cleans up" from "it has not
+        // dirtied anything yet".
+        let mut reused = Visited::new(grid.len());
+        for round in 0..3 {
             assert_eq!(
-                raggiunti(&grid, a, 4, &mut riusato),
-                atteso_a,
-                "giro {giro}"
+                reached(&grid, a, 4, &mut reused),
+                expected_a,
+                "round {round}"
             );
             assert_eq!(
-                raggiunti(&grid, b, 4, &mut riusato),
-                atteso_b,
-                "giro {giro}"
+                reached(&grid, b, 4, &mut reused),
+                expected_b,
+                "round {round}"
             );
         }
     }
 
-    /// Il wrap del contatore di generazione non rende visibili le tracce
-    /// vecchie. Senza il riazzeramento all'overflow, l'epoca tornerebbe su un
-    /// valore gia' scritto nell'array e dei tile risulterebbero visitati.
+    /// Wrapping the generation counter does not make old traces visible again.
+    /// Without the reset on overflow, the epoch would come back to a value
+    /// already written into the array and some tiles would look visited.
     #[test]
-    fn il_wrap_del_contatore_non_resuscita_le_tracce() {
-        let grid = con_strada(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("in mappa");
-        let atteso = raggiunti(&grid, a, 4, &mut Visitati::nuovo(grid.len()));
+    fn wrapping_the_counter_does_not_revive_old_traces() {
+        let grid = with_road(3);
+        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
+        let expected = reached(&grid, a, 4, &mut Visited::new(grid.len()));
 
-        let mut al_limite = Visitati::nuovo(grid.len());
-        // Un giro vero, per lasciare una marca nell'array...
-        let _ = raggiunti(&grid, a, 4, &mut al_limite);
-        // ...poi si porta il contatore a un passo dal wrap.
-        al_limite.corrente = u32::MAX;
-        assert_eq!(raggiunti(&grid, a, 4, &mut al_limite), atteso, "al wrap");
+        let mut at_the_limit = Visited::new(grid.len());
+        // One real round, to leave a mark in the array...
+        let _ = reached(&grid, a, 4, &mut at_the_limit);
+        // ...then bring the counter one step short of wrapping.
+        at_the_limit.current = u32::MAX;
         assert_eq!(
-            raggiunti(&grid, a, 4, &mut al_limite),
-            atteso,
-            "dopo il wrap"
+            reached(&grid, a, 4, &mut at_the_limit),
+            expected,
+            "at the wrap"
+        );
+        assert_eq!(
+            reached(&grid, a, 4, &mut at_the_limit),
+            expected,
+            "after the wrap"
         );
     }
 
-    /// Uno scratch nato per una griglia diversa non va usato a caso: `apri` se
-    /// ne accorge dalla lunghezza e riparte pulito.
+    /// A scratch born for a different grid must not be used blindly: `begin`
+    /// notices from its length and starts clean.
     #[test]
-    fn uno_scratch_di_taglia_sbagliata_viene_rifatto() {
-        let grid = con_strada(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("in mappa");
-        let atteso = raggiunti(&grid, a, 4, &mut Visitati::nuovo(grid.len()));
+    fn a_wrongly_sized_scratch_gets_rebuilt() {
+        let grid = with_road(3);
+        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
+        let expected = reached(&grid, a, 4, &mut Visited::new(grid.len()));
 
-        let mut altrui = Visitati::nuovo(4);
-        assert_eq!(raggiunti(&grid, a, 4, &mut altrui), atteso);
+        let mut someone_elses = Visited::new(4);
+        assert_eq!(reached(&grid, a, 4, &mut someone_elses), expected);
     }
 }

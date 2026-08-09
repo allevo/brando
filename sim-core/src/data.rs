@@ -1,69 +1,70 @@
-//! Il dataset di bilanciamento: la forma validata che il core consuma.
+//! The balancing dataset: the validated shape the core consumes.
 //!
-//! Le **definizioni** stanno qui e non in `sim-data` per la direzione delle
-//! dipendenze: il `World` tiene un `Arc<DataSet>` (A2), e sim-core non puo'
-//! dipendere da sim-data. In `sim-data` restano il parsing RON, la
-//! validazione e l'I/O — cioe' tutto cio' che il core non deve fare (D4).
+//! The **definitions** live here rather than in `sim-data` because of the
+//! direction of the dependencies: the `World` holds an `Arc<DataSet>` (A2), and
+//! sim-core cannot depend on sim-data. What stays in `sim-data` is the RON
+//! parsing, the validation and the I/O — that is, everything the core must not
+//! do (D4).
 
 use std::collections::BTreeMap;
 
-use crate::data_hash::canonical_hash;
+use crate::data_hash::dataset_hash;
 use crate::grid::Terrain;
 use crate::ids::BuildingKindId;
 use crate::service::ServiceKind;
 use crate::units::{Coins, Milli};
 
-/// Costanti globali di simulazione.
+/// Global simulation constants.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rules {
-    pub tick_per_mese: u32,
-    pub mesi_per_anno: u32,
-    pub tesoro_iniziale: Coins,
-    /// Indicizzato per livello di casa (livello 1 = indice 0).
-    pub abitanti_per_livello_casa: Vec<u16>,
-    pub consumo_cibo_per_abitante: Milli,
+    pub ticks_per_month: u32,
+    pub months_per_year: u32,
+    pub starting_treasury: Coins,
+    /// Indexed by house level (level 1 = index 0).
+    pub residents_per_house_level: Vec<u16>,
+    pub food_per_resident: Milli,
 }
 
 impl Rules {
-    /// Tick in un anno di gioco. Gli obiettivi di scenario si esprimono in
-    /// mesi e anni, mai in tick (M1).
-    pub const fn tick_per_anno(&self) -> u32 {
-        self.tick_per_mese * self.mesi_per_anno
+    /// Ticks in a game year. Scenario objectives are expressed in months and
+    /// years, never in ticks (M1).
+    pub const fn ticks_per_year(&self) -> u32 {
+        self.ticks_per_month * self.months_per_year
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerrainDef {
-    pub costruibile: bool,
-    pub attraversabile: bool,
-    pub costo_strada: Coins,
+    pub buildable: bool,
+    pub walkable: bool,
+    pub road_cost: Coins,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDef {
     pub kind: ServiceKind,
-    /// Raggio in tile percorsi sulla rete stradale (D2), uno per livello.
-    pub raggio_per_livello: Vec<u16>,
-    /// **Abitanti** serviti contemporaneamente, uno per livello.
+    /// Range in tiles walked along the road network (D2), one value per level.
+    pub range_per_level: Vec<u16>,
+    /// **Residents** served at the same time, one value per level.
     ///
-    /// Non case: con i livelli delle case (M1) la popolazione varia da casa a
-    /// casa, e una capacita' in case non direbbe piu' quanta gente il provider
-    /// riesce davvero a servire.
-    pub capacita_per_livello: Vec<u16>,
+    /// Not houses: once houses have levels (M1) the population varies from
+    /// house to house, and a capacity counted in houses would no longer say
+    /// how many people the provider can really serve.
+    pub capacity_per_level: Vec<u16>,
 }
 
 impl ServiceDef {
-    /// Raggio al livello dato (livello 1 = indice 0), `None` fuori range.
-    pub fn raggio(&self, livello: u8) -> Option<u16> {
-        self.raggio_per_livello
-            .get(usize::from(livello).checked_sub(1)?)
+    /// The range at the given level (level 1 = index 0), `None` out of range.
+    pub fn range(&self, level: u8) -> Option<u16> {
+        self.range_per_level
+            .get(usize::from(level).checked_sub(1)?)
             .copied()
     }
 
-    /// Capacita' in abitanti al livello dato, `None` fuori range.
-    pub fn capacita(&self, livello: u8) -> Option<u16> {
-        self.capacita_per_livello
-            .get(usize::from(livello).checked_sub(1)?)
+    /// The capacity in residents at the given level, `None` out of range.
+    pub fn capacity(&self, level: u8) -> Option<u16> {
+        self.capacity_per_level
+            .get(usize::from(level).checked_sub(1)?)
             .copied()
     }
 }
@@ -71,59 +72,60 @@ impl ServiceDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildingDef {
     pub id: String,
-    /// (larghezza, altezza) in tile.
-    pub footprint: (u8, u8),
-    pub costo: Coins,
-    pub livelli: u8,
-    pub servizio: Option<ServiceDef>,
-    pub servizi_richiesti: Vec<ServiceKind>,
-    pub produzione_per_tick: Option<Milli>,
-    pub giacenza_max: Option<Milli>,
+    /// (width, height) in tiles.
+    pub size: (u8, u8),
+    pub cost: Coins,
+    pub levels: u8,
+    pub service: Option<ServiceDef>,
+    pub required_services: Vec<ServiceKind>,
+    pub output_per_tick: Option<Milli>,
+    pub max_stock: Option<Milli>,
 }
 
 impl BuildingDef {
-    /// Un edificio e' una casa se richiede servizi invece di fornirne.
-    /// Regola strutturale, non un numero: sta nel codice di proposito.
-    pub fn e_una_casa(&self) -> bool {
-        self.servizio.is_none() && !self.servizi_richiesti.is_empty()
+    /// A building is a house if it requires services instead of providing them.
+    /// A structural rule, not a number: it belongs in the code on purpose.
+    pub fn is_house(&self) -> bool {
+        self.service.is_none() && !self.required_services.is_empty()
     }
 
-    pub fn e_un_produttore(&self) -> bool {
-        self.produzione_per_tick.is_some()
+    pub fn is_producer(&self) -> bool {
+        self.output_per_tick.is_some()
     }
 
-    /// Numero di tile occupati.
-    pub const fn tile_occupati(&self) -> u16 {
-        self.footprint.0 as u16 * self.footprint.1 as u16
+    /// How many tiles it takes up.
+    pub const fn tile_count(&self) -> u16 {
+        self.size.0 as u16 * self.size.1 as u16
     }
 }
 
-/// Tabelle validate, pronte per il core.
+/// The validated tables, ready for the core.
 ///
-/// Vive dietro un `Arc` dentro il `World` (A2): il caricamento e' I/O e resta
-/// fuori dal core, ma i sistemi hanno bisogno delle tabelle a ogni tick.
+/// It lives behind an `Arc` inside the `World` (A2): loading is I/O and stays
+/// outside the core, but the systems need the tables every tick.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataSet {
     pub rules: Rules,
-    /// `BTreeMap` e non `HashMap`: l'ordine di iterazione e' un contratto (D4).
+    /// A `BTreeMap` and not a `HashMap`: the iteration order is a contract (D4).
     pub terrain: BTreeMap<Terrain, TerrainDef>,
-    /// Indicizzato per [`BuildingKindId`].
+    /// Indexed by [`BuildingKindId`].
     pub buildings: Vec<BuildingDef>,
-    /// blake3 del contenuto **validato**, non dei byte dei file: riformattare
-    /// un RON o aggiungere un commento non cambia l'hash, cambiare un numero
-    /// si. Entra nell'hash dello stato (A2). Lo calcola [`DataSet::new`].
+    /// blake3 of the **validated** content, not of the files' bytes:
+    /// reformatting a RON file or adding a comment does not change the hash,
+    /// changing a number does. It feeds into the state hash (A2).
+    /// [`DataSet::new`] computes it.
     pub hash: [u8; 32],
 }
 
 impl DataSet {
-    /// Costruisce e calcola l'hash canonico. L'unico modo di ottenere un
-    /// `DataSet`: cosi' l'hash non puo' essere fuori sincrono col contenuto.
+    /// Builds the dataset and computes its hash. The only way to obtain a
+    /// `DataSet`, so the hash cannot fall out of sync with the content.
     pub fn new(
         rules: Rules,
         terrain: BTreeMap<Terrain, TerrainDef>,
         buildings: Vec<BuildingDef>,
     ) -> Self {
-        let hash = canonical_hash(&rules, &terrain, &buildings);
+        let hash = dataset_hash(&rules, &terrain, &buildings);
         Self {
             rules,
             terrain,
@@ -136,7 +138,7 @@ impl DataSet {
         self.buildings.get(usize::from(kind.get()))
     }
 
-    /// Risolve l'id testuale usato nelle tabelle e negli scenari.
+    /// Resolves the textual id used in the tables and in the scenarios.
     pub fn kind_by_id(&self, id: &str) -> Option<BuildingKindId> {
         let pos = self.buildings.iter().position(|b| b.id == id)?;
         u16::try_from(pos).ok().map(BuildingKindId::new)
@@ -146,63 +148,60 @@ impl DataSet {
         self.terrain.get(&t)
     }
 
-    /// Hash in esadecimale, per i messaggi di errore e gli header di replay.
+    /// The hash in hexadecimal, for error messages and replay headers.
     pub fn hash_hex(&self) -> String {
         self.hash.iter().map(|b| format!("{b:02x}")).collect()
     }
 
-    /// I provider di cibo che dichiarano piu' capacita' di quanta la loro
-    /// produzione ne sostenga.
+    /// The food providers that claim more capacity than their output can
+    /// sustain.
     ///
-    /// **Perche' e' un controllo e non una convenzione nei commenti.** Se un
-    /// provider di cibo puo' assegnarsi piu' abitanti di quanti ne sfami, le
-    /// case in eccedenza restano assegnate a lui — la contesa la vince il
-    /// primo provider — e non mangiano piu': la fame diventa uno stato
-    /// **assorbente**, che nemmeno costruire una seconda fattoria scioglie.
-    /// Con questo controllo verde vale invece l'implicazione inversa, ed e' un
-    /// invariante del gioco: *una casa coperta dal servizio cibo mangia
-    /// sempre*.
+    /// **Why this is a check and not a convention in the comments.** If a food
+    /// provider can take on more residents than it feeds, the houses in excess
+    /// stay assigned to it — the first provider wins a contested house — and
+    /// stop eating: hunger becomes an **absorbing** state, one that not even
+    /// building a second farm dissolves. With this check green the reverse
+    /// implication holds instead, and it is a rule of the game: *a house
+    /// covered by the food service always eats*.
     ///
-    /// Il conto e' sul caso peggiore, giacenza a zero all'inizio del tick:
-    /// cio' che il provider puo' distribuire e' il minore fra la produzione di
-    /// un tick e quanto il granaio riesce a tenere.
+    /// The arithmetic is for the worst case, an empty stock at the start of the
+    /// tick: what the provider can hand out is the smaller of one tick's output
+    /// and what the granary can hold.
     ///
-    /// **Vive quanto A5.** E' la regola giusta finche' la fattoria produce
-    /// nella propria giacenza; in M3 la merce arrivera' da un magazzino con
-    /// walker logistici reali (D3), la capacita' smettera' di dipendere dalla
-    /// produzione locale e questo controllo va tolto insieme alla
-    /// semplificazione che presidia.
-    pub fn capacita_cibo_insostenibile(&self) -> Vec<CapacitaInsostenibile> {
+    /// **It lives exactly as long as A5.** It is the right rule while the farm
+    /// produces into its own stock; in M3 the goods will come from a warehouse
+    /// via real logistics walkers, capacity will stop depending on local
+    /// output, and this check has to go along with the simplification it
+    /// guards.
+    pub fn unsustainable_food_capacity(&self) -> Vec<UnsustainableCapacity> {
         let mut out = Vec::new();
-        let consumo = self.rules.consumo_cibo_per_abitante.to_millis();
-        if consumo <= 0 {
-            // Cibo gratis: qualunque capacita' e' sostenibile. Non e' questo
-            // controllo a dire che il dataset non ha senso.
+        let per_resident = self.rules.food_per_resident.to_millis();
+        if per_resident <= 0 {
+            // Free food: any capacity is sustainable. It is not this check's
+            // job to say the dataset makes no sense.
             return out;
         }
 
         for (building, def) in self.buildings.iter().enumerate() {
-            let Some(servizio) = def.servizio.as_ref() else {
+            let Some(service) = def.service.as_ref() else {
                 continue;
             };
-            if servizio.kind != ServiceKind::Cibo {
+            if service.kind != ServiceKind::Food {
                 continue;
             }
-            let (Some(produzione), Some(giacenza_max)) =
-                (def.produzione_per_tick, def.giacenza_max)
-            else {
+            let (Some(output), Some(max_stock)) = (def.output_per_tick, def.max_stock) else {
                 continue;
             };
 
-            let distribuibile = produzione.to_millis().min(giacenza_max.to_millis());
-            let sostenibili = u16::try_from(distribuibile / consumo).unwrap_or(u16::MAX);
-            for (i, &capacita) in servizio.capacita_per_livello.iter().enumerate() {
-                if capacita > sostenibili {
-                    out.push(CapacitaInsostenibile {
+            let available = output.to_millis().min(max_stock.to_millis());
+            let sustainable = u16::try_from(available / per_resident).unwrap_or(u16::MAX);
+            for (i, &capacity) in service.capacity_per_level.iter().enumerate() {
+                if capacity > sustainable {
+                    out.push(UnsustainableCapacity {
                         building,
-                        livello: u8::try_from(i + 1).unwrap_or(u8::MAX),
-                        capacita,
-                        sostenibili,
+                        level: u8::try_from(i + 1).unwrap_or(u8::MAX),
+                        capacity,
+                        sustainable,
                     });
                 }
             }
@@ -211,16 +210,16 @@ impl DataSet {
     }
 }
 
-/// Un provider di cibo la cui capacita' supera cio' che la sua produzione
-/// sostiene. Lo trova [`DataSet::capacita_cibo_insostenibile`].
+/// A food provider whose capacity exceeds what its output sustains.
+/// [`DataSet::unsustainable_food_capacity`] finds them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CapacitaInsostenibile {
-    /// Indice in [`DataSet::buildings`].
+pub struct UnsustainableCapacity {
+    /// Index into [`DataSet::buildings`].
     pub building: usize,
-    /// Livello a cui la capacita' sfora, da 1.
-    pub livello: u8,
-    /// Abitanti dichiarati in tabella.
-    pub capacita: u16,
-    /// Abitanti che la produzione sostiene davvero.
-    pub sostenibili: u16,
+    /// The level at which the capacity overshoots, counting from 1.
+    pub level: u8,
+    /// Residents claimed in the table.
+    pub capacity: u16,
+    /// Residents the output really sustains.
+    pub sustainable: u16,
 }

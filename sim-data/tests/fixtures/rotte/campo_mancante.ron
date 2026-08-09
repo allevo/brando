@@ -1,7 +1,0 @@
-// Manca `costo`: l'errore arriva dalla deserializzazione, non dalla
-// validazione, e deve restare leggibile lo stesso.
-(
-    buildings: [
-        (id: "casa", footprint: (1, 1), livelli: 1, servizio: None, servizi_richiesti: []),
-    ],
-)

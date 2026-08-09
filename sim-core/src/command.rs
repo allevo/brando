@@ -1,17 +1,17 @@
-//! Comandi primitivi e i loro errori.
+//! The primitive commands and their errors.
 //!
-//! I comandi sono l'unico canale in scrittura verso il core: il renderer non
-//! chiama mai metodi che mutano lo stato (CLAUDE.md, confine core/renderer), e
-//! un salvataggio e' `seed + Vec<Command>` (D4).
+//! Commands are the only write channel into the core: the renderer never calls
+//! a method that mutates state (CLAUDE.md, core/renderer boundary), and a save
+//! file is `seed + Vec<Command>` (D4).
 //!
-//! I messaggi di errore non sono cosmetici: sono il feedback che tornera'
-//! all'LLM (M3), che produrra' comandi invalidi per costruzione. Rifiutarli e'
-//! il comportamento normale, non un guasto.
+//! The error messages are not cosmetic: they are the feedback that will go
+//! back to the LLM (M3), which will produce invalid commands by construction.
+//! Rejecting them is normal behaviour, not a failure.
 
 use crate::grid::Terrain;
 use crate::ids::{BuildingKindId, TilePos};
 use crate::units::Coins;
-use crate::world::Occupante;
+use crate::world::Occupant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Command {
@@ -29,52 +29,52 @@ pub enum Command {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum CommandError {
-    #[error("posizione fuori dalla mappa: {0:?}")]
+    #[error("position outside the map: {0:?}")]
     OutOfBounds(TilePos),
 
-    #[error("tile {at:?} gia' occupato da {occupant}")]
-    TileOccupied { at: TilePos, occupant: Occupato },
+    #[error("tile {at:?} is already taken by {occupant}")]
+    TileOccupied { at: TilePos, occupant: OccupantKind },
 
-    #[error("terreno non adatto in {at:?}: {terrain:?}")]
+    #[error("unsuitable terrain at {at:?}: {terrain:?}")]
     UnsuitableTerrain { at: TilePos, terrain: Terrain },
 
-    #[error("fondi insufficienti: servono {needed}, disponibili {available}")]
+    #[error("not enough funds: {needed} needed, {available} available")]
     InsufficientFunds { needed: Coins, available: Coins },
 
-    #[error("tipo di edificio sconosciuto: {0:?}")]
+    #[error("unknown kind of building: {0:?}")]
     UnknownBuildingKind(BuildingKindId),
 
-    #[error("niente da demolire in {0:?}")]
+    #[error("nothing to demolish at {0:?}")]
     NothingToDemolish(TilePos),
 }
 
-/// Cosa occupa un tile, in forma leggibile per il messaggio d'errore.
+/// What is taking up a tile, in a form readable in an error message.
 ///
-/// Non porta l'id: all'LLM che riceve il messaggio un `BuildingId` non dice
-/// nulla, mentre "una strada" o "un edificio" gli dice cosa fare dopo.
+/// It does not carry the id: to the LLM reading the message a `BuildingId`
+/// says nothing, whereas "a road" or "a building" tells it what to do next.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Occupato {
-    Strada,
-    Edificio,
-    Casa,
+pub enum OccupantKind {
+    Road,
+    Building,
+    House,
 }
 
-impl std::fmt::Display for Occupato {
+impl std::fmt::Display for OccupantKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Self::Strada => "una strada",
-            Self::Edificio => "un edificio",
-            Self::Casa => "una casa",
+            Self::Road => "a road",
+            Self::Building => "a building",
+            Self::House => "a house",
         };
         f.write_str(s)
     }
 }
 
-impl From<Occupante> for Occupato {
-    fn from(o: Occupante) -> Self {
+impl From<Occupant> for OccupantKind {
+    fn from(o: Occupant) -> Self {
         match o {
-            Occupante::Edificio(_) => Self::Edificio,
-            Occupante::Casa(_) => Self::Casa,
+            Occupant::Building(_) => Self::Building,
+            Occupant::House(_) => Self::House,
         }
     }
 }

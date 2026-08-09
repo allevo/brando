@@ -1,4 +1,4 @@
-//! Rigioca una registrazione.
+//! Replays a recording.
 
 use std::sync::Arc;
 
@@ -10,41 +10,41 @@ use crate::recording::Recording;
 #[derive(Debug, thiserror::Error)]
 pub enum ReplayError {
     #[error(
-        "il dataset non corrisponde a quello con cui e' stata registrata la partita:\n  \
-         atteso  {atteso}\n  trovato {trovato}\n\
-         se il cambio di bilanciamento era voluto, rigenera i golden con \
-         `cargo xtask regen-golden`"
+        "the dataset does not match the one the game was recorded with:\n  \
+         expected {expected}\n  found    {found}\n\
+         if the balance change was intended, regenerate the recordings with \
+         `cargo xtask regen-expected`"
     )]
-    DatasetMismatch { atteso: String, trovato: String },
+    DatasetMismatch { expected: String, found: String },
 
-    #[error("versione del formato non supportata: {trovata}, questa build legge la {attesa}")]
-    FormatoNonSupportato { trovata: u16, attesa: u16 },
+    #[error("unsupported format version: {found}, this build reads {expected}")]
+    UnsupportedFormat { found: u16, expected: u16 },
 
-    #[error("griglia non valida nell'header: {0}")]
-    GrigliaNonValida(#[from] sim_core::GridError),
+    #[error("invalid grid in the header: {0}")]
+    InvalidGrid(#[from] sim_core::GridError),
 }
 
-/// Un punto di controllo: il tick e l'hash dello stato a quel tick.
+/// A checkpoint: the tick and the state hash at that tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Checkpoint {
     pub tick: u32,
     pub hash: [u8; 32],
 }
 
-/// Crea il mondo iniziale descritto dall'header, verificando che il dataset
-/// sia quello giusto.
-pub fn mondo_iniziale(rec: &Recording, data: Arc<DataSet>) -> Result<World, ReplayError> {
+/// Creates the initial world described by the header, checking that the dataset
+/// is the right one.
+pub fn initial_world(rec: &Recording, data: Arc<DataSet>) -> Result<World, ReplayError> {
     if rec.header.format_version != crate::recording::FORMAT_VERSION {
-        return Err(ReplayError::FormatoNonSupportato {
-            trovata: rec.header.format_version,
-            attesa: crate::recording::FORMAT_VERSION,
+        return Err(ReplayError::UnsupportedFormat {
+            found: rec.header.format_version,
+            expected: crate::recording::FORMAT_VERSION,
         });
     }
-    let trovato = data.hash_hex();
-    if rec.header.dataset_hash != trovato {
+    let found = data.hash_hex();
+    if rec.header.dataset_hash != found {
         return Err(ReplayError::DatasetMismatch {
-            atteso: rec.header.dataset_hash.clone(),
-            trovato,
+            expected: rec.header.dataset_hash.clone(),
+            found,
         });
     }
     let g = &rec.header.grid;
@@ -52,43 +52,43 @@ pub fn mondo_iniziale(rec: &Recording, data: Arc<DataSet>) -> Result<World, Repl
     Ok(World::new(grid, data, rec.header.seed))
 }
 
-/// Rigioca fino al tick `until` (escluso: dopo la chiamata `world.tick()` vale
+/// Replays up to tick `until` (exclusive: after the call `world.tick()` equals
 /// `until`).
 pub fn replay(rec: &Recording, data: Arc<DataSet>, until: u32) -> Result<World, ReplayError> {
-    let mut w = mondo_iniziale(rec, data)?;
-    avanza(&mut w, rec, until);
+    let mut w = initial_world(rec, data)?;
+    advance(&mut w, rec, until);
     Ok(w)
 }
 
-/// Porta avanti un mondo gia' avviato fino al tick `until`.
+/// Carries an already started world forward to tick `until`.
 ///
-/// Separata da [`replay`] perche' e' cio' che rende verificabile il
-/// determinismo dell'esecuzione **parziale**: fermarsi a meta' e riprendere
-/// deve dare lo stesso stato di una corsa unica.
-pub fn avanza(world: &mut World, rec: &Recording, until: u32) {
+/// Kept separate from [`replay`] because it is what makes the determinism of
+/// **partial** execution checkable: stopping halfway and picking back up has to
+/// give the same state as one single run.
+pub fn advance(world: &mut World, rec: &Recording, until: u32) {
     while world.tick() < until {
-        let cmds = rec.comandi_al_tick(world.tick());
+        let cmds = rec.commands_at_tick(world.tick());
         sim_core::step(world, &cmds);
     }
 }
 
-/// Rigioca calcolando un hash ogni `ogni` tick.
+/// Replays, computing a hash every `every` ticks.
 ///
-/// Il checkpoint al tick 0 non c'e': e' lo stato iniziale, che l'header
-/// descrive gia' per intero.
+/// There is no checkpoint at tick 0: that is the initial state, which the
+/// header already describes in full.
 pub fn checkpoints(
     rec: &Recording,
     data: Arc<DataSet>,
     until: u32,
-    ogni: u32,
+    every: u32,
 ) -> Result<Vec<Checkpoint>, ReplayError> {
-    let mut w = mondo_iniziale(rec, data)?;
+    let mut w = initial_world(rec, data)?;
     let mut out = Vec::new();
-    let passo = ogni.max(1);
+    let stride = every.max(1);
     while w.tick() < until {
-        let prossimo = (w.tick() / passo + 1) * passo;
-        avanza(&mut w, rec, prossimo.min(until));
-        if w.tick() % passo == 0 || w.tick() == until {
+        let next = (w.tick() / stride + 1) * stride;
+        advance(&mut w, rec, next.min(until));
+        if w.tick() % stride == 0 || w.tick() == until {
             out.push(Checkpoint {
                 tick: w.tick(),
                 hash: hash_world(&w),

@@ -1,0 +1,33 @@
+// A farm that promises more than it produces. At 20 milli eaten per resident
+// and 400 milli produced per tick it sustains 20 of them: declaring 24 would
+// mean taking on one house more than it feeds, and that house would never eat
+// again — the first provider wins the contest, so not even a second farm could
+// take it over.
+//
+// The second farm in the table is identical but with a stock smaller than one
+// tick's output: the bottleneck there is not how much it produces, but how
+// much it can hold.
+(
+    buildings: [
+        (
+            id: "fattoria",
+            size: (2, 2),
+            cost: 40,
+            levels: 1,
+            service: Some((kind: "food", range_per_level: [10], capacity_per_level: [24])),
+            required_services: [],
+            output_per_tick: Some(400),
+            max_stock: Some(20000),
+        ),
+        (
+            id: "small_granary",
+            size: (2, 2),
+            cost: 40,
+            levels: 1,
+            service: Some((kind: "food", range_per_level: [10], capacity_per_level: [20])),
+            required_services: [],
+            output_per_tick: Some(400),
+            max_stock: Some(100),
+        ),
+    ],
+)

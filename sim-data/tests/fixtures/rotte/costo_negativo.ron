@@ -1,5 +1,0 @@
-(
-    buildings: [
-        (id: "casa", footprint: (1, 1), costo: -10, livelli: 1, servizio: None, servizi_richiesti: []),
-    ],
-)

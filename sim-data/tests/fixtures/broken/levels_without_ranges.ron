@@ -1,0 +1,14 @@
+// levels: 2 but only one range and one capacity. It is the likeliest mistake
+// once houses have more than one level in M1.
+(
+    buildings: [
+        (
+            id: "pozzo",
+            size: (1, 1),
+            cost: 12,
+            levels: 2,
+            service: Some((kind: "water", range_per_level: [12], capacity_per_level: [8])),
+            required_services: [],
+        ),
+    ],
+)

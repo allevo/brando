@@ -1,10 +1,11 @@
-//! Runner headless: partite singole, batch, rigenerazione dei golden.
+//! The headless runner: single games, batches, regenerating the recordings.
 //!
-//! E' il posto dove il gioco gira senza alcuna dipendenza grafica: `sim-core`
-//! e basta. Se qui servisse Bevy, sarebbe un errore architetturale.
+//! This is where the game runs with no graphics dependency at all: `sim-core`
+//! and nothing else. If Bevy were needed here, it would be an architectural
+//! mistake.
 
 mod bench;
-mod golden;
+mod expected;
 mod scenario;
 
 use std::process::ExitCode;
@@ -14,180 +15,178 @@ use sim_core::{ServiceKind, World};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let comando = args.first().map(String::as_str);
+    let command = args.first().map(String::as_str);
 
-    match comando {
-        Some("run") => esito(run(&args[1..])),
-        Some("record") => esito(record(&args[1..])),
-        Some("regen-golden") => esito(regen_golden(&args[1..])),
-        Some("bench") => esito(bench::bench(&args[1..])),
+    match command {
+        Some("run") => exit_code(run(&args[1..])),
+        Some("record") => exit_code(record(&args[1..])),
+        Some("regen-expected") => exit_code(regen_expected(&args[1..])),
+        Some("bench") => exit_code(bench::bench(&args[1..])),
         _ => {
-            uso();
+            usage();
             ExitCode::FAILURE
         }
     }
 }
 
-fn esito(r: Result<(), String>) -> ExitCode {
+fn exit_code(r: Result<(), String>) -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("errore: {e}");
+            eprintln!("error: {e}");
             ExitCode::FAILURE
         }
     }
 }
 
-fn uso() {
-    eprintln!("uso: cargo xtask <comando>");
+fn usage() {
+    eprintln!("usage: cargo xtask <command>");
     eprintln!();
-    eprintln!("  run --scenario <nome> --ticks <n> [--dump-every <n>]");
-    eprintln!("  record --scenario <nome> --out <file.ron>");
-    eprintln!("  regen-golden [--check]");
-    eprintln!("  bench [--lato <n>] [--abitanti <n>] [--ripetizioni <n>]   (usare --release)");
+    eprintln!("  run --scenario <name> --ticks <n> [--dump-every <n>]");
+    eprintln!("  record --scenario <name> --out <file.ron>");
+    eprintln!("  regen-expected [--check]");
+    eprintln!("  bench [--side <n>] [--residents <n>] [--reps <n>]   (use --release)");
     eprintln!();
-    eprintln!("scenari: {}", scenario::NOMI.join(", "));
+    eprintln!("scenarios: {}", scenario::NAMES.join(", "));
 }
 
-/// Registra uno scenario in un `.ron` a scelta.
+/// Records a scenario into a `.ron` file of your choosing.
 ///
-/// I golden degli scenari noti li scrive `regen-golden`; questo serve a
-/// tirarne fuori uno in un percorso qualunque, per ispezionarlo o per
-/// costruirci sopra un caso nuovo.
+/// The recordings of the known scenarios are written by `regen-expected`; this
+/// is for pulling one out at an arbitrary path, to inspect it or to build a new
+/// case on top of it.
 fn record(args: &[String]) -> Result<(), String> {
-    let nome = opzione(args, "--scenario").ok_or("serve --scenario <nome>")?;
-    let out = opzione(args, "--out").ok_or("serve --out <file.ron>")?;
+    let name = flag(args, "--scenario").ok_or("--scenario <name> is required")?;
+    let out = flag(args, "--out").ok_or("--out <file.ron> is required")?;
 
-    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tabelle: {e}"))?);
-    let sc =
-        scenario::per_nome(&nome, &data).ok_or_else(|| format!("scenario sconosciuto: {nome}"))?;
-    let rec = golden::registra(&sc, &data);
+    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tables: {e}"))?);
+    let sc = scenario::by_name(&name, &data).ok_or_else(|| format!("unknown scenario: {name}"))?;
+    let rec = expected::record(&sc, &data);
 
     let path = std::path::Path::new(&out);
     rec.save(path).map_err(|e| format!("{out}: {e}"))?;
-    println!("scritto {out} ({} comandi)", rec.commands.len());
+    println!("wrote {out} ({} commands)", rec.commands.len());
     Ok(())
 }
 
-/// Rigenera i golden, o verifica che non ci sarebbe niente da rigenerare.
-fn regen_golden(args: &[String]) -> Result<(), String> {
+/// Regenerates the recordings, or checks there would be nothing to regenerate.
+fn regen_expected(args: &[String]) -> Result<(), String> {
     let check = args.iter().any(|a| a == "--check");
-    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tabelle: {e}"))?);
-    let differenze = golden::regen(&data, check)?;
+    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tables: {e}"))?);
+    let changed = expected::regen(&data, check)?;
 
-    if differenze.is_empty() {
-        println!("golden aggiornati, niente da fare");
+    if changed.is_empty() {
+        println!("recordings up to date, nothing to do");
         return Ok(());
     }
     if check {
-        eprintln!("questi golden sarebbero cambiati:");
-        for d in &differenze {
+        eprintln!("these recordings would have changed:");
+        for d in &changed {
             eprintln!("  - {d}");
         }
         return Err(
-            "i golden non sono aggiornati. Se il cambiamento e' voluto, esegui \n  \
-             cargo xtask regen-golden\n\
-             e committa il diff; se non lo e', c'e' una fonte di non-determinismo da trovare"
+            "the recordings are out of date. If the change was intended, run \n  \
+             cargo xtask regen-expected\n\
+             and commit the diff; if it was not, there is a source of non-determinism to find"
                 .to_string(),
         );
     }
-    println!("rigenerati:");
-    for d in &differenze {
+    println!("regenerated:");
+    for d in &changed {
         println!("  - {d}");
     }
     Ok(())
 }
 
 fn run(args: &[String]) -> Result<(), String> {
-    let nome = opzione(args, "--scenario").unwrap_or_else(|| "minimo".to_string());
-    let ticks: u32 = numero(args, "--ticks")?.unwrap_or(120);
-    let dump_every: u32 = numero(args, "--dump-every")?.unwrap_or(30);
+    let name = flag(args, "--scenario").unwrap_or_else(|| "minimal".to_string());
+    let ticks: u32 = number(args, "--ticks")?.unwrap_or(120);
+    let dump_every: u32 = number(args, "--dump-every")?.unwrap_or(30);
 
-    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tabelle: {e}"))?);
-    let sc =
-        scenario::per_nome(&nome, &data).ok_or_else(|| format!("scenario sconosciuto: {nome}"))?;
+    let data = Arc::new(sim_data::load_default().map_err(|e| format!("tables: {e}"))?);
+    let sc = scenario::by_name(&name, &data).ok_or_else(|| format!("unknown scenario: {name}"))?;
 
-    println!("scenario '{}' — {}", sc.nome, sc.descrizione);
+    println!("scenario '{}' — {}", sc.name, sc.description);
     println!(
-        "seed {}, griglia {}x{}, dataset {}",
+        "seed {}, grid {}x{}, dataset {}",
         sc.seed,
-        sc.lato,
-        sc.lato,
+        sc.side,
+        sc.side,
         &data.hash_hex()[..16]
     );
     println!();
-    intestazione();
+    table_header();
 
-    let mut w = sc.mondo(Arc::clone(&data));
-    let mut rifiutati = 0usize;
+    let mut w = sc.world(Arc::clone(&data));
+    let mut rejected = 0usize;
     for t in 0..ticks {
-        let cmds = sc.comandi_al_tick(t);
+        let cmds = sc.commands_at_tick(t);
         let r = sim_core::step(&mut w, &cmds);
-        rifiutati += r.rejected.len();
+        rejected += r.rejected.len();
         for (i, e) in &r.rejected {
-            eprintln!("  tick {t}: comando {i} rifiutato: {e}");
+            eprintln!("  tick {t}: command {i} rejected: {e}");
         }
         if dump_every > 0 && (t + 1) % dump_every == 0 {
-            riga(&w);
+            row(&w);
         }
     }
 
     println!();
-    println!("{} comandi rifiutati in totale", rifiutati);
+    println!("{} commands rejected in total", rejected);
     Ok(())
 }
 
-fn intestazione() {
+fn table_header() {
     println!(
-        "{:>6}  {:>5}  {:>4}  {:>5}  {:>9}  {:>7}  {:>7}  {:>7}",
-        "tick", "mesi", "case", "abit.", "giacenza", "acqua", "cibo", "tesoro"
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}",
+        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury"
     );
 }
 
-fn riga(w: &World) {
-    let mesi = w.tick() / w.data().rules.tick_per_mese;
-    let con_acqua = w
+fn row(w: &World) {
+    let months = w.tick() / w.data().rules.ticks_per_month;
+    let with_water = w
         .houses()
-        .filter(|(_, h)| h.servita.get(ServiceKind::Acqua))
+        .filter(|(_, h)| h.served.get(ServiceKind::Water))
         .count();
-    let con_cibo = w
+    let with_food = w
         .houses()
-        .filter(|(_, h)| h.servita.get(ServiceKind::Cibo))
+        .filter(|(_, h)| h.served.get(ServiceKind::Food))
         .count();
-    let case = w.n_case();
+    let houses = w.house_count();
     println!(
-        "{:>6}  {:>5}  {:>4}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>7}",
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}",
         w.tick(),
-        mesi,
-        case,
-        w.popolazione(),
-        milli(w.giacenza_totale()),
-        con_acqua,
-        case,
-        con_cibo,
-        case,
-        w.economy().tesoro
+        months,
+        houses,
+        w.population(),
+        milli(w.total_stock()),
+        with_water,
+        houses,
+        with_food,
+        houses,
+        w.economy().treasury
     );
 }
 
-/// Formatta millesimi come `12.500`, come fa `Milli::Display`.
+/// Formats thousandths as `12.500`, the way `Milli::Display` does.
 fn milli(v: i64) -> String {
-    let segno = if v < 0 { "-" } else { "" };
+    let sign = if v < 0 { "-" } else { "" };
     let a = v.unsigned_abs();
-    format!("{segno}{}.{:03}", a / 1000, a % 1000)
+    format!("{sign}{}.{:03}", a / 1000, a % 1000)
 }
 
-fn opzione(args: &[String], nome: &str) -> Option<String> {
-    let i = args.iter().position(|a| a == nome)?;
+fn flag(args: &[String], name: &str) -> Option<String> {
+    let i = args.iter().position(|a| a == name)?;
     args.get(i + 1).cloned()
 }
 
-fn numero(args: &[String], nome: &str) -> Result<Option<u32>, String> {
-    match opzione(args, nome) {
+fn number(args: &[String], name: &str) -> Result<Option<u32>, String> {
+    match flag(args, name) {
         None => Ok(None),
         Some(v) => v
             .parse()
             .map(Some)
-            .map_err(|_| format!("{nome} vuole un numero, trovato '{v}'")),
+            .map_err(|_| format!("{name} wants a number, found '{v}'")),
     }
 }

@@ -1,48 +1,55 @@
-//! Griglia dei tile e tipi che la compongono.
+//! The tile grid and the types that make it up.
 //!
-//! Vincolo di memoria: `Tile` sta in 4 byte, quindi 40.000 tile occupano
-//! 160 KB e restano in cache (CLAUDE.md, modello dello stato). Ogni campo
-//! aggiunto qui va pesato contro quel budget, che un test presidia.
+//! Memory constraint: `Tile` fits in 4 bytes, so 40,000 tiles take 160 KB and
+//! stay in cache (CLAUDE.md, state model). Every field added here has to be
+//! weighed against that budget, which a test guards.
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{TileIdx, TilePos};
 
-/// Lato massimo della griglia (A4). Oltre, `TileIdx(u16)` non basterebbe.
-pub const LATO_MAX: u16 = 256;
+/// Maximum side of the grid (A4). Beyond it, `TileIdx(u16)` would not be enough.
+pub const MAX_SIDE: u16 = 256;
 
-/// Tipo di terreno. I numeri associati (costruibile? costo della strada?)
-/// non stanno qui: arrivano dalle tabelle di `sim-data` (D6).
+/// The kind of ground on a tile. The numbers that go with it (buildable? road
+/// cost?) do not live here: they come from the `sim-data` tables (D6).
+///
+/// The three kinds, in plain terms:
+/// - `Plain` — ordinary flat ground. You can build on it and lay roads on it.
+///   It is the default the whole map starts as.
+/// - `Water` — rivers and sea. Nothing can be built and no road can cross it.
+/// - `Rock` — rocky ground. No building fits on it, but a road can be cut
+///   through, at a higher cost than on `Plain`.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
 #[repr(u8)]
 pub enum Terrain {
     #[default]
-    Pianura,
-    Acqua,
-    Roccia,
+    Plain,
+    Water,
+    Rock,
 }
 
 impl Terrain {
-    /// Tutte le varianti, in ordine stabile. Serve a `sim-data` per validare
-    /// che la tabella dei terreni sia completa.
-    pub const TUTTI: [Terrain; 3] = [Terrain::Pianura, Terrain::Acqua, Terrain::Roccia];
+    /// Every variant, in a stable order. `sim-data` uses it to check that the
+    /// terrain table is complete.
+    pub const ALL: [Terrain; 3] = [Terrain::Plain, Terrain::Water, Terrain::Rock];
 }
 
-/// Bit di stato del tile. Scritto a mano invece che con `bitflags` per non
-/// aggiungere una dipendenza a `sim-core` (D1).
+/// Status bits of a tile. Hand-written instead of using `bitflags` so as not
+/// to add a dependency to `sim-core` (D1).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct TileFlags(u8);
 
 impl TileFlags {
     const HAS_ROAD: u8 = 1 << 0;
-    /// Se il tile e' occupato. Serve un bit dedicato perche' l'indice
-    /// dell'occupante non ha piu' un valore sentinella: qualunque `TileIdx`,
-    /// `u16::MAX` compreso, e' l'origine legittima di un edificio su una
-    /// mappa 256x256.
+    /// Whether the tile is occupied. It needs a bit of its own because the
+    /// occupant's index no longer has a sentinel value: any `TileIdx`,
+    /// `u16::MAX` included, is a legitimate origin for a building on a 256x256
+    /// map.
     const HAS_OCCUPANT: u8 = 1 << 1;
-    /// Se l'occupante e' una casa; altrimenti e' un edificio.
+    /// Whether the occupant is a house; otherwise it is a building.
     const OCCUPANT_IS_HOUSE: u8 = 1 << 2;
 
     pub const fn empty() -> Self {
@@ -82,7 +89,7 @@ impl std::fmt::Debug for TileFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "TileFlags(road={}, occupato={}, casa={})",
+            "TileFlags(road={}, occupied={}, house={})",
             self.has_road(),
             self.has_occupant(),
             self.occupant_is_house()
@@ -90,53 +97,53 @@ impl std::fmt::Debug for TileFlags {
     }
 }
 
-/// Chi occupa un tile, come riferimento compatto.
+/// Whoever occupies a tile, as a compact reference.
 ///
-/// L'occupante e' identificato dal **tile di origine** del suo footprint, non
-/// da un indice progressivo assegnato al momento della costruzione: cosi' lo
-/// stato di un tile e' funzione della citta' e non della storia degli
-/// inserimenti, e non serve una free-list di slot da tenere coerente. La mappa
-/// da origine a `BuildingId`/`HouseId` sta nel `World`, non nel tile.
+/// The occupant is identified by the **origin tile** of its area, not by a
+/// running index handed out at build time: this way the state of a tile is a
+/// function of the city and not of the order things were placed in, and no
+/// free list of slots has to be kept consistent. The map from origin to
+/// `BuildingId`/`HouseId` lives in the `World`, not in the tile.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct TileOccupant {
     pub origin: TileIdx,
-    pub e_casa: bool,
+    pub is_house: bool,
 }
 
-/// Budget: 4 byte. 40.000 tile ⇒ 160 KB, sta in L2.
+/// Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct Tile {
     pub terrain: Terrain,
     pub flags: TileFlags,
-    /// Valido solo se `flags.has_occupant()`. Privato: leggerlo senza
-    /// guardare il flag darebbe l'origine di un occupante rimosso.
+    /// Only valid if `flags.has_occupant()`. Private: reading it without
+    /// checking the flag would give the origin of an occupant already removed.
     occupant_origin: TileIdx,
 }
 
 impl Tile {
-    /// L'occupante del tile, se c'e'.
-    pub const fn occupante(&self) -> Option<TileOccupant> {
+    /// The tile's occupant, if there is one.
+    pub const fn occupant(&self) -> Option<TileOccupant> {
         if self.flags.has_occupant() {
             Some(TileOccupant {
                 origin: self.occupant_origin,
-                e_casa: self.flags.occupant_is_house(),
+                is_house: self.flags.occupant_is_house(),
             })
         } else {
             None
         }
     }
 
-    pub const fn e_libero(&self) -> bool {
+    pub const fn is_free(&self) -> bool {
         !self.flags.has_occupant() && !self.flags.has_road()
     }
 
-    pub const fn set_occupante(&mut self, occ: TileOccupant) {
+    pub const fn set_occupant(&mut self, occ: TileOccupant) {
         self.occupant_origin = occ.origin;
         self.flags.set(TileFlags::HAS_OCCUPANT, true);
-        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.e_casa);
+        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.is_house);
     }
 
-    pub const fn libera_occupante(&mut self) {
+    pub const fn clear_occupant(&mut self) {
         self.flags.set(TileFlags::HAS_OCCUPANT, false);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
         self.occupant_origin = TileIdx::new(0);
@@ -145,15 +152,15 @@ impl Tile {
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum GridError {
-    #[error("dimensione della griglia non valida: {width}x{height}, ammesso 1..={max} per lato")]
-    DimensioneNonValida { width: u16, height: u16, max: u16 },
+    #[error("invalid grid size: {width}x{height}, each side must be 1..={max}")]
+    InvalidSize { width: u16, height: u16, max: u16 },
 }
 
-/// Griglia densa di tile, indicizzata `y * width + x`.
+/// A dense grid of tiles, indexed `y * width + x`.
 ///
-/// `width` e `height` sono `u16` e non `u8` perche' il lato massimo e' 256,
-/// che in un `u8` non ci starebbe: i valori ammessi sono `1..=256`. Le
-/// coordinate restano `u8` (0..=255).
+/// `width` and `height` are `u16` rather than `u8` because the maximum side is
+/// 256, which would not fit in a `u8`: the allowed values are `1..=256`. The
+/// coordinates stay `u8` (0..=255).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Grid {
     width: u16,
@@ -162,13 +169,13 @@ pub struct Grid {
 }
 
 impl Grid {
-    /// Griglia uniforme. Rifiuta lati a 0 o oltre [`LATO_MAX`].
+    /// A uniform grid. Rejects sides of 0 or beyond [`MAX_SIDE`].
     pub fn new(width: u16, height: u16, terrain: Terrain) -> Result<Self, GridError> {
-        if width == 0 || height == 0 || width > LATO_MAX || height > LATO_MAX {
-            return Err(GridError::DimensioneNonValida {
+        if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE {
+            return Err(GridError::InvalidSize {
                 width,
                 height,
-                max: LATO_MAX,
+                max: MAX_SIDE,
             });
         }
         let len = usize::from(width) * usize::from(height);
@@ -191,13 +198,13 @@ impl Grid {
         self.height
     }
 
-    /// Numero di tile. `u32` e non `usize`: il massimo e' 65.536.
+    /// Number of tiles. `u32` and not `usize`: the maximum is 65,536.
     pub const fn len(&self) -> u32 {
         self.width as u32 * self.height as u32
     }
 
-    /// Sempre `false`: una griglia con un lato a zero non e' costruibile.
-    /// Esiste solo per non lasciare `len()` senza il suo compagno.
+    /// Always `false`: a grid with a side of zero cannot be built.
+    /// It exists only so `len()` is not left without its companion.
     pub const fn is_empty(&self) -> bool {
         false
     }
@@ -206,18 +213,18 @@ impl Grid {
         (pos.x as u16) < self.width && (pos.y as u16) < self.height
     }
 
-    /// Indice lineare della posizione, `None` se fuori dalla mappa.
+    /// Linear index of the position, `None` if off the map.
     pub const fn idx(&self, pos: TilePos) -> Option<TileIdx> {
         if !self.in_bounds(pos) {
             return None;
         }
         let i = pos.y as u32 * self.width as u32 + pos.x as u32;
-        // Invariante: in_bounds implica i < width*height <= 65_536, quindi i
-        // sta in u16 (l'ultimo indice valido e' 65_535).
+        // Invariant: in_bounds implies i < width*height <= 65_536, so i fits in
+        // a u16 (the last valid index is 65_535).
         Some(TileIdx::new(i as u16))
     }
 
-    /// Posizione corrispondente all'indice, `None` se fuori dalla mappa.
+    /// The position matching an index, `None` if off the map.
     pub const fn pos(&self, idx: TileIdx) -> Option<TilePos> {
         let i = idx.get() as u32;
         if i >= self.len() {
@@ -244,17 +251,18 @@ impl Grid {
         self.get_mut(idx)
     }
 
-    /// Tutti gli indici validi, in ordine crescente. E' l'ordine di scansione
-    /// canonico: la ricostruzione della rete stradale (fase 05) ci si appoggia.
+    /// Every valid index, in increasing order. This is the canonical scan
+    /// order: rebuilding the road network (phase 05) relies on it.
     pub fn indices(&self) -> impl Iterator<Item = TileIdx> {
         (0..self.len()).map(|i| TileIdx::new(i as u16))
     }
 
-    /// I quattro vicini ortogonali, **senza wraparound**: il vicino "a destra"
-    /// di `x = width - 1` non esiste, non e' il primo della riga sotto.
+    /// The four orthogonal neighbours, **without wraparound**: the neighbour
+    /// "to the right" of `x = width - 1` does not exist, it is not the first
+    /// tile of the row below.
     ///
-    /// Ordine di emissione: nord, ovest, est, sud — cioe' `TileIdx` crescente.
-    /// L'ordine e' parte del contratto di determinismo del BFS (D4).
+    /// Emission order: north, west, east, south — that is, increasing
+    /// `TileIdx`. The order is part of the BFS determinism contract (D4).
     pub fn neighbors4(&self, idx: TileIdx) -> impl Iterator<Item = TileIdx> {
         let mut out = [None; 4];
         if let Some(p) = self.pos(idx) {
@@ -282,88 +290,89 @@ mod tests {
     use proptest::prelude::*;
 
     #[test]
-    fn tile_sta_nel_budget() {
+    fn tile_stays_within_budget() {
         assert_eq!(
             size_of::<Tile>(),
             4,
-            "Tile e' cresciuto: 40.000 tile devono stare in cache"
+            "Tile has grown: 40,000 tiles have to fit in cache"
         );
     }
 
     #[test]
-    fn new_rifiuta_dimensioni_fuori_range() {
+    fn new_rejects_sizes_out_of_range() {
         for (w, h) in [(0, 10), (10, 0), (257, 10), (10, 257)] {
             assert_eq!(
-                Grid::new(w, h, Terrain::Pianura),
-                Err(GridError::DimensioneNonValida {
+                Grid::new(w, h, Terrain::Plain),
+                Err(GridError::InvalidSize {
                     width: w,
                     height: h,
-                    max: LATO_MAX
+                    max: MAX_SIDE
                 })
             );
         }
-        assert!(Grid::new(256, 256, Terrain::Pianura).is_ok());
-        assert!(Grid::new(1, 1, Terrain::Pianura).is_ok());
+        assert!(Grid::new(256, 256, Terrain::Plain).is_ok());
+        assert!(Grid::new(1, 1, Terrain::Plain).is_ok());
     }
 
     #[test]
-    fn griglia_massima_indicizza_l_ultimo_tile() {
-        let g = Grid::new(256, 256, Terrain::Pianura).expect("256x256 e' valida");
+    fn the_largest_grid_can_index_its_last_tile() {
+        let g = Grid::new(256, 256, Terrain::Plain).expect("256x256 is valid");
         assert_eq!(g.len(), 65_536);
-        let ultimo = g.idx(TilePos::new(255, 255)).expect("in bounds");
-        assert_eq!(ultimo.get(), u16::MAX);
-        assert_eq!(g.pos(ultimo), Some(TilePos::new(255, 255)));
+        let last = g.idx(TilePos::new(255, 255)).expect("in bounds");
+        assert_eq!(last.get(), u16::MAX);
+        assert_eq!(g.pos(last), Some(TilePos::new(255, 255)));
     }
 
-    /// Anche l'ultimo tile di una mappa 256x256 (`TileIdx` = u16::MAX) puo'
-    /// essere l'origine di un occupante: e' il motivo per cui la presenza sta
-    /// in un flag e non in un valore sentinella.
+    /// Even the last tile of a 256x256 map (`TileIdx` = u16::MAX) can be the
+    /// origin of an occupant: that is why presence lives in a flag rather than
+    /// in a sentinel value.
     #[test]
-    fn l_occupante_usa_il_tile_di_origine() {
+    fn the_occupant_is_identified_by_its_origin_tile() {
         let mut t = Tile::default();
-        assert_eq!(t.occupante(), None);
-        assert!(t.e_libero());
+        assert_eq!(t.occupant(), None);
+        assert!(t.is_free());
 
         let occ = TileOccupant {
             origin: TileIdx::new(u16::MAX),
-            e_casa: true,
+            is_house: true,
         };
-        t.set_occupante(occ);
-        assert_eq!(t.occupante(), Some(occ));
-        assert!(!t.e_libero());
+        t.set_occupant(occ);
+        assert_eq!(t.occupant(), Some(occ));
+        assert!(!t.is_free());
 
-        t.libera_occupante();
-        assert_eq!(t.occupante(), None);
-        assert_eq!(t, Tile::default(), "liberare azzera anche l'origine");
+        t.clear_occupant();
+        assert_eq!(t.occupant(), None);
+        assert_eq!(t, Tile::default(), "clearing also resets the origin");
     }
 
     #[test]
-    fn niente_wraparound_ai_bordi() {
-        let g = Grid::new(4, 4, Terrain::Pianura).expect("griglia valida");
-        // Il tile a destra della prima riga non e' vicino del primo della seconda.
-        let destra = g.idx(TilePos::new(3, 0)).expect("in bounds");
-        let sinistra_riga_dopo = g.idx(TilePos::new(0, 1)).expect("in bounds");
-        let vicini: Vec<_> = g.neighbors4(destra).collect();
-        assert!(!vicini.contains(&sinistra_riga_dopo));
+    fn no_wraparound_at_the_edges() {
+        let g = Grid::new(4, 4, Terrain::Plain).expect("valid grid");
+        // The tile to the right of the first row is not a neighbour of the
+        // first tile of the second row.
+        let right = g.idx(TilePos::new(3, 0)).expect("in bounds");
+        let left_of_next_row = g.idx(TilePos::new(0, 1)).expect("in bounds");
+        let neighbors: Vec<_> = g.neighbors4(right).collect();
+        assert!(!neighbors.contains(&left_of_next_row));
     }
 
     #[test]
-    fn conteggio_vicini_per_posizione() {
-        let g = Grid::new(5, 4, Terrain::Pianura).expect("griglia valida");
+    fn neighbor_count_by_position() {
+        let g = Grid::new(5, 4, Terrain::Plain).expect("valid grid");
         let n = |x, y| {
             g.neighbors4(g.idx(TilePos::new(x, y)).expect("in bounds"))
                 .count()
         };
-        assert_eq!(n(0, 0), 2, "angolo");
-        assert_eq!(n(4, 3), 2, "angolo opposto");
-        assert_eq!(n(2, 0), 3, "bordo");
-        assert_eq!(n(2, 2), 4, "interno");
+        assert_eq!(n(0, 0), 2, "corner");
+        assert_eq!(n(4, 3), 2, "opposite corner");
+        assert_eq!(n(2, 0), 3, "edge");
+        assert_eq!(n(2, 2), 4, "interior");
     }
 
-    /// Griglie di dimensione arbitraria e una posizione valida al loro interno.
-    fn griglia_e_pos() -> impl Strategy<Value = (Grid, TilePos)> {
-        (1u16..=LATO_MAX, 1u16..=LATO_MAX).prop_flat_map(|(w, h)| {
-            let g = Grid::new(w, h, Terrain::Pianura).expect("dimensioni in range");
+    /// Grids of arbitrary size, plus a valid position inside them.
+    fn grid_and_pos() -> impl Strategy<Value = (Grid, TilePos)> {
+        (1u16..=MAX_SIDE, 1u16..=MAX_SIDE).prop_flat_map(|(w, h)| {
+            let g = Grid::new(w, h, Terrain::Plain).expect("sizes in range");
             (Just(g), 0..w, 0..h).prop_map(|(g, x, y)| (g, TilePos::new(x as u8, y as u8)))
         })
     }
@@ -371,60 +380,60 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(256))]
 
-        /// Biiezione posizione -> indice -> posizione.
+        /// Position -> index -> position gets you back where you started.
         #[test]
-        fn pos_idx_e_biiettiva((g, p) in griglia_e_pos()) {
-            let i = g.idx(p).expect("pos generata in bounds");
+        fn pos_to_idx_round_trips((g, p) in grid_and_pos()) {
+            let i = g.idx(p).expect("generated pos is in bounds");
             prop_assert_eq!(g.pos(i), Some(p));
         }
 
-        /// E nell'altro verso: indice -> posizione -> indice.
+        /// And the other way round: index -> position -> index.
         #[test]
-        fn idx_pos_e_biiettiva((g, p) in griglia_e_pos()) {
-            let i = g.idx(p).expect("pos generata in bounds");
-            let p2 = g.pos(i).expect("indice valido");
+        fn idx_to_pos_round_trips((g, p) in grid_and_pos()) {
+            let i = g.idx(p).expect("generated pos is in bounds");
+            let p2 = g.pos(i).expect("valid index");
             prop_assert_eq!(g.idx(p2), Some(i));
         }
 
-        /// Fuori dai bordi non esiste indice.
+        /// Outside the edges there is no index.
         #[test]
-        fn fuori_bordo_niente_indice((g, _p) in griglia_e_pos()) {
-            if g.width() < LATO_MAX {
-                let fuori = TilePos::new(g.width() as u8, 0);
-                prop_assert_eq!(g.idx(fuori), None);
-                prop_assert!(!g.in_bounds(fuori));
+        fn outside_the_edge_there_is_no_index((g, _p) in grid_and_pos()) {
+            if g.width() < MAX_SIDE {
+                let outside = TilePos::new(g.width() as u8, 0);
+                prop_assert_eq!(g.idx(outside), None);
+                prop_assert!(!g.in_bounds(outside));
             }
             prop_assert_eq!(g.pos(TileIdx::new(u16::MAX)).is_some(), g.len() == 65_536);
         }
 
-        /// Ogni vicino e' in mappa e a distanza di Manhattan 1; il numero di
-        /// vicini dipende solo da quanti bordi tocca il tile.
+        /// Every neighbour is on the map and at Manhattan distance 1; how many
+        /// there are depends only on how many edges the tile touches.
         #[test]
-        fn neighbors4_non_esce_e_non_wrappa((g, p) in griglia_e_pos()) {
-            let i = g.idx(p).expect("pos generata in bounds");
-            let vicini: Vec<_> = g.neighbors4(i).collect();
+        fn neighbors4_stays_on_the_map_and_does_not_wrap((g, p) in grid_and_pos()) {
+            let i = g.idx(p).expect("generated pos is in bounds");
+            let neighbors: Vec<_> = g.neighbors4(i).collect();
 
-            for &v in &vicini {
-                let pv = g.pos(v).expect("vicino in mappa");
+            for &v in &neighbors {
+                let pv = g.pos(v).expect("neighbour on the map");
                 prop_assert_eq!(p.manhattan(pv), 1);
             }
 
-            let sul_bordo_x = u16::from(p.x) == 0 || u16::from(p.x) + 1 == g.width();
-            let sul_bordo_y = u16::from(p.y) == 0 || u16::from(p.y) + 1 == g.height();
-            let attesi = if g.width() == 1 { 0 } else if sul_bordo_x { 1 } else { 2 }
-                + if g.height() == 1 { 0 } else if sul_bordo_y { 1 } else { 2 };
-            prop_assert_eq!(vicini.len(), attesi);
+            let on_edge_x = u16::from(p.x) == 0 || u16::from(p.x) + 1 == g.width();
+            let on_edge_y = u16::from(p.y) == 0 || u16::from(p.y) + 1 == g.height();
+            let expected = if g.width() == 1 { 0 } else if on_edge_x { 1 } else { 2 }
+                + if g.height() == 1 { 0 } else if on_edge_y { 1 } else { 2 };
+            prop_assert_eq!(neighbors.len(), expected);
 
-            // I vicini escono in ordine di TileIdx crescente (contratto BFS).
-            let mut ordinati = vicini.clone();
-            ordinati.sort_unstable();
-            prop_assert_eq!(vicini, ordinati);
+            // Neighbours come out in increasing TileIdx order (BFS contract).
+            let mut sorted = neighbors.clone();
+            sorted.sort_unstable();
+            prop_assert_eq!(neighbors, sorted);
         }
 
-        /// La relazione di vicinanza e' simmetrica.
+        /// Being neighbours is a symmetric relation.
         #[test]
-        fn neighbors4_e_simmetrica((g, p) in griglia_e_pos()) {
-            let i = g.idx(p).expect("pos generata in bounds");
+        fn neighbors4_is_symmetric((g, p) in grid_and_pos()) {
+            let i = g.idx(p).expect("generated pos is in bounds");
             for v in g.neighbors4(i) {
                 prop_assert!(g.neighbors4(v).any(|w| w == i));
             }

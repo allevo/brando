@@ -1,0 +1,5 @@
+(
+    buildings: [
+        (id: "casa", size: (1, 1), cost: -10, levels: 1, service: None, required_services: []),
+    ],
+)

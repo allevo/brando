@@ -1,42 +1,42 @@
-//! Hash canonico dello stato.
+//! The state hash.
 //!
-//! Scritto a mano, non delegato a serde (A3): con serde l'hash dipenderebbe
-//! dall'ordine di dichiarazione dei campi e dal formato, quindi spostare un
-//! campo in una struct — refactoring senza conseguenze semantiche —
-//! invaliderebbe tutti i golden. E' esattamente il falso positivo che rende
-//! inutile il test piu' prezioso del progetto.
+//! Written by hand, not delegated to serde (A3): with serde the hash would
+//! depend on the order the fields are declared in and on the format, so moving
+//! a field inside a struct — a refactor with no semantic consequences — would
+//! invalidate every recording. That is exactly the false positive that makes
+//! the project's most valuable test useless.
 //!
-//! Il costo e' che aggiungere un campo allo stato richiede di aggiungerlo qui
-//! a mano. Se lo si dimentica, l'hash diventa cieco su quel campo e i golden
-//! smettono di proteggerlo: e' il rischio noto di A3, mitigato dal test
-//! `l_hash_copre_tutto_lo_stato`.
+//! The cost is that adding a field to the state requires adding it here by
+//! hand. If that is forgotten, the hash goes blind on that field and the
+//! recordings stop protecting it: it is the known risk of A3, mitigated by the
+//! `the_hash_covers_the_whole_state` test.
 
 use sim_core::{RngDomain, ServiceKind, World};
 
-/// Prefisso di dominio: separa questo hash da quello del dataset.
-/// Cambiarlo rigenera tutti i golden.
-const DOMINIO: &[u8] = b"brando/world/v1";
+/// Domain prefix: keeps this hash apart from the dataset's.
+/// Changing it regenerates every recording.
+const DOMAIN: &[u8] = b"brando/world/v1";
 
-/// Hash canonico dello stato, in un ordine fissato **qui** e non altrove.
+/// The state hash, in an order fixed **here** and nowhere else.
 ///
-/// Cosa entra: tick, hash del dataset, dimensioni della griglia, i tile in
-/// ordine di `TileIdx`, gli edifici e le case in ordine di id, l'economia e la
-/// posizione di ogni stream RNG.
+/// What goes in: the tick, the dataset hash, the grid's dimensions, the tiles
+/// in `TileIdx` order, the buildings and the houses in id order, the economy
+/// and the position of every RNG stream.
 ///
-/// Cosa **non** entra: `RoadNetwork`, `Coverage`, `DirtyFlags`, `FoodLedger`.
-/// Sono strutture derivate o diagnostiche; se entrassero, un bug di
-/// ricostruzione si presenterebbe come divergenza di hash, mentre il test che
-/// deve coglierlo e' l'equivalenza incrementale/da-zero della fase 06 — che
-/// dice anche *dove* e' il problema.
+/// What does **not** go in: `RoadNetwork`, `Coverage`, `DirtyFlags`,
+/// `FoodTotals`. They are derived or diagnostic structures; if they went in, a
+/// rebuild bug would show up as a hash divergence, while the test meant to
+/// catch it is the incremental-versus-from-scratch equivalence of phase 06 —
+/// which also says *where* the problem is.
 ///
-/// `House::servita` invece **entra**, pur essendo calcolata dalla copertura:
-/// e' un campo dello stato ed e' l'input da cui M1 fara' evolvere o degradare
-/// le case. Se restasse fuori, su M0 un golden non si accorgerebbe quasi di
-/// nulla — cambiare la regola di assegnazione dei servizi non sposterebbe un
-/// bit.
+/// `House::served` on the other hand **does** go in, even though it is computed
+/// from the coverage: it is a field of the state and it is the input M1 will
+/// use to level houses up or let them decay. If it stayed out, a recording on
+/// M0 would barely notice anything — changing the service assignment rule
+/// would not move a single bit.
 pub fn hash_world(w: &World) -> [u8; 32] {
     let mut h = blake3::Hasher::new();
-    h.update(DOMINIO);
+    h.update(DOMAIN);
 
     h.update(&w.tick().to_le_bytes());
     h.update(&w.data().hash);
@@ -45,50 +45,49 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     h.update(&grid.width().to_le_bytes());
     h.update(&grid.height().to_le_bytes());
 
-    // --- tile, in ordine di TileIdx ---
+    // --- tiles, in TileIdx order ---
     for idx in grid.indices() {
         let Some(t) = grid.get(idx) else { continue };
         h.update(&[t.terrain as u8, t.flags.bits()]);
-        // I flag dicono gia' se c'e' un occupante; l'origine si aggiunge solo
-        // quando c'e', per non hashare byte privi di significato.
-        if let Some(occ) = t.occupante() {
+        // The flags already say whether there is an occupant; the origin is
+        // added only when there is one, so no meaningless bytes get hashed.
+        if let Some(occ) = t.occupant() {
             h.update(&occ.origin.get().to_le_bytes());
         }
     }
 
-    // --- edifici, in ordine di id ---
-    // L'iterazione di uno SlotMap e' per indice di slot, deterministica a
-    // parita' di sequenza di inserimenti e rimozioni — garantita dal log dei
-    // comandi (D4).
-    h.update(&(w.n_edifici() as u64).to_le_bytes());
+    // --- buildings, in id order ---
+    // Iterating a SlotMap goes by slot index, deterministic given the same
+    // sequence of insertions and removals — guaranteed by the command log (D4).
+    h.update(&(w.building_count() as u64).to_le_bytes());
     for (_, b) in w.buildings() {
         h.update(&b.kind.get().to_le_bytes());
         h.update(&[b.origin.x, b.origin.y, b.level]);
         h.update(&b.stock.to_millis().to_le_bytes());
     }
 
-    // --- case, in ordine di id ---
-    h.update(&(w.n_case() as u64).to_le_bytes());
+    // --- houses, in id order ---
+    h.update(&(w.house_count() as u64).to_le_bytes());
     for (_, c) in w.houses() {
         h.update(&[c.origin.x, c.origin.y, c.level]);
-        h.update(&c.abitanti.to_le_bytes());
-        h.update(&[c.servita.bits()]);
+        h.update(&c.residents.to_le_bytes());
+        h.update(&[c.served.bits()]);
     }
 
-    // --- economia ---
-    h.update(&w.economy().tesoro.get().to_le_bytes());
+    // --- economy ---
+    h.update(&w.economy().treasury.get().to_le_bytes());
 
-    // --- posizione degli stream RNG ---
-    // Uno stato in cui Events ha consumato 5 valori non e' lo stesso in cui ne
-    // ha consumati 6, anche se tutto il resto coincide: senza questo, una
-    // divergenza si manifesterebbe molti tick dopo, dove e' quasi impossibile
-    // da attribuire.
-    for d in RngDomain::TUTTI {
+    // --- position of the RNG streams ---
+    // A state in which Events has consumed 5 values is not the same as one in
+    // which it has consumed 6, even if everything else matches: without this, a
+    // divergence would show up many ticks later, where it is almost impossible
+    // to attribute.
+    for d in RngDomain::ALL {
         h.update(&w.rng().draws(d).to_le_bytes());
     }
 
-    // Presidio contro un cambio silenzioso del numero di servizi: se ne
-    // arrivasse uno nuovo, `servita.bits()` cambierebbe significato.
+    // A guard against a silent change in the number of services: if a new one
+    // arrived, `served.bits()` would change meaning.
     h.update(&[ServiceKind::COUNT as u8]);
 
     *h.finalize().as_bytes()

@@ -1,27 +1,27 @@
 #![forbid(unsafe_code)]
 
-//! Salvataggio come `seed + Vec<Command>` e hashing canonico dello stato (D4).
+//! Saving as `seed + Vec<Command>`, and hashing the state (D4).
 //!
-//! Un salvataggio non e' un dump dello stato: e' il seed piu' il log dei
-//! comandi, rigiocato dal core. Qui vivono anche i golden replay, che sono il
-//! test piu' prezioso del progetto — da qui in avanti ogni fonte di
-//! non-determinismo introdotta per distrazione si manifesta come un hash che
-//! cambia, entro un commit da quando e' stata introdotta.
+//! A save file is not a dump of the state: it is the seed plus the command log,
+//! replayed by the core. The recorded replays live here too, and they are the
+//! project's most valuable test — from here on, every source of
+//! non-determinism introduced by accident shows up as a hash that changes,
+//! within one commit of being introduced.
 
-pub mod golden;
+pub mod expected;
 pub mod hash;
 pub mod recording;
 pub mod replay;
 
-pub use golden::GoldenError;
+pub use expected::ExpectedError;
 pub use hash::{hash_hex, hash_world};
 pub use recording::{FORMAT_VERSION, GridSpec, Header, Recording, RecordingError};
-pub use replay::{Checkpoint, ReplayError, avanza, checkpoints, mondo_iniziale, replay};
+pub use replay::{Checkpoint, ReplayError, advance, checkpoints, initial_world, replay};
 
-/// Ogni quanti tick si prende un checkpoint nei golden committati.
-pub const CHECKPOINT_OGNI: u32 = 30;
+/// How many ticks apart the checkpoints are in the committed recordings.
+pub const CHECKPOINT_EVERY: u32 = 30;
 
-/// Directory dei golden, risolta a compile time.
-pub fn dir_golden() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
+/// The directory of the recorded replays, resolved at compile time.
+pub fn expected_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/expected")
 }

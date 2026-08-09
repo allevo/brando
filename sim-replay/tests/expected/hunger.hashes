@@ -1,6 +1,6 @@
-# golden di 'fame': hash canonico dello stato ogni 30 tick.
-# Se cambia senza che sia cambiato il bilanciamento, e' stata introdotta
-# una fonte di non-determinismo: fermarsi e trovarla, non rigenerare.
+# expected hashes for 'hunger': the state hash every 30 ticks.
+# If this changes without the balancing having changed, a source of
+# non-determinism has been introduced: stop and find it, do not regenerate.
 30,e7011f447aa96ab9fe7065c29da8ebc0ba2a0c92884ab7f1a3d4b23ce64f5729
 60,94856707c166b2ab484402de7c1322bbb2c49e4222e9057dced35b0268e137d2
 90,ee45fcc1861f7b695500cedc175a1a1266c0d88e88085bc932f72af7a5764728

@@ -1,7 +1,7 @@
-//! Caricamento delle tabelle da disco.
+//! Loading the tables from disk.
 //!
-//! E' l'unico punto del progetto che fa I/O sui dati di gioco: `sim-core` non
-//! ne fa nessuno (D4).
+//! It is the only place in the project that does I/O on game data: `sim-core`
+//! does none (D4).
 
 use std::path::{Path, PathBuf};
 
@@ -15,14 +15,14 @@ const FILE_BUILDINGS: &str = "buildings.ron";
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
-    #[error("impossibile leggere {path}: {source}")]
+    #[error("cannot read {path}: {source}")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
 
-    #[error("{file} non e' un RON valido: {source}")]
+    #[error("{file} is not valid RON: {source}")]
     Ron {
         file: &'static str,
         #[source]
@@ -30,25 +30,26 @@ pub enum LoadError {
     },
 
     #[error("{0}")]
-    Validazione(#[from] ValidationReport),
+    Validation(#[from] ValidationReport),
 }
 
-/// Carica le tre tabelle da una directory.
+/// Loads the three tables from a directory.
 pub fn load_from_dir(dir: &Path) -> Result<DataSet, LoadError> {
-    let leggi = |nome: &str| -> Result<String, LoadError> {
-        let path = dir.join(nome);
+    let read = |name: &str| -> Result<String, LoadError> {
+        let path = dir.join(name);
         std::fs::read_to_string(&path).map_err(|source| LoadError::Io { path, source })
     };
-    let rules = leggi(FILE_RULES)?;
-    let terrain = leggi(FILE_TERRAIN)?;
-    let buildings = leggi(FILE_BUILDINGS)?;
+    let rules = read(FILE_RULES)?;
+    let terrain = read(FILE_TERRAIN)?;
+    let buildings = read(FILE_BUILDINGS)?;
     from_ron_str(&rules, &terrain, &buildings)
 }
 
-/// Come [`load_from_dir`], ma a partire dal contenuto gia' letto.
+/// Like [`load_from_dir`], but starting from content already read.
 ///
-/// Serve ai test (che compongono tabelle valide e rotte senza duplicare i
-/// file su disco) e a chi vorra' incorporare le tabelle nel binario.
+/// It serves the tests (which put together valid and broken tables without
+/// duplicating files on disk) and whoever will want to embed the tables in the
+/// binary.
 pub fn from_ron_str(rules: &str, terrain: &str, buildings: &str) -> Result<DataSet, LoadError> {
     let raw = RawDataSet {
         rules: parse::<RawRules>(FILE_RULES, rules)?,

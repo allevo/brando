@@ -1,0 +1,7 @@
+// `cost` is missing: the error comes from deserialisation, not validation, and
+// it has to stay readable all the same.
+(
+    buildings: [
+        (id: "casa", size: (1, 1), levels: 1, service: None, required_services: []),
+    ],
+)

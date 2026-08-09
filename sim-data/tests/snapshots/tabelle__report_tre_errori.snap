@@ -1,8 +1,0 @@
----
-source: sim-data/tests/tabelle.rs
-expression: r.to_string()
----
-3 errori di validazione nelle tabelle:
-  - buildings[0].id: valore vuoto
-  - buildings[0].footprint.0: atteso almeno 1, trovato 0
-  - buildings[1].giacenza_max: un produttore deve avere giacenza_max > 0

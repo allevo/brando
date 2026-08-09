@@ -1,11 +1,12 @@
-//! Produzione e consumo (passo 4 del tick).
+//! Production and consumption (step 4 of the tick).
 //!
-//! In M0 la fattoria e' un provider di copertura come il pozzo: produce in una
-//! giacenza locale e le case che copre consumano da li' (A5). Non e' la catena
-//! produttiva definitiva — magazzini e walker logistici reali sono M3 (D3) —
-//! ma e' la versione minima che chiude un ciclo produzione→consumo
-//! osservabile, e non introduce concetti da rimuovere: la copertura resta
-//! valida, in M3 cambia solo *da dove* arriva la merce.
+//! In M0 the farm is a coverage provider just like the well: it produces into a
+//! local stock and the houses it covers consume from there (A5). It is not the
+//! final production chain — warehouses and real logistics walkers are M3 (D3) —
+//! but it is the smallest version that closes an observable
+//! production→consumption loop, and it introduces no concept that will have to
+//! be removed: coverage stays valid, what changes in M3 is only *where* the
+//! goods come from.
 
 use std::sync::Arc;
 
@@ -14,109 +15,107 @@ use crate::service::ServiceKind;
 use crate::units::Milli;
 use crate::world::World;
 
-/// Contabilita' cumulativa del cibo.
+/// Running totals for food.
 ///
-/// Serve a verificare la conservazione e all'evaluator di M2. Non influenza
-/// nessuna decisione di gioco e non entra nell'hash canonico dello stato.
+/// They serve to check conservation, and M2's evaluator. They influence no game
+/// decision and do not enter the state hash.
 ///
-/// I campi sono `i64` di millesimi e non `Milli`: sono totali cumulativi, che
-/// su una partita lunga escono dal range di `Milli(i32)`. Saturare li' dentro
-/// romperebbe in silenzio l'uguaglianza che questi campi esistono per
-/// verificare.
+/// The fields are `i64` of thousandths and not `Milli`: they are running
+/// totals, which over a long game leave the range of `Milli(i32)`. Saturating
+/// in there would silently break the very equality these fields exist to check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct FoodLedger {
-    pub prodotto: i64,
-    pub consumato: i64,
-    /// Cibo evaporato perche' il granaio era pieno.
-    pub perso_per_giacenza_piena: i64,
-    /// Cibo evaporato con la fattoria che lo conteneva.
+pub struct FoodTotals {
+    pub produced: i64,
+    pub consumed: i64,
+    /// Food that evaporated because the granary was full.
+    pub lost_to_full_stock: i64,
+    /// Food that evaporated along with the farm that held it.
     ///
-    /// Esiste per lo stesso motivo del campo sopra: senza, demolire un
-    /// produttore pieno romperebbe l'uguaglianza di conservazione, e il test
-    /// piu' importante della fase segnalerebbe un bug che non c'e'.
-    pub perso_per_demolizione: i64,
+    /// It exists for the same reason as the field above: without it,
+    /// demolishing a full producer would break the conservation equality, and
+    /// the phase's most important test would report a bug that is not there.
+    pub lost_to_demolition: i64,
 }
 
-impl FoodLedger {
-    /// Quanto dovrebbe esserci nelle giacenze delle fattorie vive.
-    pub const fn atteso_in_giacenza(&self) -> i64 {
-        self.prodotto - self.consumato - self.perso_per_giacenza_piena - self.perso_per_demolizione
+impl FoodTotals {
+    /// How much should be sitting in the stocks of the farms still standing.
+    pub const fn expected_stock(&self) -> i64 {
+        self.produced - self.consumed - self.lost_to_full_stock - self.lost_to_demolition
     }
 }
 
 pub(crate) fn production(world: &mut World) {
-    // L'Arc si clona per poter leggere le tabelle mentre si mutano gli
-    // edifici: e' un incremento di refcount, non una copia del dataset.
+    // The Arc is cloned so the tables can be read while the buildings are
+    // mutated: it is a refcount bump, not a copy of the dataset.
     let data = Arc::clone(&world.data);
 
-    // --- 1. le fattorie producono ---
+    // --- 1. the farms produce ---
     for (_, b) in world.buildings.iter_mut() {
         let Some(def) = data.def(b.kind) else {
             continue;
         };
-        let (Some(produzione), Some(max)) = (def.produzione_per_tick, def.giacenza_max) else {
+        let (Some(output), Some(max)) = (def.output_per_tick, def.max_stock) else {
             continue;
         };
 
-        let lordo = b.stock.saturating_add(produzione);
-        // La saturazione al massimo della giacenza e' **semantica di gioco**:
-        // il granaio e' pieno e il resto si perde. Il termine `perso` esiste
-        // proprio perche' senza di lui la conservazione non sarebbe
-        // un'uguaglianza.
-        let nuovo = lordo.min(max);
-        let perso = i64::from(lordo.to_millis()) - i64::from(nuovo.to_millis());
+        let gross = b.stock.saturating_add(output);
+        // Saturating at the maximum stock is **game semantics**: the granary is
+        // full and the rest is lost. The `lost` term exists precisely because
+        // without it conservation would not be an equality.
+        let capped = gross.min(max);
+        let lost = i64::from(gross.to_millis()) - i64::from(capped.to_millis());
 
-        world.food.prodotto += i64::from(produzione.to_millis());
-        world.food.perso_per_giacenza_piena += perso;
-        b.stock = nuovo;
+        world.food.produced += i64::from(output.to_millis());
+        world.food.lost_to_full_stock += lost;
+        b.stock = capped;
     }
 
-    // --- 2. le case mangiano ---
-    // In ordine di HouseId: e' un ordine deterministico ed e' regola di gioco,
-    // come l'ordinamento per (distanza, TileIdx) della fase 06.
-    let case: Vec<HouseId> = world.houses.keys().collect();
-    for h in case {
-        let Some(casa) = world.houses.get(h) else {
+    // --- 2. the houses eat ---
+    // In HouseId order: it is a deterministic order and it is a game rule, like
+    // the (distance, TileIdx) ordering of phase 06.
+    let houses: Vec<HouseId> = world.houses.keys().collect();
+    for h in houses {
+        let Some(house) = world.houses.get(h) else {
             continue;
         };
-        let abitanti = i32::from(casa.abitanti);
-        let provider = world.coverage.provider(h, ServiceKind::Cibo);
+        let residents = i32::from(house.residents);
+        let provider = world.coverage.provider(h, ServiceKind::Food);
 
-        let ha_mangiato = match provider {
+        let ate = match provider {
             None => false,
             Some(p) => {
-                let consumo = data
+                let needed = data
                     .rules
-                    .consumo_cibo_per_abitante
-                    .checked_mul_int(abitanti)
+                    .food_per_resident
+                    .checked_mul_int(residents)
                     .unwrap_or(Milli::ZERO);
-                consuma(world, p, consumo)
+                take_from_stock(world, p, needed)
             }
         };
 
-        if let Some(casa) = world.houses.get_mut(h) {
-            casa.servita.set(ServiceKind::Cibo, ha_mangiato);
+        if let Some(house) = world.houses.get_mut(h) {
+            house.served.set(ServiceKind::Food, ate);
         }
     }
 }
 
-/// Preleva `consumo` dalla giacenza del provider.
+/// Takes `amount` out of the provider's stock.
 ///
-/// Restituisce `false` senza toccare nulla se la giacenza non basta: **niente
-/// consumo parziale**. La scelta e' deliberata — rende la conservazione
-/// verificabile con un'uguaglianza esatta invece che con una disuguaglianza, e
-/// in M1 dara' un segnale binario pulito a "la casa ha mangiato questo mese".
-fn consuma(world: &mut World, provider: BuildingId, consumo: Milli) -> bool {
+/// Returns `false` without touching anything if the stock is not enough: **no
+/// partial consumption**. The choice is deliberate — it makes conservation
+/// checkable with an exact equality instead of an inequality, and in M1 it will
+/// give a clean binary signal for "the house ate this month".
+fn take_from_stock(world: &mut World, provider: BuildingId, amount: Milli) -> bool {
     let Some(b) = world.buildings.get_mut(provider) else {
         return false;
     };
-    if b.stock < consumo {
+    if b.stock < amount {
         return false;
     }
-    let Some(resto) = b.stock.checked_sub(consumo) else {
+    let Some(left) = b.stock.checked_sub(amount) else {
         return false;
     };
-    b.stock = resto;
-    world.food.consumato += i64::from(consumo.to_millis());
+    b.stock = left;
+    world.food.consumed += i64::from(amount.to_millis());
     true
 }

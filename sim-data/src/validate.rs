@@ -1,8 +1,8 @@
-//! Validazione delle tabelle grezze.
+//! Validation of the raw tables.
 //!
-//! Il report raccoglie **tutti** gli errori, non solo il primo: chi corregge
-//! una tabella vuole vedere tutti i problemi in un giro, non ricompilare sei
-//! volte. Un `?` sul primo controllo sarebbe una validazione finta.
+//! The report gathers **every** error, not just the first: whoever is fixing a
+//! table wants to see all the problems in one go, not recompile six times. A
+//! `?` on the first check would make the validation a sham.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -12,57 +12,57 @@ use sim_core::{Coins, Milli, ServiceKind, Terrain};
 use crate::raw::{RawBuildingDef, RawDataSet};
 use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 
-/// Un singolo problema, con il percorso logico del campo che lo causa.
+/// A single problem, with the logical path of the field that causes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationError {
-    /// Es. `buildings[1].servizio.raggio_per_livello`.
+    /// E.g. `buildings[1].service.range_per_level`.
     pub path: String,
     pub kind: ValidationErrorKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ValidationErrorKind {
-    #[error("valore vuoto")]
-    Vuoto,
+    #[error("empty value")]
+    Empty,
 
-    #[error("id duplicato, gia' usato da {precedente}")]
-    IdDuplicato { precedente: String },
+    #[error("duplicate id, already used by {previous}")]
+    DuplicateId { previous: String },
 
-    #[error("atteso almeno {min}, trovato {trovato}")]
-    TroppoPiccolo { min: i64, trovato: i64 },
+    #[error("expected at least {min}, found {found}")]
+    TooSmall { min: i64, found: i64 },
 
-    #[error("valore negativo: {trovato}")]
-    Negativo { trovato: i64 },
+    #[error("negative value: {found}")]
+    Negative { found: i64 },
 
-    #[error("atteso un valore per livello: livelli = {livelli}, valori = {trovati}")]
-    LunghezzaPerLivello { livelli: u8, trovati: usize },
+    #[error("expected one value per level: levels = {levels}, values = {found}")]
+    WrongLengthPerLevel { levels: u8, found: usize },
 
-    #[error("servizio sconosciuto: {nome:?} (noti: {noti})")]
-    ServizioSconosciuto { nome: String, noti: String },
+    #[error("unknown service: {name:?} (known: {known})")]
+    UnknownService { name: String, known: String },
 
-    #[error("un produttore deve avere giacenza_max > 0")]
-    ProduttoreSenzaGiacenza,
+    #[error("a producer must have max_stock > 0")]
+    ProducerWithoutStock,
 
-    #[error("giacenza_max su un edificio che non produce nulla")]
-    GiacenzaSenzaProduzione,
+    #[error("max_stock on a building that produces nothing")]
+    StockWithoutOutput,
 
     #[error(
-        "capacita' {capacita} abitanti, ma la produzione ne sostiene {sostenibili}: \
-         le case in eccesso resterebbero assegnate a un provider che non le sfama"
+        "capacity of {capacity} residents, but the output sustains {sustainable}: \
+         the houses in excess would stay assigned to a provider that does not feed them"
     )]
-    CapacitaOltreLaProduzione { capacita: u16, sostenibili: u16 },
+    CapacityBeyondOutput { capacity: u16, sustainable: u16 },
 
-    #[error("terreno assente dalla tabella: {terrain:?}")]
-    TerrenoMancante { terrain: Terrain },
+    #[error("terrain missing from the table: {terrain:?}")]
+    MissingTerrain { terrain: Terrain },
 
-    #[error("terreno gia' dichiarato")]
-    TerrenoDuplicato,
+    #[error("terrain already declared")]
+    DuplicateTerrain,
 
-    #[error("troppi edifici in tabella: il massimo e' {max}")]
-    TroppiEdifici { max: usize },
+    #[error("too many buildings in the table: the maximum is {max}")]
+    TooManyBuildings { max: usize },
 }
 
-/// L'insieme dei problemi trovati in un giro di validazione.
+/// The set of problems found in one validation pass.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ValidationReport {
     pub errors: Vec<ValidationError>,
@@ -89,9 +89,9 @@ impl fmt::Display for ValidationReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "{} error{} di validazione nelle tabelle:",
+            "{} validation error{} in the tables:",
             self.errors.len(),
-            if self.errors.len() == 1 { "e" } else { "i" }
+            if self.errors.len() == 1 { "" } else { "s" }
         )?;
         for e in &self.errors {
             writeln!(f, "  - {}: {}", e.path, e.kind)?;
@@ -102,35 +102,35 @@ impl fmt::Display for ValidationReport {
 
 impl std::error::Error for ValidationReport {}
 
-/// Valida e costruisce in un solo passaggio.
+/// Validates and builds in a single pass.
 ///
-/// Il piano prevedeva `validate(&RawDataSet) -> Result<(), ValidationReport>`
-/// con la conversione a parte: farlo in due passaggi obbligherebbe a
-/// ricontrollare gli stessi invarianti durante la conversione (o a fidarsi
-/// con degli `expect`). Un passaggio solo, che restituisce il dataset
-/// costruito, e' la stessa garanzia senza la duplicazione.
+/// The plan called for `validate(&RawDataSet) -> Result<(), ValidationReport>`
+/// with the conversion done separately: doing it in two passes would force the
+/// same invariants to be rechecked during the conversion (or trusted with a few
+/// `expect`s). A single pass, returning the dataset it built, is the same
+/// guarantee without the duplication.
 pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
     let mut rep = ValidationReport::default();
 
-    let rules = valida_rules(raw, &mut rep);
-    let terrain = valida_terrain(raw, &mut rep);
-    let buildings = valida_buildings(raw, &mut rep);
+    let rules = validate_rules(raw, &mut rep);
+    let terrain = validate_terrain(raw, &mut rep);
+    let buildings = validate_buildings(raw, &mut rep);
 
     if !rep.is_empty() {
         return Err(rep);
     }
 
-    // I controlli **fra** tabelle vengono dopo, e solo se le singole tabelle
-    // sono sane: la coerenza fra la capacita' di un provider di cibo e cio'
-    // che la sua produzione sostiene incrocia `rules` e `buildings`, e su una
-    // tabella gia' rotta produrrebbe rumore invece che informazione.
+    // The checks **across** tables come afterwards, and only if the individual
+    // tables are sound: the consistency between a food provider's capacity and
+    // what its output sustains crosses `rules` and `buildings`, and on an
+    // already broken table it would produce noise instead of information.
     let data = DataSet::new(rules, terrain, buildings);
-    for v in data.capacita_cibo_insostenibile() {
+    for v in data.unsustainable_food_capacity() {
         rep.push(
-            format!("buildings[{}].servizio.capacita_per_livello", v.building),
-            ValidationErrorKind::CapacitaOltreLaProduzione {
-                capacita: v.capacita,
-                sostenibili: v.sostenibili,
+            format!("buildings[{}].service.capacity_per_level", v.building),
+            ValidationErrorKind::CapacityBeyondOutput {
+                capacity: v.capacity,
+                sustainable: v.sustainable,
             },
         );
     }
@@ -141,90 +141,90 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
     Ok(data)
 }
 
-fn valida_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
+fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
     let r = &raw.rules;
 
-    if r.tick_per_mese < 1 {
+    if r.ticks_per_month < 1 {
         rep.push(
-            "rules.tick_per_mese",
-            ValidationErrorKind::TroppoPiccolo {
+            "rules.ticks_per_month",
+            ValidationErrorKind::TooSmall {
                 min: 1,
-                trovato: i64::from(r.tick_per_mese),
+                found: i64::from(r.ticks_per_month),
             },
         );
     }
-    if r.mesi_per_anno < 1 {
+    if r.months_per_year < 1 {
         rep.push(
-            "rules.mesi_per_anno",
-            ValidationErrorKind::TroppoPiccolo {
+            "rules.months_per_year",
+            ValidationErrorKind::TooSmall {
                 min: 1,
-                trovato: i64::from(r.mesi_per_anno),
+                found: i64::from(r.months_per_year),
             },
         );
     }
-    if r.tick_per_mese.checked_mul(r.mesi_per_anno).is_none() {
+    if r.ticks_per_month.checked_mul(r.months_per_year).is_none() {
         rep.push(
-            "rules.mesi_per_anno",
-            ValidationErrorKind::TroppoPiccolo { min: 1, trovato: 0 },
+            "rules.months_per_year",
+            ValidationErrorKind::TooSmall { min: 1, found: 0 },
         );
     }
-    if r.abitanti_per_livello_casa.is_empty() {
+    if r.residents_per_house_level.is_empty() {
         rep.push(
-            "rules.abitanti_per_livello_casa",
-            ValidationErrorKind::Vuoto,
+            "rules.residents_per_house_level",
+            ValidationErrorKind::Empty,
         );
     }
-    if r.consumo_cibo_per_abitante < 0 {
+    if r.food_per_resident < 0 {
         rep.push(
-            "rules.consumo_cibo_per_abitante",
-            ValidationErrorKind::Negativo {
-                trovato: i64::from(r.consumo_cibo_per_abitante),
+            "rules.food_per_resident",
+            ValidationErrorKind::Negative {
+                found: i64::from(r.food_per_resident),
             },
         );
     }
 
     Rules {
-        tick_per_mese: r.tick_per_mese,
-        mesi_per_anno: r.mesi_per_anno,
-        tesoro_iniziale: Coins::new(r.tesoro_iniziale),
-        abitanti_per_livello_casa: r.abitanti_per_livello_casa.clone(),
-        consumo_cibo_per_abitante: Milli::from_millis(r.consumo_cibo_per_abitante),
+        ticks_per_month: r.ticks_per_month,
+        months_per_year: r.months_per_year,
+        starting_treasury: Coins::new(r.starting_treasury),
+        residents_per_house_level: r.residents_per_house_level.clone(),
+        food_per_resident: Milli::from_millis(r.food_per_resident),
     }
 }
 
-fn valida_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Terrain, TerrainDef> {
+fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Terrain, TerrainDef> {
     let mut out = BTreeMap::new();
 
     for (i, t) in raw.terrain.terrains.iter().enumerate() {
         let path = format!("terrains[{i}]");
-        if t.costo_strada < 0 {
+        if t.road_cost < 0 {
             rep.push(
-                format!("{path}.costo_strada"),
-                ValidationErrorKind::Negativo {
-                    trovato: i64::from(t.costo_strada),
+                format!("{path}.road_cost"),
+                ValidationErrorKind::Negative {
+                    found: i64::from(t.road_cost),
                 },
             );
         }
         let def = TerrainDef {
-            costruibile: t.costruibile,
-            attraversabile: t.attraversabile,
-            costo_strada: Coins::new(t.costo_strada),
+            buildable: t.buildable,
+            walkable: t.walkable,
+            road_cost: Coins::new(t.road_cost),
         };
         if out.insert(t.terrain, def).is_some() {
             rep.push(
                 format!("{path}.terrain"),
-                ValidationErrorKind::TerrenoDuplicato,
+                ValidationErrorKind::DuplicateTerrain,
             );
         }
     }
 
-    // La tabella deve coprire tutte le varianti: un terreno mancante
-    // diventerebbe un `unwrap` in un hot path.
-    for t in Terrain::TUTTI {
+    // The table has to cover every variant: a missing terrain would become an
+    // `unwrap` in a hot path.
+    for t in Terrain::ALL {
         if !out.contains_key(&t) {
             rep.push(
                 "terrains",
-                ValidationErrorKind::TerrenoMancante { terrain: t },
+                ValidationErrorKind::MissingTerrain { terrain: t },
             );
         }
     }
@@ -232,13 +232,13 @@ fn valida_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Terr
     out
 }
 
-fn valida_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<BuildingDef> {
+fn validate_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<BuildingDef> {
     let defs = &raw.buildings.buildings;
 
     if defs.len() > usize::from(u16::MAX) {
         rep.push(
             "buildings",
-            ValidationErrorKind::TroppiEdifici {
+            ValidationErrorKind::TooManyBuildings {
                 max: usize::from(u16::MAX),
             },
         );
@@ -249,104 +249,104 @@ fn valida_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<Buildin
         let path = format!("buildings[{i}]");
 
         if b.id.trim().is_empty() {
-            rep.push(format!("{path}.id"), ValidationErrorKind::Vuoto);
-        } else if let Some(prec) = defs.iter().take(i).position(|o| o.id == b.id) {
+            rep.push(format!("{path}.id"), ValidationErrorKind::Empty);
+        } else if let Some(prev) = defs.iter().take(i).position(|o| o.id == b.id) {
             rep.push(
                 format!("{path}.id"),
-                ValidationErrorKind::IdDuplicato {
-                    precedente: format!("buildings[{prec}].id"),
+                ValidationErrorKind::DuplicateId {
+                    previous: format!("buildings[{prev}].id"),
                 },
             );
         }
 
-        if b.livelli < 1 {
+        if b.levels < 1 {
             rep.push(
-                format!("{path}.livelli"),
-                ValidationErrorKind::TroppoPiccolo {
+                format!("{path}.levels"),
+                ValidationErrorKind::TooSmall {
                     min: 1,
-                    trovato: i64::from(b.livelli),
+                    found: i64::from(b.levels),
                 },
             );
         }
-        if b.costo < 0 {
+        if b.cost < 0 {
             rep.push(
-                format!("{path}.costo"),
-                ValidationErrorKind::Negativo {
-                    trovato: i64::from(b.costo),
+                format!("{path}.cost"),
+                ValidationErrorKind::Negative {
+                    found: i64::from(b.cost),
                 },
             );
         }
-        if b.footprint.0 < 1 {
+        if b.size.0 < 1 {
             rep.push(
-                format!("{path}.footprint.0"),
-                ValidationErrorKind::TroppoPiccolo {
+                format!("{path}.size.0"),
+                ValidationErrorKind::TooSmall {
                     min: 1,
-                    trovato: i64::from(b.footprint.0),
+                    found: i64::from(b.size.0),
                 },
             );
         }
-        if b.footprint.1 < 1 {
+        if b.size.1 < 1 {
             rep.push(
-                format!("{path}.footprint.1"),
-                ValidationErrorKind::TroppoPiccolo {
+                format!("{path}.size.1"),
+                ValidationErrorKind::TooSmall {
                     min: 1,
-                    trovato: i64::from(b.footprint.1),
+                    found: i64::from(b.size.1),
                 },
             );
         }
 
-        let servizio = valida_servizio(b, &path, rep);
-        let servizi_richiesti = valida_servizi_richiesti(b, &path, rep);
-        valida_produzione(b, &path, rep);
+        let service = validate_service(b, &path, rep);
+        let required_services = validate_required_services(b, &path, rep);
+        validate_output(b, &path, rep);
 
         out.push(BuildingDef {
             id: b.id.clone(),
-            footprint: b.footprint,
-            costo: Coins::new(b.costo),
-            livelli: b.livelli,
-            servizio,
-            servizi_richiesti,
-            produzione_per_tick: b.produzione_per_tick.map(Milli::from_millis),
-            giacenza_max: b.giacenza_max.map(Milli::from_millis),
+            size: b.size,
+            cost: Coins::new(b.cost),
+            levels: b.levels,
+            service,
+            required_services,
+            output_per_tick: b.output_per_tick.map(Milli::from_millis),
+            max_stock: b.max_stock.map(Milli::from_millis),
         });
     }
 
     out
 }
 
-fn valida_servizio(
+fn validate_service(
     b: &RawBuildingDef,
     path: &str,
     rep: &mut ValidationReport,
 ) -> Option<ServiceDef> {
-    let s = b.servizio.as_ref()?;
+    let s = b.service.as_ref()?;
 
     let kind = match ServiceKind::from_id(&s.kind) {
         Some(k) => Some(k),
         None => {
             rep.push(
-                format!("{path}.servizio.kind"),
-                ValidationErrorKind::ServizioSconosciuto {
-                    nome: s.kind.clone(),
-                    noti: servizi_noti(),
+                format!("{path}.service.kind"),
+                ValidationErrorKind::UnknownService {
+                    name: s.kind.clone(),
+                    known: known_services(),
                 },
             );
             None
         }
     };
 
-    // Un valore per livello: e' l'errore piu' probabile quando in M1 i livelli
-    // diventeranno piu' di uno.
-    for (campo, valori) in [
-        ("raggio_per_livello", &s.raggio_per_livello),
-        ("capacita_per_livello", &s.capacita_per_livello),
+    // One value per level: it is the likeliest mistake once M1 makes the levels
+    // more than one.
+    for (field, values) in [
+        ("range_per_level", &s.range_per_level),
+        ("capacity_per_level", &s.capacity_per_level),
     ] {
-        if valori.len() != usize::from(b.livelli) {
+        if values.len() != usize::from(b.levels) {
             rep.push(
-                format!("{path}.servizio.{campo}"),
-                ValidationErrorKind::LunghezzaPerLivello {
-                    livelli: b.livelli,
-                    trovati: valori.len(),
+                format!("{path}.service.{field}"),
+                ValidationErrorKind::WrongLengthPerLevel {
+                    levels: b.levels,
+                    found: values.len(),
                 },
             );
         }
@@ -354,25 +354,25 @@ fn valida_servizio(
 
     kind.map(|kind| ServiceDef {
         kind,
-        raggio_per_livello: s.raggio_per_livello.clone(),
-        capacita_per_livello: s.capacita_per_livello.clone(),
+        range_per_level: s.range_per_level.clone(),
+        capacity_per_level: s.capacity_per_level.clone(),
     })
 }
 
-fn valida_servizi_richiesti(
+fn validate_required_services(
     b: &RawBuildingDef,
     path: &str,
     rep: &mut ValidationReport,
 ) -> Vec<ServiceKind> {
-    let mut out = Vec::with_capacity(b.servizi_richiesti.len());
-    for (j, nome) in b.servizi_richiesti.iter().enumerate() {
-        match ServiceKind::from_id(nome) {
+    let mut out = Vec::with_capacity(b.required_services.len());
+    for (j, name) in b.required_services.iter().enumerate() {
+        match ServiceKind::from_id(name) {
             Some(k) => out.push(k),
             None => rep.push(
-                format!("{path}.servizi_richiesti[{j}]"),
-                ValidationErrorKind::ServizioSconosciuto {
-                    nome: nome.clone(),
-                    noti: servizi_noti(),
+                format!("{path}.required_services[{j}]"),
+                ValidationErrorKind::UnknownService {
+                    name: name.clone(),
+                    known: known_services(),
                 },
             ),
         }
@@ -380,34 +380,34 @@ fn valida_servizi_richiesti(
     out
 }
 
-fn valida_produzione(b: &RawBuildingDef, path: &str, rep: &mut ValidationReport) {
-    match (b.produzione_per_tick, b.giacenza_max) {
-        (Some(p), giacenza) => {
+fn validate_output(b: &RawBuildingDef, path: &str, rep: &mut ValidationReport) {
+    match (b.output_per_tick, b.max_stock) {
+        (Some(p), stock) => {
             if p < 0 {
                 rep.push(
-                    format!("{path}.produzione_per_tick"),
-                    ValidationErrorKind::Negativo {
-                        trovato: i64::from(p),
+                    format!("{path}.output_per_tick"),
+                    ValidationErrorKind::Negative {
+                        found: i64::from(p),
                     },
                 );
             }
-            if giacenza.is_none_or(|g| g <= 0) {
+            if stock.is_none_or(|g| g <= 0) {
                 rep.push(
-                    format!("{path}.giacenza_max"),
-                    ValidationErrorKind::ProduttoreSenzaGiacenza,
+                    format!("{path}.max_stock"),
+                    ValidationErrorKind::ProducerWithoutStock,
                 );
             }
         }
         (None, Some(_)) => rep.push(
-            format!("{path}.giacenza_max"),
-            ValidationErrorKind::GiacenzaSenzaProduzione,
+            format!("{path}.max_stock"),
+            ValidationErrorKind::StockWithoutOutput,
         ),
         (None, None) => {}
     }
 }
 
-fn servizi_noti() -> String {
-    ServiceKind::TUTTI
+fn known_services() -> String {
+    ServiceKind::ALL
         .iter()
         .map(|k| k.as_id())
         .collect::<Vec<_>>()

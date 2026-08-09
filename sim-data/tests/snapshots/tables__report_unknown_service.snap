@@ -1,0 +1,7 @@
+---
+source: sim-data/tests/tables.rs
+expression: r.to_string()
+---
+2 validation errors in the tables:
+  - buildings[0].service.kind: unknown service: "astral_transport" (known: water, food)
+  - buildings[0].required_services[0]: unknown service: "ambrosia" (known: water, food)

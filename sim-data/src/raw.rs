@@ -1,20 +1,20 @@
-//! Forma grezza delle tabelle, cosi' come stanno nei file RON.
+//! The raw shape of the tables, exactly as they sit in the RON files.
 //!
-//! I campi sono interi nudi e stringhe: i newtype (`Milli`, `Coins`,
-//! `ServiceKind`) compaiono solo dopo la validazione. Cosi' un RON con un
-//! numero fuori range produce un errore di validazione leggibile invece di
-//! un errore di deserializzazione oscuro, e i file restano leggibili a occhio.
+//! The fields are bare integers and strings: the newtypes (`Milli`, `Coins`,
+//! `ServiceKind`) only appear after validation. That way a RON file with a
+//! number out of range produces a readable validation error instead of an
+//! obscure deserialisation one, and the files stay readable by eye.
 
 use serde::Deserialize;
 use sim_core::Terrain;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawRules {
-    pub tick_per_mese: u32,
-    pub mesi_per_anno: u32,
-    pub tesoro_iniziale: i32,
-    pub abitanti_per_livello_casa: Vec<u16>,
-    pub consumo_cibo_per_abitante: i32,
+    pub ticks_per_month: u32,
+    pub months_per_year: u32,
+    pub starting_treasury: i32,
+    pub residents_per_house_level: Vec<u16>,
+    pub food_per_resident: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -25,9 +25,9 @@ pub struct RawTerrainTable {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawTerrainDef {
     pub terrain: Terrain,
-    pub costruibile: bool,
-    pub attraversabile: bool,
-    pub costo_strada: i32,
+    pub buildable: bool,
+    pub walkable: bool,
+    pub road_cost: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,27 +38,27 @@ pub struct RawBuildingTable {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawBuildingDef {
     pub id: String,
-    pub footprint: (u8, u8),
-    pub costo: i32,
-    pub livelli: u8,
+    pub size: (u8, u8),
+    pub cost: i32,
+    pub levels: u8,
     #[serde(default)]
-    pub servizio: Option<RawServiceDef>,
+    pub service: Option<RawServiceDef>,
     #[serde(default)]
-    pub servizi_richiesti: Vec<String>,
+    pub required_services: Vec<String>,
     #[serde(default)]
-    pub produzione_per_tick: Option<i32>,
+    pub output_per_tick: Option<i32>,
     #[serde(default)]
-    pub giacenza_max: Option<i32>,
+    pub max_stock: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawServiceDef {
     pub kind: String,
-    pub raggio_per_livello: Vec<u16>,
-    pub capacita_per_livello: Vec<u16>,
+    pub range_per_level: Vec<u16>,
+    pub capacity_per_level: Vec<u16>,
 }
 
-/// Le tre tabelle appena deserializzate, prima di qualunque controllo.
+/// The three tables just deserialised, before any check.
 #[derive(Debug, Clone)]
 pub struct RawDataSet {
     pub rules: RawRules,

@@ -1,23 +1,23 @@
-//! Il tick della simulazione.
+//! The simulation tick.
 //!
-//! L'ordine dei dieci passi e' **semantica di gioco**, non un dettaglio
-//! implementativo (CLAUDE.md, ordine del tick). Tutte e dieci le funzioni
-//! esistono da subito, anche vuote: se nascessero man mano, l'ordine
-//! diventerebbe un accidente della cronologia di sviluppo.
+//! The order of the ten steps is **game semantics**, not an implementation
+//! detail (CLAUDE.md, tick order). All ten functions exist from the start, even
+//! the empty ones: if they came into being one at a time, the order would end
+//! up an accident of the development timeline.
 //!
-//! Unita' di tempo: 1 tick = 1 giorno di gioco.
+//! Unit of time: 1 tick = 1 game day.
 
-use crate::command::{Command, CommandError, Occupato};
+use crate::command::{Command, CommandError, OccupantKind};
 use crate::event::Event;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
-use crate::world::{Building, House, Occupante, World};
+use crate::world::{Building, House, Occupant, World};
 
-/// Cosa e' successo in un tick.
+/// What happened during a tick.
 ///
-/// Un comando invalido **non** interrompe il tick e non e' un `Err` del tick:
-/// viene scartato e registrato con l'indice che aveva in `cmds`.
+/// An invalid command does **not** interrupt the tick and is not an `Err` of
+/// the tick: it is discarded and recorded with the index it had in `cmds`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StepReport {
     pub rejected: Vec<(usize, CommandError)>,
@@ -25,17 +25,17 @@ pub struct StepReport {
 }
 
 impl StepReport {
-    pub fn accettati(&self, totale: usize) -> usize {
-        totale - self.rejected.len()
+    pub fn accepted(&self, total: usize) -> usize {
+        total - self.rejected.len()
     }
 }
 
-/// Avanza il mondo di un tick applicando i comandi in arrivo.
+/// Advances the world by one tick, applying the incoming commands.
 pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     let mut r = StepReport::default();
-    // Fotografia dei servizi a inizio tick: e' il riferimento rispetto al
-    // quale il passo 10 emette i delta.
-    let servizi_prima = snapshot_servizi(world);
+    // A snapshot of the services at the start of the tick: it is the reference
+    // step 10 emits its deltas against.
+    let services_before = service_snapshot(world);
     apply_commands(world, cmds, &mut r); // 1
     rebuild_roads(world); // 2
     propagate_coverage(world); // 3
@@ -45,21 +45,21 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     finance(world); // 7
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
-    emit_events(world, &servizi_prima, &mut r); // 10
+    emit_events(world, &services_before, &mut r); // 10
     world.tick = world.tick.saturating_add(1);
     r
 }
 
-// --- 1. comandi ------------------------------------------------------------
+// --- 1. commands -----------------------------------------------------------
 
 fn apply_commands(world: &mut World, cmds: &[Command], r: &mut StepReport) {
     for (i, cmd) in cmds.iter().enumerate() {
-        let esito = match *cmd {
+        let outcome = match *cmd {
             Command::PlaceRoad { at } => place_road(world, at, r),
             Command::PlaceBuilding { kind, origin } => place_building(world, kind, origin, r),
             Command::Demolish { at } => demolish(world, at, r),
         };
-        if let Err(e) = esito {
+        if let Err(e) = outcome {
             r.rejected.push((i, e));
         }
     }
@@ -72,10 +72,10 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
     if tile.flags.has_road() {
         return Err(CommandError::TileOccupied {
             at,
-            occupant: Occupato::Strada,
+            occupant: OccupantKind::Road,
         });
     }
-    if let Some(occ) = world.occupante(idx) {
+    if let Some(occ) = world.occupant(idx) {
         return Err(CommandError::TileOccupied {
             at,
             occupant: occ.into(),
@@ -83,16 +83,16 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
     }
 
     let def = terrain_def(world, tile.terrain, at)?;
-    if !def.attraversabile {
+    if !def.walkable {
         return Err(CommandError::UnsuitableTerrain {
             at,
             terrain: tile.terrain,
         });
     }
-    let costo = def.costo_strada;
-    paga(world, costo)?;
+    let cost = def.road_cost;
+    charge(world, cost)?;
 
-    // Da qui in poi non si puo' piu' fallire: nessuna mutazione parziale.
+    // From here on nothing can fail: no partial mutation.
     if let Some(t) = world.grid.get_mut(idx) {
         t.flags.set_road(true);
     }
@@ -111,14 +111,14 @@ fn place_building(
         .data
         .def(kind)
         .ok_or(CommandError::UnknownBuildingKind(kind))?;
-    let footprint = def.footprint;
-    let costo = def.costo;
-    let e_una_casa = def.e_una_casa();
-    let abitanti = if e_una_casa {
+    let size = def.size;
+    let cost = def.cost;
+    let is_a_house = def.is_house();
+    let residents = if is_a_house {
         world
             .data
             .rules
-            .abitanti_per_livello_casa
+            .residents_per_house_level
             .first()
             .copied()
             .unwrap_or(0)
@@ -126,9 +126,9 @@ fn place_building(
         0
     };
 
-    // L'intero footprint si valida prima di qualunque mutazione: una
-    // sovrapposizione parziale lascerebbe lo stato incoerente.
-    let tiles = tiles_del_footprint(world, origin, footprint)?;
+    // The whole area is validated before any mutation: a partial overlap would
+    // leave the state inconsistent.
+    let tiles = tiles_covered(world, origin, size)?;
     for (idx, pos) in &tiles {
         let tile = world
             .grid
@@ -137,17 +137,17 @@ fn place_building(
         if tile.flags.has_road() {
             return Err(CommandError::TileOccupied {
                 at: *pos,
-                occupant: Occupato::Strada,
+                occupant: OccupantKind::Road,
             });
         }
-        if let Some(occ) = world.occupante(*idx) {
+        if let Some(occ) = world.occupant(*idx) {
             return Err(CommandError::TileOccupied {
                 at: *pos,
                 occupant: occ.into(),
             });
         }
         let tdef = terrain_def(world, tile.terrain, *pos)?;
-        if !tdef.costruibile {
+        if !tdef.buildable {
             return Err(CommandError::UnsuitableTerrain {
                 at: *pos,
                 terrain: tile.terrain,
@@ -155,27 +155,27 @@ fn place_building(
         }
     }
 
-    paga(world, costo)?;
+    charge(world, cost)?;
 
-    // --- da qui in poi nessun fallimento possibile ---
+    // --- from here on no failure is possible ---
     let origin_idx = tiles
         .first()
         .map(|(i, _)| *i)
         .unwrap_or_else(|| TileIdx::new(0));
 
-    if e_una_casa {
+    if is_a_house {
         let id = world.houses.insert(House {
             origin,
             level: 1,
-            abitanti,
-            servita: crate::service::ServiceFlags::empty(),
+            residents,
+            served: crate::service::ServiceFlags::empty(),
         });
-        world.case_per_origine.insert(origin_idx, id);
-        occupa(world, &tiles, origin_idx, true);
-        // Una casa nuova va coperta: senza questo, resterebbe non servita
-        // finche' qualcos'altro non sporca la copertura. E' esattamente
-        // l'invalidazione dimenticata che il test di equivalenza coglie.
-        segna_tutti_i_provider(world);
+        world.houses_by_origin.insert(origin_idx, id);
+        occupy(world, &tiles, origin_idx, true);
+        // A new house needs covering: without this it would stay unserved until
+        // something else dirtied the coverage. That is exactly the forgotten
+        // invalidation the equivalence test catches.
+        mark_all_providers_dirty(world);
         r.events.push(Event::HousePlaced { id, origin });
     } else {
         let id = world.buildings.insert(Building {
@@ -184,9 +184,9 @@ fn place_building(
             level: 1,
             stock: crate::units::Milli::ZERO,
         });
-        world.edifici_per_origine.insert(origin_idx, id);
-        occupa(world, &tiles, origin_idx, false);
-        world.dirty.segna_coverage(id);
+        world.buildings_by_origin.insert(origin_idx, id);
+        occupy(world, &tiles, origin_idx, false);
+        world.dirty.mark_coverage(id);
         r.events.push(Event::BuildingPlaced { id, kind, origin });
     }
     Ok(())
@@ -195,10 +195,10 @@ fn place_building(
 fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
     let idx = world.grid.idx(at).ok_or(CommandError::OutOfBounds(at))?;
 
-    if let Some(occ) = world.occupante(idx) {
+    if let Some(occ) = world.occupant(idx) {
         match occ {
-            Occupante::Edificio(id) => rimuovi_edificio(world, id, r),
-            Occupante::Casa(id) => rimuovi_casa(world, id, r),
+            Occupant::Building(id) => remove_building(world, id, r),
+            Occupant::House(id) => remove_house(world, id, r),
         }
         return Ok(());
     }
@@ -216,130 +216,131 @@ fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), Co
     Err(CommandError::NothingToDemolish(at))
 }
 
-fn rimuovi_edificio(world: &mut World, id: BuildingId, r: &mut StepReport) {
+fn remove_building(world: &mut World, id: BuildingId, r: &mut StepReport) {
     let Some(b) = world.buildings.remove(id) else {
         return;
     };
     let Some(def) = world.data.def(b.kind) else {
         return;
     };
-    let footprint = def.footprint;
-    // La giacenza sparisce col produttore: va registrata, altrimenti la
-    // conservazione del cibo smette di essere un'uguaglianza (fase 07).
-    if def.e_un_produttore() {
-        world.food.perso_per_demolizione += i64::from(b.stock.to_millis());
+    let size = def.size;
+    // The stock disappears with the producer: it has to be recorded, otherwise
+    // food conservation stops being an equality (phase 07).
+    if def.is_producer() {
+        world.food.lost_to_demolition += i64::from(b.stock.to_millis());
     }
-    libera_footprint(world, b.origin, footprint);
+    clear_tiles(world, b.origin, size);
     if let Some(idx) = world.grid.idx(b.origin) {
-        world.edifici_per_origine.remove(&idx);
+        world.buildings_by_origin.remove(&idx);
     }
-    world.dirty.dimentica_coverage(id);
-    // La copertura di tutti gli altri provider va rivista: quello rimosso
-    // poteva servire case che ora tornano libere (fase 06).
-    segna_tutti_i_provider(world);
+    world.dirty.forget_coverage(id);
+    // Every other provider's coverage has to be revisited: the one just removed
+    // may have been serving houses that are now free again (phase 06).
+    mark_all_providers_dirty(world);
     r.events.push(Event::BuildingRemoved { id });
 }
 
-fn rimuovi_casa(world: &mut World, id: HouseId, r: &mut StepReport) {
+fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     let Some(h) = world.houses.remove(id) else {
         return;
     };
-    // Il footprint di una casa e' quello del suo tipo; in M0 le case sono
-    // 1x1, ma il footprint si rilegge dalla tabella per non incastrarsi il
-    // giorno in cui non lo saranno piu'.
-    let footprint = world
+    // A house's size is the one of its kind; in M0 houses are 1x1, but the size
+    // is re-read from the table so as not to get stuck the day they no longer
+    // are.
+    let size = world
         .data
         .kind_by_id("casa")
         .and_then(|k| world.data.def(k))
-        .map_or((1, 1), |d| d.footprint);
-    libera_footprint(world, h.origin, footprint);
+        .map_or((1, 1), |d| d.size);
+    clear_tiles(world, h.origin, size);
     if let Some(idx) = world.grid.idx(h.origin) {
-        world.case_per_origine.remove(&idx);
+        world.houses_by_origin.remove(&idx);
     }
-    segna_tutti_i_provider(world);
+    mark_all_providers_dirty(world);
     r.events.push(Event::HouseRemoved { id });
 }
 
-// --- 2..10: i passi che si riempiono nelle fasi successive ------------------
+// --- 2..10: the steps that fill up in the later phases ----------------------
 
-/// Passo 2 — ricostruisce la rete stradale, ma solo se e' sporca.
+/// Step 2 — rebuilds the road network, but only if it is dirty.
 ///
-/// La topologia della rete cambia le distanze percorse, quindi dopo una
-/// ricostruzione ogni provider va rivalutato (passo 3).
+/// The network's topology changes the walked distances, so after a rebuild
+/// every provider has to be re-evaluated (step 3).
 fn rebuild_roads(world: &mut World) {
     if !world.dirty.roads {
         return;
     }
     world.roads.rebuild(&world.grid);
     world.dirty.roads = false;
-    segna_tutti_i_provider(world);
+    mark_all_providers_dirty(world);
 }
 
-/// Passo 3 — copertura aggregata dei servizi. E' l'hot path del progetto.
+/// Step 3 — aggregate service coverage. It is the project's hot path.
 fn propagate_coverage(world: &mut World) {
     crate::coverage::propagate_coverage(world);
 }
 
-/// Passo 4 — produzione e consumo delle catene.
+/// Step 4 — production and consumption along the chains.
 fn production(world: &mut World) {
     crate::production::production(world);
 }
 
-/// Passo 5 — walker logistici reali, M3 (D3).
+/// Step 5 — real logistics walkers, M3 (D3).
 fn step_walkers(_world: &mut World) {}
 
-/// Passo 6 — evoluzione, degrado e migrazione, M1.
+/// Step 6 — levelling up, decay and migration, M1.
 fn houses_and_migration(_world: &mut World) {}
 
-/// Passo 7 — tesoro e tasse, M1.
+/// Step 7 — treasury and taxes, M1.
 fn finance(_world: &mut World) {}
 
-/// Passo 8 — eventi casuali, M1. Primo uso di `RngDomain::Events`.
+/// Step 8 — random events, M1. First use of `RngDomain::Events`.
 fn random_events(_world: &mut World) {}
 
-/// Passo 9 — obiettivi di scenario, M1 (serve `sim-scenario`).
+/// Step 9 — scenario objectives, M1 (needs `sim-scenario`).
 fn check_objectives(_world: &mut World, _r: &mut StepReport) {}
 
-/// Passo 10 — emette i delta di copertura.
+/// Step 10 — emits the coverage deltas.
 ///
-/// Solo i **cambiamenti** rispetto all'inizio del tick: una casa affamata da
-/// dieci tick genera un evento al primo, non dieci. E' il confine con il
-/// renderer, e la scelta sbagliata qui costerebbe 40.000 eventi per tick.
-fn emit_events(world: &mut World, prima: &[(HouseId, ServiceFlags)], r: &mut StepReport) {
+/// Only the **changes** relative to the start of the tick: a house that has
+/// been hungry for ten ticks generates one event on the first, not ten. This is
+/// the boundary with the renderer, and the wrong choice here would cost 40,000
+/// events per tick.
+fn emit_events(world: &mut World, before: &[(HouseId, ServiceFlags)], r: &mut StepReport) {
     for (house, _) in world.houses() {
-        let adesso = world
+        let now = world
             .house(house)
-            .map_or(ServiceFlags::empty(), |h| h.servita);
-        // Una casa nata in questo tick non ha un "prima": parte da scoperta,
-        // quindi se e' servita l'evento c'e'.
-        let precedente = prima
+            .map_or(ServiceFlags::empty(), |h| h.served);
+        // A house born this tick has no "before": it starts uncovered, so if it
+        // is served the event is there.
+        let previous = before
             .binary_search_by_key(&house, |(h, _)| *h)
-            .map_or(ServiceFlags::empty(), |i| prima[i].1);
-        if adesso == precedente {
+            .map_or(ServiceFlags::empty(), |i| before[i].1);
+        if now == previous {
             continue;
         }
-        for service in ServiceKind::TUTTI {
-            if adesso.get(service) != precedente.get(service) {
+        for service in ServiceKind::ALL {
+            if now.get(service) != previous.get(service) {
                 r.events.push(Event::ServiceCoverageChanged {
                     house,
                     service,
-                    served: adesso.get(service),
+                    served: now.get(service),
                 });
             }
         }
     }
 }
 
-/// I flag di servizio di ogni casa, ordinati per `HouseId` cosi' che il
-/// confronto del passo 10 sia una ricerca binaria e non una scansione.
-fn snapshot_servizi(world: &World) -> Vec<(HouseId, ServiceFlags)> {
+/// Every house's service flags, sorted by `HouseId` so step 10's comparison is
+/// a binary search and not a scan.
+fn service_snapshot(world: &World) -> Vec<(HouseId, ServiceFlags)> {
     let mut v: Vec<(HouseId, ServiceFlags)> =
-        world.houses().map(|(id, h)| (id, h.servita)).collect();
+        world.houses().map(|(id, h)| (id, h.served)).collect();
     v.sort_unstable_by_key(|(id, _)| *id);
     v
 }
 
-// --- helper ----------------------------------------------------------------
+// --- helpers ---------------------------------------------------------------
 
 fn terrain_def(
     world: &World,
@@ -352,33 +353,34 @@ fn terrain_def(
         .ok_or(CommandError::UnsuitableTerrain { at, terrain })
 }
 
-/// Scala il costo dal tesoro. Errore strutturato, mai un tesoro negativo.
-fn paga(world: &mut World, costo: Coins) -> Result<(), CommandError> {
-    let disponibile = world.economy.tesoro;
-    let resto = disponibile
-        .checked_sub(costo)
+/// Takes the cost out of the treasury. A structured error, never a negative
+/// treasury.
+fn charge(world: &mut World, cost: Coins) -> Result<(), CommandError> {
+    let available = world.economy.treasury;
+    let left = available
+        .checked_sub(cost)
         .ok_or(CommandError::InsufficientFunds {
-            needed: costo,
-            available: disponibile,
+            needed: cost,
+            available,
         })?;
-    if resto.is_negative() {
+    if left.is_negative() {
         return Err(CommandError::InsufficientFunds {
-            needed: costo,
-            available: disponibile,
+            needed: cost,
+            available,
         });
     }
-    world.economy.tesoro = resto;
+    world.economy.treasury = left;
     Ok(())
 }
 
-/// I tile del footprint, in ordine di `TileIdx` crescente. Errore se anche
-/// uno solo esce dalla mappa.
-fn tiles_del_footprint(
+/// The tiles an area covers, in increasing `TileIdx` order. An error if even
+/// one of them leaves the map.
+fn tiles_covered(
     world: &World,
     origin: TilePos,
-    footprint: (u8, u8),
+    size: (u8, u8),
 ) -> Result<Vec<(TileIdx, TilePos)>, CommandError> {
-    let (w, h) = footprint;
+    let (w, h) = size;
     let mut out = Vec::with_capacity(usize::from(w) * usize::from(h));
     for dy in 0..h {
         for dx in 0..w {
@@ -398,39 +400,39 @@ fn tiles_del_footprint(
     Ok(out)
 }
 
-fn occupa(world: &mut World, tiles: &[(TileIdx, TilePos)], origin_idx: TileIdx, e_casa: bool) {
+fn occupy(world: &mut World, tiles: &[(TileIdx, TilePos)], origin_idx: TileIdx, is_house: bool) {
     let occ = crate::grid::TileOccupant {
         origin: origin_idx,
-        e_casa,
+        is_house,
     };
     for (idx, _) in tiles {
         if let Some(t) = world.grid.get_mut(*idx) {
-            t.set_occupante(occ);
+            t.set_occupant(occ);
         }
     }
 }
 
-fn libera_footprint(world: &mut World, origin: TilePos, footprint: (u8, u8)) {
-    let Ok(tiles) = tiles_del_footprint(world, origin, footprint) else {
+fn clear_tiles(world: &mut World, origin: TilePos, size: (u8, u8)) {
+    let Ok(tiles) = tiles_covered(world, origin, size) else {
         return;
     };
     for (idx, _) in tiles {
         if let Some(t) = world.grid.get_mut(idx) {
-            t.libera_occupante();
+            t.clear_occupant();
         }
     }
 }
 
-/// In M0 il ricalcolo della copertura e' ingenuo: quando la topologia cambia,
-/// tutti i provider tornano dirty. `CLAUDE.md` lo autorizza, purche' i flag
-/// esistano — ed esistono.
+/// In M0 recomputing coverage is naive: when the topology changes, every
+/// provider goes dirty again. `CLAUDE.md` licenses that, as long as the flags
+/// exist — and they do.
 ///
-/// "Tutti dirty" si dice con il flag globale, non elencando i provider uno a
-/// uno in `dirty.coverage`: la lista serve all'invalidazione **mirata**, e
-/// riempirla con l'insieme completo non aggiungerebbe nessuna informazione a
-/// chi un giorno la leggera'. Vale anche quando non resta nessun provider —
-/// le assegnazioni esistenti vanno comunque buttate, ed e' il caso che la sola
-/// lista non sa esprimere.
-fn segna_tutti_i_provider(world: &mut World) {
-    world.dirty.invalida_coverage();
+/// "Everything dirty" is said with the global flag, not by listing the
+/// providers one by one in `dirty.coverage`: the list serves **targeted**
+/// invalidation, and filling it with the complete set would add no information
+/// for whoever reads it one day. It holds even when no provider is left — the
+/// existing assignments still have to be thrown away, and that is the case the
+/// list alone cannot express.
+fn mark_all_providers_dirty(world: &mut World) {
+    world.dirty.invalidate_coverage();
 }

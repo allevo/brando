@@ -1,6 +1,6 @@
-# golden di 'minimo': hash canonico dello stato ogni 30 tick.
-# Se cambia senza che sia cambiato il bilanciamento, e' stata introdotta
-# una fonte di non-determinismo: fermarsi e trovarla, non rigenerare.
+# expected hashes for 'minimal': the state hash every 30 ticks.
+# If this changes without the balancing having changed, a source of
+# non-determinism has been introduced: stop and find it, do not regenerate.
 30,1e93471fb076b766f4268e09ff6bfc699f81221f2880d11dcac4e7dcb91eb181
 60,5f54b184d83cc92e872feacfd08ba7fe10a79acf1e275e8be9db62f64e74b4fd
 90,44b8b58f49302c55744579084fa349485cebd061b286b09d193e57b7083e523d

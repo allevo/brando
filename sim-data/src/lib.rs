@@ -1,32 +1,32 @@
 #![forbid(unsafe_code)]
 
-//! Tabelle di bilanciamento in RON, caricate e validate all'avvio.
+//! The balancing tables in RON, loaded and validated at startup.
 //!
-//! Tutto cio' che e' numerico nel gioco vive qui e non nel codice
-//! (CLAUDE.md, convenzioni). Il caricamento e' I/O e per questo sta qui,
-//! mai dentro `sim-core` (D4).
+//! Everything numeric in the game lives here and not in the code
+//! (CLAUDE.md, conventions). Loading is I/O and that is why it lives here,
+//! never inside `sim-core` (D4).
 
 pub mod load;
 pub mod raw;
 pub mod validate;
 
 pub use load::{LoadError, from_ron_str, load_from_dir};
-/// Le definizioni del dataset vivono in `sim-core` (il `World` le tiene in
-/// un `Arc`, A2); qui restano parsing, validazione e I/O. Ri-esportate per
-/// comodita' di chi carica le tabelle.
+/// The dataset definitions live in `sim-core` (the `World` holds them in an
+/// `Arc`, A2); what stays here is parsing, validation and I/O. Re-exported for
+/// the convenience of whoever loads the tables.
 pub use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
 pub use validate::{ValidationError, ValidationErrorKind, ValidationReport, validate};
 
-/// Directory delle tabelle di produzione, risolta a compile time.
+/// The directory of the production tables, resolved at compile time.
 ///
-/// Evita che ogni chiamante debba sapere dove sta `sim-data/data`. Resta un
-/// percorso su disco e non un `include_str!`: le tabelle si modificano senza
-/// ricompilare, che e' il punto di averle in RON.
-pub fn dir_dati_di_produzione() -> std::path::PathBuf {
+/// It saves every caller from having to know where `sim-data/data` is. It stays
+/// a path on disk and not an `include_str!`: the tables can be edited without
+/// recompiling, which is the whole point of having them in RON.
+pub fn production_data_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data")
 }
 
-/// Carica le tabelle di produzione.
+/// Loads the production tables.
 pub fn load_default() -> Result<DataSet, LoadError> {
-    load_from_dir(&dir_dati_di_produzione())
+    load_from_dir(&production_data_dir())
 }

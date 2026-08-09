@@ -1,12 +1,12 @@
-//! Il salvataggio: `seed + Vec<Command>`, non un dump dello stato (D4).
+//! The save file: `seed + Vec<Command>`, not a dump of the state (D4).
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sim_core::{Command, Terrain};
 
-/// Versione del formato. Si incrementa quando cambia la forma del file, non
-/// quando cambia il bilanciamento: per quello c'e' `dataset_hash`.
+/// Version of the format. It goes up when the shape of the file changes, not
+/// when the balancing does: that is what `dataset_hash` is for.
 pub const FORMAT_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,62 +21,60 @@ pub struct Header {
     pub format_version: u16,
     pub seed: u64,
     pub grid: GridSpec,
-    /// blake3 del `DataSet`, in esadecimale per restare leggibile nel file.
+    /// blake3 of the `DataSet`, in hexadecimal so it stays readable in the file.
     ///
-    /// Se il bilanciamento cambia, il replay fallisce subito e con il motivo
-    /// giusto invece di divergere dieci tick dopo per un effetto secondario
-    /// (A2).
+    /// If the balancing changes, the replay fails immediately and for the right
+    /// reason instead of diverging ten ticks later through a side effect (A2).
     pub dataset_hash: String,
 }
 
-/// Una partita registrata.
+/// A recorded game.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recording {
     pub header: Header,
-    /// Ordinato per tick crescente. Piu' comandi nello stesso tick mantengono
-    /// l'ordine di inserimento: quell'ordine e' parte del contratto di
-    /// determinismo, non un dettaglio del file.
+    /// Sorted by increasing tick. Several commands within the same tick keep
+    /// the order they were added in: that order is part of the determinism
+    /// contract, not a detail of the file.
     pub commands: Vec<(u32, Command)>,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RecordingError {
-    #[error("impossibile leggere o scrivere {path}: {source}")]
+    #[error("cannot read or write {path}: {source}")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
 
-    #[error("{path} non e' un RON valido: {source}")]
+    #[error("{path} is not valid RON: {source}")]
     Parse {
         path: PathBuf,
         #[source]
         source: ron::error::SpannedError,
     },
 
-    #[error("impossibile serializzare la registrazione: {0}")]
+    #[error("cannot serialise the recording: {0}")]
     Serialize(#[from] ron::Error),
 }
 
 impl Recording {
     pub fn load(path: &Path) -> Result<Self, RecordingError> {
-        let testo = std::fs::read_to_string(path).map_err(|source| RecordingError::Io {
+        let text = std::fs::read_to_string(path).map_err(|source| RecordingError::Io {
             path: path.to_path_buf(),
             source,
         })?;
-        ron::from_str(&testo).map_err(|source| RecordingError::Parse {
+        ron::from_str(&text).map_err(|source| RecordingError::Parse {
             path: path.to_path_buf(),
             source,
         })
     }
 
-    /// Scrive il file. Il formato e' volutamente prolisso e indentato: un
-    /// golden che nessuno riesce a leggere non aiuta a capire perche' e'
-    /// cambiato.
+    /// Writes the file. The format is deliberately verbose and indented: a
+    /// recording nobody can read does not help anyone work out why it changed.
     pub fn save(&self, path: &Path) -> Result<(), RecordingError> {
-        let testo = self.to_ron()?;
-        std::fs::write(path, testo).map_err(|source| RecordingError::Io {
+        let text = self.to_ron()?;
+        std::fs::write(path, text).map_err(|source| RecordingError::Io {
             path: path.to_path_buf(),
             source,
         })
@@ -89,13 +87,13 @@ impl Recording {
         Ok(format!("{}\n", ron::ser::to_string_pretty(self, cfg)?))
     }
 
-    /// L'ultimo tick in cui c'e' un comando.
-    pub fn ultimo_tick(&self) -> u32 {
+    /// The last tick that holds a command.
+    pub fn last_tick(&self) -> u32 {
         self.commands.iter().map(|(t, _)| *t).max().unwrap_or(0)
     }
 
-    /// I comandi di un tick, nell'ordine di inserimento.
-    pub fn comandi_al_tick(&self, tick: u32) -> Vec<Command> {
+    /// The commands of one tick, in the order they were added.
+    pub fn commands_at_tick(&self, tick: u32) -> Vec<Command> {
         self.commands
             .iter()
             .filter(|(t, _)| *t == tick)

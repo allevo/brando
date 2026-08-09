@@ -1,57 +1,57 @@
-// I tre edifici di M0. Un solo livello ciascuno: l'evoluzione delle case e'
-// M1, e con essa raggi e capacita' diventeranno vettori di piu' elementi.
+// The three buildings of M0. One level each: houses levelling up is M1, and
+// with it ranges and capacities will become vectors of more than one element.
 (
     buildings: [
         (
             id: "casa",
-            footprint: (1, 1),
-            costo: 10,
-            livelli: 1,
-            servizio: None,
-            servizi_richiesti: ["acqua", "cibo"],
+            size: (1, 1),
+            cost: 10,
+            levels: 1,
+            service: None,
+            required_services: ["water", "food"],
         ),
         (
             id: "pozzo",
-            footprint: (1, 1),
-            costo: 12,
-            livelli: 1,
-            servizio: Some((
-                kind: "acqua",
-                // Un valore per livello. Raggio in tile percorsi sulla rete
-                // stradale, non in linea d'aria (D2).
-                raggio_per_livello: [12],
-                // Abitanti serviti contemporaneamente, non case: con i livelli
-                // delle case (M1) la popolazione per casa varia. Trentadue
-                // sono otto case da quattro.
-                capacita_per_livello: [32],
+            size: (1, 1),
+            cost: 12,
+            levels: 1,
+            service: Some((
+                kind: "water",
+                // One value per level. Range in tiles walked along the road
+                // network, not as the crow flies (D2).
+                range_per_level: [12],
+                // Residents served at the same time, not houses: once houses
+                // have levels (M1) the population per house varies. Thirty-two
+                // is eight houses of four.
+                capacity_per_level: [32],
             )),
-            servizi_richiesti: [],
+            required_services: [],
         ),
         (
             id: "fattoria",
-            footprint: (2, 2),
-            costo: 40,
-            livelli: 1,
-            // A5: in M0 la fattoria copre come un pozzo, consumando da una
-            // giacenza locale. In M3 la merce arrivera' da un magazzino via
-            // walker logistici reali e questi due campi cambieranno: il
-            // raggio resta, la provenienza della merce no.
-            servizio: Some((
-                kind: "cibo",
-                raggio_per_livello: [10],
-                // Abitanti serviti contemporaneamente. Non e' un numero
-                // libero: e' cio' che la produzione sostiene,
-                // produzione_per_tick / consumo_cibo_per_abitante = 400 / 20 =
-                // 20 abitanti, cioe' cinque case da quattro. Alzarlo
-                // rimetterebbe in piedi lo stato assorbente della fame — case
-                // assegnate a una fattoria che non le sfama e che nessun'altra
-                // fattoria puo' rilevare. Lo verifica la validazione, non
-                // questo commento: sim-core `DataSet::capacita_cibo_insostenibile`.
-                capacita_per_livello: [20],
+            size: (2, 2),
+            cost: 40,
+            levels: 1,
+            // A5: in M0 the farm covers just like a well, consuming from a
+            // local stock. In M3 the goods will arrive from a warehouse via
+            // real logistics walkers and these two fields will change: the
+            // range stays, where the goods come from does not.
+            service: Some((
+                kind: "food",
+                range_per_level: [10],
+                // Residents served at the same time. Not a free number: it is
+                // what the output sustains, output_per_tick /
+                // food_per_resident = 400 / 20 = 20 residents, that is five
+                // houses of four. Raising it would bring back the absorbing
+                // state of hunger — houses assigned to a farm that does not
+                // feed them and that no other farm can take over. Validation
+                // checks this, not this comment: sim-core
+                // `DataSet::unsustainable_food_capacity`.
+                capacity_per_level: [20],
             )),
-            servizi_richiesti: [],
-            produzione_per_tick: Some(400),
-            giacenza_max: Some(20000),
+            required_services: [],
+            output_per_tick: Some(400),
+            max_stock: Some(20000),
         ),
     ],
 )

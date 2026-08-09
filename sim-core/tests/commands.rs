@@ -1,0 +1,335 @@
+//! Phase 04 — the table-driven behaviour of `step` and of the commands.
+//!
+//! The global invariants (no panic, no overlap, a consistent treasury) live in
+//! `invariants.rs`.
+
+mod common;
+
+use common::*;
+use sim_core::{Coins, Command, CommandError, Event, Occupant, Terrain, TileOccupant};
+
+#[test]
+fn an_empty_tick_only_advances_the_tick() {
+    let mut w = world();
+    let before = w.clone();
+
+    let r = tick(&mut w, &[]);
+
+    assert_eq!(w.tick(), before.tick() + 1);
+    assert!(r.rejected.is_empty());
+    assert!(r.events.is_empty());
+    assert_eq!(w.grid(), before.grid());
+    assert_eq!(w.economy(), before.economy());
+    assert_eq!(w.building_count(), 0);
+    assert_eq!(w.house_count(), 0);
+    assert_eq!(w.rng(), before.rng(), "no system draws from the RNG in M0");
+}
+
+#[test]
+fn a_farm_takes_four_tiles_and_costs_money() {
+    let mut w = world();
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(3, 3),
+        }],
+    );
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(w.building_count(), 1);
+    assert_eq!(
+        w.economy().treasury,
+        Coins::new(STARTING_TREASURY - FARM_COST)
+    );
+
+    let origin = w.grid().idx(pos(3, 3)).expect("on the map");
+    let mut occupied = 0;
+    for (x, y) in [(3, 3), (4, 3), (3, 4), (4, 4)] {
+        let idx = w.grid().idx(pos(x, y)).expect("on the map");
+        let tile = w.grid().get(idx).expect("tile");
+        assert_eq!(
+            tile.occupant(),
+            Some(TileOccupant {
+                origin,
+                is_house: false
+            }),
+            "tile ({x},{y}) must point at the farm's origin"
+        );
+        assert!(matches!(w.occupant(idx), Some(Occupant::Building(_))));
+        occupied += 1;
+    }
+    assert_eq!(occupied, 4);
+
+    // The tiles just outside the area stay free.
+    let outside = w.grid().idx(pos(5, 3)).expect("on the map");
+    assert_eq!(w.occupant(outside), None);
+}
+
+#[test]
+fn an_overlap_is_rejected_without_mutating_anything() {
+    let mut w = world();
+    tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(3, 3),
+        }],
+    );
+    let before = w.clone();
+
+    // The second farm touches a single tile of the first.
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(4, 4),
+        }],
+    );
+
+    assert_eq!(r.rejected.len(), 1);
+    assert!(matches!(r.rejected[0].1, CommandError::TileOccupied { .. }));
+    assert_eq!(w.building_count(), before.building_count());
+    assert_eq!(
+        w.economy(),
+        before.economy(),
+        "a rejected command costs nothing"
+    );
+    assert_eq!(
+        w.grid(),
+        before.grid(),
+        "no partial occupation: validation comes before the mutations"
+    );
+}
+
+#[test]
+fn a_building_cannot_stick_out_past_the_edge() {
+    let mut w = world_of(8, 8);
+    let before = w.clone();
+
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(7, 7),
+        }],
+    );
+
+    assert_eq!(r.rejected.len(), 1);
+    assert!(matches!(r.rejected[0].1, CommandError::OutOfBounds(_)));
+    assert_eq!(w.grid(), before.grid());
+    assert_eq!(w.economy(), before.economy());
+}
+
+#[test]
+fn an_empty_treasury_reports_the_right_numbers() {
+    let mut w = world();
+    // Drain the treasury by building houses for as long as there is money.
+    let houses = STARTING_TREASURY / HOUSE_COST;
+    let cmds: Vec<_> = (0..houses)
+        .map(|i| Command::PlaceBuilding {
+            kind: HOUSE,
+            origin: pos((i % 32) as u8, (i / 32) as u8),
+        })
+        .collect();
+    let r = tick(&mut w, &cmds);
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(w.economy().treasury, Coins::ZERO);
+
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: WELL,
+            origin: pos(20, 20),
+        }],
+    );
+    assert_eq!(
+        r.rejected[0].1,
+        CommandError::InsufficientFunds {
+            needed: Coins::new(WELL_COST),
+            available: Coins::ZERO,
+        }
+    );
+}
+
+#[test]
+fn demolishing_frees_every_tile_and_removes_the_id() {
+    let mut w = world();
+    tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(3, 3),
+        }],
+    );
+    let id = w
+        .buildings()
+        .next()
+        .map(|(id, _)| id)
+        .expect("one building");
+
+    // Demolishing from a tile that is not the origin must work all the same.
+    let r = tick(&mut w, &[Command::Demolish { at: pos(4, 4) }]);
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(w.building_count(), 0);
+    assert_eq!(w.building(id), None, "the id is no longer live");
+    assert!(r.events.contains(&Event::BuildingRemoved { id }));
+    for (x, y) in [(3, 3), (4, 3), (3, 4), (4, 4)] {
+        let idx = w.grid().idx(pos(x, y)).expect("on the map");
+        assert_eq!(w.occupant(idx), None, "({x},{y}) must be free again");
+    }
+}
+
+#[test]
+fn demolishing_nothing_is_an_error() {
+    let mut w = world();
+    let r = tick(&mut w, &[Command::Demolish { at: pos(5, 5) }]);
+    assert_eq!(r.rejected[0].1, CommandError::NothingToDemolish(pos(5, 5)));
+}
+
+#[test]
+fn a_kind_of_building_that_does_not_exist() {
+    let mut w = world();
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: UNKNOWN_KIND,
+            origin: pos(1, 1),
+        }],
+    );
+    assert_eq!(
+        r.rejected[0].1,
+        CommandError::UnknownBuildingKind(UNKNOWN_KIND)
+    );
+    assert_eq!(w.economy().treasury, Coins::new(STARTING_TREASURY));
+}
+
+#[test]
+fn a_road_costs_money_sets_the_flag_and_dirties_the_network() {
+    let mut w = world();
+    let r = tick(&mut w, &[Command::PlaceRoad { at: pos(2, 2) }]);
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(
+        w.economy().treasury,
+        Coins::new(STARTING_TREASURY - PLAIN_ROAD_COST)
+    );
+    let idx = w.grid().idx(pos(2, 2)).expect("on the map");
+    assert!(w.grid().get(idx).expect("tile").flags.has_road());
+    // Step 2 has already consumed the flag within the same tick: what stays
+    // observable is that the rebuild happened.
+    assert!(!w.dirty().roads);
+    assert_eq!(w.roads().rebuilds(), 1);
+
+    // Two roads on the same tile: the second is rejected.
+    let r = tick(&mut w, &[Command::PlaceRoad { at: pos(2, 2) }]);
+    assert!(matches!(r.rejected[0].1, CommandError::TileOccupied { .. }));
+}
+
+#[test]
+fn nothing_gets_built_on_unsuitable_terrain() {
+    let mut w = world();
+    // A lake in the middle of the map.
+    assert!(w.set_terrain(pos(6, 6), Terrain::Water));
+
+    let r = tick(
+        &mut w,
+        &[
+            Command::PlaceBuilding {
+                kind: HOUSE,
+                origin: pos(6, 6),
+            },
+            Command::PlaceRoad { at: pos(6, 6) },
+        ],
+    );
+
+    assert_eq!(r.rejected.len(), 2);
+    for (_, e) in &r.rejected {
+        assert!(
+            matches!(
+                e,
+                CommandError::UnsuitableTerrain {
+                    terrain: Terrain::Water,
+                    ..
+                }
+            ),
+            "{e:?}"
+        );
+    }
+}
+
+#[test]
+fn a_house_is_a_house_not_a_building() {
+    let mut w = world();
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: HOUSE,
+            origin: pos(1, 1),
+        }],
+    );
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(w.house_count(), 1);
+    assert_eq!(
+        w.building_count(),
+        0,
+        "houses are not counted among the buildings (D5)"
+    );
+    assert_eq!(w.population(), u32::from(RESIDENTS_PER_HOUSE));
+    let (_, h) = w.houses().next().expect("one house");
+    assert_eq!(h.level, 1);
+    assert!(matches!(
+        r.events[0],
+        Event::HousePlaced { origin, .. } if origin == pos(1, 1)
+    ));
+}
+
+#[test]
+fn one_invalid_command_does_not_stop_the_others() {
+    let mut w = world();
+    let r = tick(
+        &mut w,
+        &[
+            Command::PlaceRoad { at: pos(0, 0) },
+            Command::Demolish { at: pos(31, 31) }, // nothing to demolish
+            Command::PlaceRoad { at: pos(1, 0) },
+        ],
+    );
+
+    assert_eq!(r.rejected.len(), 1);
+    assert_eq!(r.rejected[0].0, 1, "the index of the discarded command");
+    assert_eq!(r.accepted(3), 2);
+    assert!(w.grid().at(pos(0, 0)).expect("tile").flags.has_road());
+    assert!(w.grid().at(pos(1, 0)).expect("tile").flags.has_road());
+}
+
+#[test]
+fn building_marks_the_provider_as_dirty() {
+    let mut w = world();
+    tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: WELL,
+            origin: pos(5, 5),
+        }],
+    );
+    let id = w.buildings().next().map(|(id, _)| id).expect("the well");
+    // As with roads, step 3 consumes the list within the same tick: the
+    // observable effect is that coverage was recomputed.
+    assert!(w.dirty().coverage.is_empty());
+    assert!(!w.dirty().coverage_invalidated);
+    assert_eq!(w.coverage().recomputes(), 1);
+
+    tick(&mut w, &[Command::Demolish { at: pos(5, 5) }]);
+    assert!(
+        !w.dirty().coverage.contains(&id),
+        "a demolished provider does not stay in the dirty list"
+    );
+    assert_eq!(
+        w.coverage().recomputes(),
+        2,
+        "demolishing even the last provider forces a recomputation"
+    );
+}

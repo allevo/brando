@@ -1,0 +1,3 @@
+(
+    buildings: [
+        (id: "casa", size: (1, 1), cost: 10

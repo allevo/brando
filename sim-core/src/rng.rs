@@ -1,19 +1,19 @@
-//! RNG deterministico, uno stream per dominio (D4).
+//! Deterministic RNG, one stream per domain (D4).
 //!
-//! Il requisito difficile non e' seedare l'RNG: e' che il giorno in cui si
-//! aggiunge un dominio nuovo i golden replay degli scenari esistenti restino
-//! verdi. Per questo il seed di ogni stream deriva dal **nome** del dominio e
-//! non dalla sua posizione nell'enum.
+//! The hard requirement is not seeding the RNG: it is that the day a new
+//! domain is added, the recorded replays of the existing scenarios stay green.
+//! That is why each stream's seed derives from the domain's **name** and not
+//! from its position in the enum.
 
 use rand::{RngCore, SeedableRng};
 use rand_pcg::Pcg64;
 use serde::{Deserialize, Serialize};
 
-/// Domini RNG indipendenti.
+/// Independent RNG domains.
 ///
-/// Aggiungere una variante non deve alterare le sequenze delle varianti
-/// esistenti: se lo fa, la derivazione e' per posizione ed e' un bug, non un
-/// golden da rigenerare.
+/// Adding a variant must not change the sequences of the existing ones: if it
+/// does, the derivation is positional and that is a bug, not a recording to
+/// regenerate.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub enum RngDomain {
     Events,
@@ -22,20 +22,20 @@ pub enum RngDomain {
 }
 
 impl RngDomain {
-    /// Tutte le varianti, in ordine di dichiarazione. L'ordine conta solo per
-    /// l'hash canonico (fase 08), non per la derivazione dei seed.
-    pub const TUTTI: [RngDomain; 3] = [
+    /// Every variant, in declaration order. The order matters only for the
+    /// state hash (phase 08), not for deriving the seeds.
+    pub const ALL: [RngDomain; 3] = [
         RngDomain::Events,
         RngDomain::Migration,
         RngDomain::Production,
     ];
 
-    pub const COUNT: usize = Self::TUTTI.len();
+    pub const COUNT: usize = Self::ALL.len();
 
-    /// Sale stabile del dominio.
+    /// The domain's stable salt.
     ///
-    /// Non rinominare una variante senza rigenerare i golden: il nome e' parte
-    /// del contratto di determinismo, non un dettaglio estetico.
+    /// Do not rename a variant without regenerating the recordings: the name is
+    /// part of the determinism contract, not a cosmetic detail.
     const fn salt(self) -> &'static str {
         match self {
             Self::Events => "brando/rng/v1/events",
@@ -44,11 +44,11 @@ impl RngDomain {
         }
     }
 
-    /// Slot occupato dal dominio in [`RngSet`].
+    /// The slot this domain takes up in [`RngSet`].
     ///
-    /// Assegnato per variante e non per posizione in [`RngDomain::TUTTI`]:
-    /// e' cio' che permette di aggiungere un dominio in testa all'enum senza
-    /// spostare gli stream esistenti.
+    /// Assigned per variant and not by position in [`RngDomain::ALL`]: that is
+    /// what lets a domain be added at the top of the enum without moving the
+    /// existing streams.
     const fn index(self) -> usize {
         match self {
             Self::Events => 0,
@@ -57,8 +57,8 @@ impl RngDomain {
         }
     }
 
-    /// Inversa di [`RngDomain::index`]. La biiezione e' verificata da
-    /// `index_e_una_biiezione`.
+    /// The inverse of [`RngDomain::index`]. `index_is_a_round_trip` checks the
+    /// two really are inverses.
     const fn from_index(i: usize) -> Option<Self> {
         match i {
             0 => Some(Self::Events),
@@ -69,12 +69,12 @@ impl RngDomain {
     }
 }
 
-/// Uno stream RNG con il conteggio delle estrazioni.
+/// One RNG stream, with a count of how many values it has produced.
 ///
-/// Il conteggio non serve al gioco: serve all'hash canonico (fase 08). A
-/// parita' di seed, il numero di estrazioni determina univocamente lo stato
-/// del generatore, quindi hashare `(seed, draws)` copre lo stato dell'RNG
-/// senza dover serializzare i suoi interni.
+/// The count is of no use to the game: it serves the state hash (phase 08).
+/// For a given seed, the number of draws uniquely determines the generator's
+/// state, so hashing `(seed, draws)` covers the RNG's state without having to
+/// serialise its internals.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Stream {
     rng: Pcg64,
@@ -89,71 +89,71 @@ impl Stream {
         }
     }
 
-    /// Quante estrazioni sono state fatte da questo stream.
+    /// How many draws this stream has made.
     pub const fn draws(&self) -> u64 {
         self.draws
     }
 
-    const fn conta(&mut self) {
-        // wrapping e non `+=`: il core non panica. In pratica non ci si
-        // arriva mai, 2^64 estrazioni non sono raggiungibili in una partita.
+    const fn count_draw(&mut self) {
+        // Wrapping rather than `+=`: the core does not panic. In practice it is
+        // never reached, 2^64 draws are not attainable within one game.
         self.draws = self.draws.wrapping_add(1);
     }
 }
 
 impl RngCore for Stream {
     fn next_u32(&mut self) -> u32 {
-        self.conta();
+        self.count_draw();
         self.rng.next_u32()
     }
 
     fn next_u64(&mut self) -> u64 {
-        self.conta();
+        self.count_draw();
         self.rng.next_u64()
     }
 
     fn fill_bytes(&mut self, dst: &mut [u8]) {
-        self.conta();
+        self.count_draw();
         self.rng.fill_bytes(dst);
     }
 }
 
-/// L'insieme degli stream, uno per dominio.
+/// The set of streams, one per domain.
 ///
-/// I campi non sono pubblici di proposito: se due sistemi potessero estrarre
-/// dallo stesso stream nello stesso tick, l'ordine di estrazione diventerebbe
-/// un contratto implicito. [`RngSet::get`] presta un dominio alla volta.
+/// The fields are deliberately private: if two systems could draw from the same
+/// stream in the same tick, the draw order would become an implicit contract.
+/// [`RngSet::get`] lends out one domain at a time.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct RngSet {
     streams: [Stream; RngDomain::COUNT],
 }
 
 impl RngSet {
-    /// Deriva uno stream per dominio a partire dal seed della partita.
+    /// Derives one stream per domain from the game's seed.
     ///
-    /// `blake3(seed_le || salt)` in modalita' XOF riempie per intero i 32 byte
-    /// di seed di `Pcg64`: `seed_from_u64` scarterebbe entropia e renderebbe
-    /// piu' facile una collisione tra domini.
+    /// `blake3(seed_le || salt)` in XOF mode fills all 32 seed bytes of
+    /// `Pcg64`: `seed_from_u64` would throw away entropy and make a collision
+    /// between domains easier.
     ///
-    /// Gli stream si riempiono per **slot** (`index()`), non scorrendo
-    /// `TUTTI`: altrimenti aggiungere una variante in testa all'enum
-    /// sposterebbe gli stream esistenti e sfaserebbe tutti i golden.
+    /// The streams are filled by **slot** (`index()`), not by walking `ALL`:
+    /// otherwise adding a variant at the top of the enum would shift the
+    /// existing streams and knock every recording out of phase.
     pub fn from_seed(seed: u64) -> Self {
         let streams = std::array::from_fn(|i| {
-            // Invariante dimostrabile: `from_index` e' l'inversa di `index`
-            // su 0..COUNT, presidiato da `index_e_una_biiezione`.
-            let d = RngDomain::from_index(i).expect("slot < COUNT ha sempre un dominio");
+            // Provable invariant: `from_index` is the inverse of `index` over
+            // 0..COUNT, guarded by `index_is_a_round_trip`.
+            let d = RngDomain::from_index(i).expect("a slot < COUNT always has a domain");
             Stream::from_seed_bytes(derive_seed(seed, d))
         });
         Self { streams }
     }
 
-    /// Presta in scrittura lo stream di un dominio.
+    /// Lends out a domain's stream for writing.
     pub fn get(&mut self, domain: RngDomain) -> &mut Stream {
         &mut self.streams[domain.index()]
     }
 
-    /// Posizione dello stream, per l'hash canonico dello stato (fase 08).
+    /// The stream's position, for the state hash (phase 08).
     pub fn draws(&self, domain: RngDomain) -> u64 {
         self.streams[domain.index()].draws()
     }
@@ -172,26 +172,26 @@ fn derive_seed(seed: u64, domain: RngDomain) -> [u8; 32] {
 mod tests {
     use super::*;
 
-    fn sequenza(seed: u64, domain: RngDomain, n: usize) -> Vec<u64> {
+    fn sequence(seed: u64, domain: RngDomain, n: usize) -> Vec<u64> {
         let mut set = RngSet::from_seed(seed);
         let s = set.get(domain);
         (0..n).map(|_| s.next_u64()).collect()
     }
 
-    /// Valori attesi scritti a mano: confrontare due istanze tra loro
-    /// passerebbe anche con una derivazione sbagliata.
+    /// The expected values are written out by hand: comparing two instances
+    /// against each other would pass even with a broken derivation.
     ///
-    /// Se questo test rompe dopo aver **aggiunto** una variante a
-    /// `RngDomain`, la derivazione e' per posizione e non per nome: e' un bug,
-    /// non un golden da rigenerare.
+    /// If this test breaks after **adding** a variant to `RngDomain`, the
+    /// derivation is positional and not by name: that is a bug, not a
+    /// recording to regenerate.
     ///
-    /// Se rompe dopo aver **rinominato** una variante o cambiato un sale, e'
-    /// atteso: il nome del dominio e' parte del contratto (vanno rigenerati
-    /// anche i golden replay).
+    /// If it breaks after **renaming** a variant or changing a salt, that is
+    /// expected: the domain name is part of the contract (the recorded replays
+    /// have to be regenerated too).
     #[test]
-    fn sequenze_riproducibili_con_valori_attesi() {
+    fn sequences_are_reproducible_with_the_expected_values() {
         assert_eq!(
-            sequenza(42, RngDomain::Events, 8),
+            sequence(42, RngDomain::Events, 8),
             [
                 16_951_895_464_066_535_839,
                 10_528_375_347_967_641_558,
@@ -204,7 +204,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            sequenza(42, RngDomain::Migration, 4),
+            sequence(42, RngDomain::Migration, 4),
             [
                 6_744_713_315_132_201_080,
                 14_951_314_113_004_524_121,
@@ -213,7 +213,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            sequenza(42, RngDomain::Production, 4),
+            sequence(42, RngDomain::Production, 4),
             [
                 7_953_230_224_566_493_169,
                 13_149_629_979_718_932_555,
@@ -223,68 +223,68 @@ mod tests {
         );
     }
 
-    /// `index` e `from_index` sono l'una l'inversa dell'altra su `0..COUNT`.
-    /// E' l'invariante che autorizza l'`expect` in `RngSet::from_seed`.
+    /// `index` and `from_index` are each other's inverse over `0..COUNT`.
+    /// That is the invariant that licenses the `expect` in `RngSet::from_seed`.
     #[test]
-    fn index_e_una_biiezione() {
-        for d in RngDomain::TUTTI {
-            assert!(d.index() < RngDomain::COUNT, "{d:?} fuori dagli slot");
+    fn index_is_a_round_trip() {
+        for d in RngDomain::ALL {
+            assert!(d.index() < RngDomain::COUNT, "{d:?} outside the slots");
             assert_eq!(RngDomain::from_index(d.index()), Some(d));
         }
         for i in 0..RngDomain::COUNT {
-            let d = RngDomain::from_index(i).expect("slot coperto");
+            let d = RngDomain::from_index(i).expect("slot covered");
             assert_eq!(d.index(), i);
         }
         assert_eq!(RngDomain::from_index(RngDomain::COUNT), None);
     }
 
-    /// Coglie il copia-incolla in cui due domini condividono il sale.
+    /// Catches the copy-paste in which two domains share a salt.
     #[test]
-    fn domini_indipendenti() {
-        let e = sequenza(42, RngDomain::Events, 8);
-        let m = sequenza(42, RngDomain::Migration, 8);
-        let p = sequenza(42, RngDomain::Production, 8);
+    fn the_domains_are_independent() {
+        let e = sequence(42, RngDomain::Events, 8);
+        let m = sequence(42, RngDomain::Migration, 8);
+        let p = sequence(42, RngDomain::Production, 8);
         assert_ne!(e, m);
         assert_ne!(e, p);
         assert_ne!(m, p);
     }
 
-    /// L'ordine con cui i sistemi chiamano i domini non deve influire sulle
-    /// rispettive sequenze: A,B,A,B e A,A,B,B danno gli stessi risultati.
+    /// The order in which systems call the domains must not affect their
+    /// sequences: A,B,A,B and A,A,B,B give the same results.
     #[test]
-    fn ordine_di_chiamata_irrilevante() {
-        let mut alternato = RngSet::from_seed(7);
+    fn the_call_order_does_not_matter() {
+        let mut interleaved = RngSet::from_seed(7);
         let mut a1 = Vec::new();
         let mut b1 = Vec::new();
         for _ in 0..4 {
-            a1.push(alternato.get(RngDomain::Events).next_u64());
-            b1.push(alternato.get(RngDomain::Production).next_u64());
+            a1.push(interleaved.get(RngDomain::Events).next_u64());
+            b1.push(interleaved.get(RngDomain::Production).next_u64());
         }
 
-        let mut raggruppato = RngSet::from_seed(7);
+        let mut grouped = RngSet::from_seed(7);
         let a2: Vec<_> = (0..4)
-            .map(|_| raggruppato.get(RngDomain::Events).next_u64())
+            .map(|_| grouped.get(RngDomain::Events).next_u64())
             .collect();
         let b2: Vec<_> = (0..4)
-            .map(|_| raggruppato.get(RngDomain::Production).next_u64())
+            .map(|_| grouped.get(RngDomain::Production).next_u64())
             .collect();
 
         assert_eq!(a1, a2);
         assert_eq!(b1, b2);
-        assert_eq!(alternato, raggruppato, "anche lo stato finale coincide");
+        assert_eq!(interleaved, grouped, "the final state matches too");
     }
 
     #[test]
-    fn seed_diversi_sequenze_diverse() {
-        for d in RngDomain::TUTTI {
-            assert_ne!(sequenza(42, d, 8), sequenza(43, d, 8), "dominio {d:?}");
+    fn different_seeds_give_different_sequences() {
+        for d in RngDomain::ALL {
+            assert_ne!(sequence(42, d, 8), sequence(43, d, 8), "domain {d:?}");
         }
     }
 
-    /// Il conteggio delle estrazioni e' cio' che l'hash canonico usera' per
-    /// distinguere "consumati 5 valori" da "consumati 6" (fase 08).
+    /// The draw count is what the state hash will use to tell "5 values
+    /// consumed" from "6" (phase 08).
     #[test]
-    fn le_estrazioni_si_contano_per_dominio() {
+    fn draws_are_counted_per_domain() {
         let mut set = RngSet::from_seed(1);
         assert_eq!(set.draws(RngDomain::Events), 0);
         for _ in 0..5 {
@@ -296,10 +296,11 @@ mod tests {
         assert_eq!(set.draws(RngDomain::Production), 0);
     }
 
-    /// Stato uguale sse stesso seed e stesse estrazioni: e' l'assunzione che
-    /// rende sufficiente hashare (seed, draws) invece degli interni di Pcg64.
+    /// The state is equal iff the seed and the draw count are: that is the
+    /// assumption that makes hashing (seed, draws) enough instead of Pcg64's
+    /// internals.
     #[test]
-    fn stato_determinato_da_seed_e_conteggio() {
+    fn the_state_is_determined_by_seed_and_draw_count() {
         let mut a = RngSet::from_seed(9);
         let mut b = RngSet::from_seed(9);
         for _ in 0..3 {
