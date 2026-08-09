@@ -300,15 +300,34 @@ impl World {
 
     /// Come [`World::ingressi_edificio`], per una casa.
     pub fn ingressi_casa(&self, id: HouseId) -> Vec<TileIdx> {
+        let mut out = Vec::new();
+        self.ingressi_casa_in(id, &mut out);
+        out
+    }
+
+    /// Come [`World::ingressi_casa`], scrivendo in un buffer riusabile.
+    ///
+    /// Esiste per il passo 3, che la chiama una volta per casa a ogni
+    /// ricalcolo: restituire un `Vec` nuovo ogni volta erano 3.750 allocazioni
+    /// per ricalcolo alla scala di riferimento, tutte di due elementi scarsi.
+    pub fn ingressi_casa_in(&self, id: HouseId, out: &mut Vec<TileIdx>) {
+        out.clear();
         let Some(h) = self.houses.get(id) else {
-            return Vec::new();
+            return;
         };
-        self.ingressi(h.origin, (1, 1))
+        self.ingressi_in(h.origin, (1, 1), out);
     }
 
     /// I tile strada adiacenti a un footprint, in ordine di `TileIdx`.
     pub fn ingressi(&self, origin: TilePos, footprint: (u8, u8)) -> Vec<TileIdx> {
         let mut out = Vec::new();
+        self.ingressi_in(origin, footprint, &mut out);
+        out
+    }
+
+    /// Come [`World::ingressi`], scrivendo in un buffer riusabile.
+    pub fn ingressi_in(&self, origin: TilePos, footprint: (u8, u8), out: &mut Vec<TileIdx>) {
+        out.clear();
         for dy in 0..footprint.1 {
             for dx in 0..footprint.0 {
                 let (Some(x), Some(y)) = (origin.x.checked_add(dx), origin.y.checked_add(dy))
@@ -327,7 +346,6 @@ impl World {
         }
         out.sort_unstable();
         out.dedup();
-        out
     }
 
     /// Distanza in tile percorsi sulla rete, da un edificio a un altro.

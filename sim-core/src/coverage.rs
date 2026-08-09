@@ -58,6 +58,84 @@ impl Coverage {
     }
 }
 
+/// Da tile strada alle case che vi si affacciano.
+///
+/// Forma CSR: le case del tile `t` sono `case[offsets[t]..offsets[t + 1]]`.
+/// `TileIdx` e' un indice **denso** sulla griglia, quindi indicizzarlo
+/// direttamente costa un accesso, contro i ~13 confronti con pointer chasing di
+/// un `BTreeMap`. Non e' un dettaglio: e' l'operazione piu' frequente dell'intero
+/// ricalcolo — una per tile raggiunto, per ogni provider, cioe' ~100.000 volte
+/// alla scala di riferimento.
+///
+/// **Al massimo quattro case per tile**, perche' un tile ha quattro vicini
+/// ortogonali (`Grid::neighbors4`) e ognuno ospita al piu' un occupante. Il
+/// limite regge anche se in M1 le case diventeranno piu' grandi di 1x1: viene
+/// dai vicini del tile, non dalla dimensione della casa.
+struct CasePerTile {
+    /// Lungo `grid.len() + 1`.
+    offsets: Vec<u32>,
+    /// Le case, raggruppate per tile e in ordine di `HouseId` dentro il gruppo.
+    case: Vec<HouseId>,
+}
+
+impl CasePerTile {
+    /// Counting sort in tre passate: conta, somma i prefissi, riempi.
+    ///
+    /// Lineare nel numero di tile piu' quello degli ingressi, senza nessun
+    /// confronto — contro l'ordinamento implicito di un `BTreeMap`, che
+    /// pagherebbe `log n` a ogni inserimento e allocherebbe un nodo per tile.
+    fn nuova(world: &World) -> Self {
+        let tiles = world.grid().len() as usize;
+        let mut offsets = vec![0u32; tiles + 1];
+
+        // Le coppie si raccolgono in ordine di `HouseId`: e' quell'ordine che
+        // si ritrova poi dentro ogni gruppo.
+        let mut coppie: Vec<(TileIdx, HouseId)> = Vec::new();
+        let mut ingressi = Vec::new();
+        for (id, _) in world.houses() {
+            world.ingressi_casa_in(id, &mut ingressi);
+            for t in &ingressi {
+                coppie.push((*t, id));
+                offsets[t.as_usize()] += 1;
+            }
+        }
+
+        // Somma prefissa esclusiva: `offsets[t]` diventa l'inizio del gruppo.
+        let mut somma = 0u32;
+        for o in &mut offsets {
+            let conteggio = *o;
+            *o = somma;
+            somma += conteggio;
+        }
+
+        // Riempimento in avanti, con `offsets[t]` che fa da cursore. Alla fine
+        // ogni cursore e' arrivato sulla fine del proprio gruppo, cioe'
+        // sull'inizio del successivo: basta traslare di uno a destra.
+        let mut case = vec![HouseId::default(); coppie.len()];
+        for (t, h) in coppie {
+            let i = t.as_usize();
+            if let Some(slot) = case.get_mut(offsets[i] as usize) {
+                *slot = h;
+            }
+            offsets[i] += 1;
+        }
+        for i in (1..=tiles).rev() {
+            offsets[i] = offsets[i - 1];
+        }
+        offsets[0] = 0;
+
+        Self { offsets, case }
+    }
+
+    fn get(&self, t: TileIdx) -> &[HouseId] {
+        let i = t.as_usize();
+        let (Some(&da), Some(&a)) = (self.offsets.get(i), self.offsets.get(i + 1)) else {
+            return &[];
+        };
+        self.case.get(da as usize..a as usize).unwrap_or(&[])
+    }
+}
+
 /// Ricalcola la copertura da zero sullo stato corrente.
 ///
 /// In M0 il passo 3 del tick chiama proprio questa, per tutti i provider,
@@ -71,12 +149,7 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
 
     // Mappa inversa tile strada -> case che vi si affacciano. Costruita una
     // volta per ricalcolo invece che una volta per provider.
-    let mut case_per_tile: BTreeMap<TileIdx, Vec<HouseId>> = BTreeMap::new();
-    for (id, _) in world.houses() {
-        for t in world.ingressi_casa(id) {
-            case_per_tile.entry(t).or_default().push(id);
-        }
-    }
+    let case_per_tile = CasePerTile::nuova(world);
 
     // I provider si scorrono in ordine di BuildingId: e' l'ordine che decide
     // chi vince una casa contesa, quindi e' semantica di gioco.
@@ -115,10 +188,7 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
         // Candidate: casa -> distanza minima a cui e' stata raggiunta.
         let mut candidate: BTreeMap<HouseId, u16> = BTreeMap::new();
         bfs_strade(world.grid(), &ingressi, raggio, |tile, d| {
-            let Some(case) = case_per_tile.get(&tile) else {
-                return;
-            };
-            for h in case {
+            for h in case_per_tile.get(tile) {
                 candidate
                     .entry(*h)
                     .and_modify(|best| {
