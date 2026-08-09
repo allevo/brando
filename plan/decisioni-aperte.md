@@ -3,6 +3,9 @@
 Scelte necessarie per implementare M0 che `CLAUDE.md` non fissa. Per ognuna: la
 raccomandazione che le fasi assumono, e cosa cambia se si decide diversamente.
 
+Da A7 in poi il file continua oltre M0: sono decisioni prese dopo la chiusura, con la stessa
+forma. Chi cerca "perché il codice fa così e non cosà" trova qui la risposta.
+
 ## Stato a fine M0
 
 | # | Esito | Nota |
@@ -16,6 +19,18 @@ raccomandazione che le fasi assumono, e cosa cambia se si decide diversamente.
 
 Nessuna è rimasta aperta. Le due che meritano di essere lette sono A2 e A5, perché entrambe
 sono finite altrove rispetto a come erano state scritte.
+
+## Decisioni dopo M0
+
+| # | Esito | Nota |
+|---|---|---|
+| A7 | **Chiusa**: i comandi restano un enum | un trait romperebbe `Copy`, serde e il formato dei golden |
+| A8 | **Chiusa**: `Arc<DataSet>` si tiene | serve a `World: Clone`, non al borrow checker |
+| A9 | **Chiusa**: l'acqua è copertura, non una risorsa | ma `servizi_richiesti` è dato dichiarativo che M1 deve iniziare a leggere |
+| A10 | **Chiusa in linea di principio**, da implementare in M1 | la soddisfazione è un accumulatore di tempo, non un livello di risorsa |
+
+Sono nate smarcando `dubbi.md` (2026-08-09): tre erano domande di design, e le risposte
+valevano più della domanda. A9 e A10 sono prerequisiti di M1 fase 1–2.
 
 ---
 
@@ -164,3 +179,111 @@ Il test scritto in fase 07 per cambiare esito ha cambiato esito, ed è ora
 **Raccomandazione:** 30 tick = 1 mese, 12 mesi = 1 anno (360 tick). Il valore vive in
 `sim-data` (`rules.ron`), non nel codice: gli obiettivi di scenario si esprimono in mesi
 e servono a M1.
+
+---
+
+## A7 — I comandi restano un enum, non un trait
+
+**Decisione:** `Command` resta un enum chiuso, applicato da un `match` che chiama tre funzioni
+libere (`tick.rs`). Niente `trait TryApply`, niente `Box<dyn …>`.
+
+Il motivo non è stilistico, è che il trait romperebbe cose che esistono:
+
+- `Command` è `Copy` e `Serialize`/`Deserialize`, e un salvataggio è `seed + Vec<Command>`
+  serializzato in RON con `struct_names(true)`. Un trait object fa saltare `Copy`, il derive di
+  serde, `PartialEq`/`Eq` — e **il formato dei golden già committati**.
+- D4 vuole un vocabolario **chiuso**: un trait invita implementazioni esterne, cioè comandi che
+  il log di determinismo non sa rappresentare.
+- L'adattatore LLM di M3 ha bisogno di uno schema enumerabile: `Intent → Vec<Command>` con un
+  insieme finito e ispezionabile.
+
+E non c'è niente da risparmiare: il `match` è **cinque righe e tre varianti**, e la logica sta
+già in tre funzioni separate.
+
+*Se il fastidio è un altro* — `tick.rs` è il file più lungo del core (434 righe) e mescola
+dispatch, applicazione dei comandi, i dieci passi e sette helper — allora la risposta è
+separare in **moduli**, non in trait object. Sono due problemi diversi con due soluzioni
+diverse.
+
+---
+
+## A8 — `World` tiene un `Arc<DataSet>`, e non è per il borrow checker
+
+A2 aveva deciso l'`Arc` senza dire perché fosse un `Arc` e non un valore. La risposta:
+
+**`World` è `Clone` e viene clonato moltissimo.** `invarianti_i_rifiuti_non_mutano` lo clona una
+volta per tick per ogni caso proptest — migliaia di volte per esecuzione — e
+`l_hash_copre_tutto_lo_stato` una volta per perturbazione. Con l'`Arc` il campo costa un
+incremento di refcount; senza, ogni clone rifarebbe le allocazioni di `Vec<BuildingDef>`, delle
+`String` degli id e dei `Vec<u16>` per livello. In più `sim-replay` e `xtask` costruiscono più
+`World` dallo stesso dataset caricato una volta sola.
+
+Le alternative sono peggiori: `World<'a>` propaga un lifetime in `Scenario`, nelle firme di
+replay e in ogni test; passare `&DataSet` a `step` cambia la firma dichiarata in `CLAUDE.md`
+(già valutata e scartata in A2).
+
+**`Arc` e non `Rc`** benché il core sia monothread: `Arc` rende `World: Send`, e `xtask` ha in
+programma i batch di partite per il bilanciamento automatico — è esattamente il caso in cui si
+vorrà parallelizzare.
+
+*Nota su un falso indizio.* `production.rs` fa `Arc::clone(&world.data)` e sembra usare l'`Arc`
+per niente. Lì è davvero un aggiramento del borrow checker: `consuma(world, …)` prende
+`&mut World` intero, quindi un `&world.data` vivo per tutta la funzione sarebbe incompatibile.
+Si toglierebbe passando a `consuma` i soli campi che tocca, ma costa un incremento atomico per
+tick e renderebbe la firma più rumorosa. Lasciato com'è, di proposito.
+
+---
+
+## A9 — L'acqua è copertura, non una risorsa
+
+**Decisione:** il pozzo non dichiara `produzione_per_tick` né `giacenza_max`, quindi il passo 4
+non lo tocca mai. L'acqua ha raggio e capacità, e basta. È il modello di Zeus, ed è quello
+giusto: una catena produttiva dell'acqua sarebbe una risorsa in più da bilanciare senza nessun
+payoff di gioco.
+
+**Il buco che sta accanto, e che va chiuso in M1.** `servizi_richiesti` (`["acqua","cibo"]`
+sulla casa) è letto **solo** da `BuildingDef::e_una_casa()`: serve a classificare il tipo di
+edificio, non a decidere niente in simulazione. La copertura assegna qualunque casa
+raggiungibile senza mai guardare se quel servizio le serva davvero. Oggi non è osservabile —
+c'è un solo tipo di casa — ma è il campo che M1 deve iniziare a leggere sul serio, quando i
+livelli avranno requisiti di servizio diversi.
+
+**Un'asimmetria da sciogliere insieme.** `House::servita` significa due cose a seconda del bit:
+per l'acqua "è coperta" (scritto dal passo 3), per il cibo "ha mangiato" (riscritto dal passo
+4). Con l'invariante *coperta ⇒ mangia sempre* le due coincidono sempre, quindi la differenza
+oggi esiste solo sulla carta — ma è una trappola per chi leggerà quel campo in M1.
+
+---
+
+## A10 — La soddisfazione delle case è un accumulatore di tempo, non un livello di risorsa
+
+Serve a M1 fase 1–2 (evoluzione, degrado, migrazione) e va deciso prima di scriverle.
+
+**Non un "livello di cibo arrivato".** Misurare *quanto* cibo entra in una casa romperebbe
+"niente consumo parziale" (fase 07), ed è quella scelta a rendere la conservazione
+un'**uguaglianza esatta** invece che una disuguaglianza — cioè a rendere il test più prezioso
+del progetto capace di trovare un bug invece che di rassicurare. Sarebbe anche degenere: con la
+coerenza capacità/produzione (A5) una casa coperta riceve sempre il 100%.
+
+**Decisione:** un accumulatore per servizio, `House { soddisfazione: [i16; ServiceKind::COUNT] }`,
+che sale quando il servizio c'è e scende quando manca. Non misura quanto arriva, misura **da
+quanto tempo** arriva — che è ciò che serve davvero a "me ne vado / sto / cresco", e che non è
+degenere nemmeno oggi, perché la copertura si perde (demolisci una fattoria, spezzi una strada).
+
+Con **soglie diverse per evolvere e degradare**: la banda d'isteresi evita che la città oscilli
+a ogni tick sul confine, ed è anche ciò che tiene stabili i golden. Tutte le soglie in RON (D6).
+
+**Sulla migrazione.** D5 dice che l'unità è la casa, non l'individuo, e gli immigranti come
+walker veri sono D3/M3. In M1 la migrazione va tenuta **aggregata**: un indice di attrattività
+cittadino decide il flusso netto, che riempie le case con posto. Allora "i migranti vanno solo
+dove si sta bene" non è un meccanismo separato — è la stessa regola dell'evoluzione (una casa
+non servita non accetta nuovi abitanti e a lungo li perde). Un meccanismo in meno per lo stesso
+comportamento.
+
+**Sequenza:** va fatto insieme ai livelli delle case, non prima. È il momento in cui `abitanti`
+smette di essere costante, ed è la ragione per cui la capacità dei servizi è già stata spostata
+in abitanti (A5). Quando arriva, `RngDomain::Migration` viene usato per la prima volta e
+`seed_diversi_danno_hash_diversi`, oggi `#[ignore]`, si riattiva e deve passare.
+
+**Attenzione a un dettaglio meccanico:** ogni campo nuovo su `House` va aggiunto a mano a
+`hash_world` (A3). Se ci si dimentica, `l_hash_copre_tutto_lo_stato` fallisce — la rete c'è.

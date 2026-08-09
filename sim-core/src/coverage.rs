@@ -80,6 +80,17 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
 
     // I provider si scorrono in ordine di BuildingId: e' l'ordine che decide
     // chi vince una casa contesa, quindi e' semantica di gioco.
+    //
+    // **Dipendenza da tenere d'occhio.** Che l'iterazione dello `SlotMap`
+    // coincida con l'ordine crescente delle chiavi e' vero oggi — `KeyData`
+    // deriva `Ord` con `idx` prima di `version`, e l'iterazione scorre gli
+    // slot per indice — ma `slotmap` documenta l'ordine delle chiavi come
+    // *unspecified*. Un aggiornamento della dipendenza potrebbe quindi
+    // cambiare quale provider vince una casa contesa. Non sarebbe silenzioso:
+    // i golden divergerebbero, ed e' esattamente il caso descritto dal
+    // messaggio di `gli_hash_coincidono_con_quelli_committati` — hash diversi
+    // senza che il bilanciamento sia cambiato significa fermarsi e cercare la
+    // fonte, non rigenerare.
     for (provider, b) in world.buildings() {
         let Some(def) = world.data().def(b.kind) else {
             continue;
@@ -205,19 +216,24 @@ pub(crate) fn propagate_coverage(world: &mut World) {
 
     // Le case portano una copia dei flag: e' cio' che leggeranno evoluzione e
     // degrado (M1) senza dover interrogare la `Coverage`.
-    let flags: Vec<(HouseId, crate::service::ServiceFlags)> = world
-        .houses()
-        .map(|(id, _)| {
-            let mut f = crate::service::ServiceFlags::empty();
-            for k in ServiceKind::TUTTI {
-                f.set(k, world.coverage.e_servita(id, k));
-            }
-            (id, f)
-        })
-        .collect();
-    for (id, f) in flags {
-        if let Some(h) = world.houses.get_mut(id) {
-            h.servita = f;
+    //
+    // Lo split dei campi serve a scrivere le case mentre si legge la
+    // copertura: sono campi disgiunti dello stesso `World`, ma il borrow
+    // checker lo vede solo se glieli si nomina separatamente. L'alternativa —
+    // raccogliere i flag in un `Vec` e riscorrerlo — costava una passata e
+    // un'allocazione per ogni ricalcolo.
+    let World {
+        houses, coverage, ..
+    } = world;
+    for (_, h) in houses.iter_mut() {
+        h.servita = crate::service::ServiceFlags::empty();
+    }
+    for (id, servizi) in coverage.assegnazioni() {
+        let Some(h) = houses.get_mut(*id) else {
+            continue;
+        };
+        for k in ServiceKind::TUTTI {
+            h.servita.set(k, servizi[k.index()].is_some());
         }
     }
 }

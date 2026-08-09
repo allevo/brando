@@ -14,11 +14,16 @@ Fasi plausibili, nell'ordine in cui probabilmente conviene farle:
    Goal verificabile: una casa servita da acqua e cibo raggiunge il livello 2 in un numero di
    tick calcolabile dal `DataSet`; togliendo l'acqua torna al livello 1.
    Il prerequisito — capacità dei servizi in abitanti anziché in case — è stato fatto prima,
-   subito dopo M0: vedi [A5](decisioni-aperte.md).
+   subito dopo M0: vedi [A5](decisioni-aperte.md). La forma della soddisfazione (un accumulatore
+   di tempo per servizio, con isteresi, **non** un livello di risorsa) è decisa in
+   [A10](decisioni-aperte.md). Qui `servizi_richiesti` smette di essere dato dichiarativo e
+   inizia a essere letto ([A9](decisioni-aperte.md)).
 2. **Migrazione.** Primo uso reale di `RngDomain::Migration` — ed è il tick in cui il test 7
    della fase 08 (sensibilità al seed) si riattiva e deve passare.
    Goal: una città attraente cresce, una città affamata si spopola, e due seed diversi danno
    traiettorie diverse ma entrambe plausibili.
+   Aggregata, non per individui: il flusso netto lo decide un indice di attrattività cittadino
+   ([A10](decisioni-aperte.md)), perché gli immigranti come walker veri sono M3 (D3).
 3. **Tesoro e tasse.** Passo 7 del tick. Goal: l'invariante del tesoro della fase 09 si estende
    alle entrate e resta un'uguaglianza esatta.
 4. **`sim-scenario`.** Obiettivi obbligatori e opzionali, condizioni di vittoria, passo 9 del

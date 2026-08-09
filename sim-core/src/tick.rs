@@ -424,12 +424,13 @@ fn libera_footprint(world: &mut World, origin: TilePos, footprint: (u8, u8)) {
 /// In M0 il ricalcolo della copertura e' ingenuo: quando la topologia cambia,
 /// tutti i provider tornano dirty. `CLAUDE.md` lo autorizza, purche' i flag
 /// esistano — ed esistono.
+///
+/// "Tutti dirty" si dice con il flag globale, non elencando i provider uno a
+/// uno in `dirty.coverage`: la lista serve all'invalidazione **mirata**, e
+/// riempirla con l'insieme completo non aggiungerebbe nessuna informazione a
+/// chi un giorno la leggera'. Vale anche quando non resta nessun provider —
+/// le assegnazioni esistenti vanno comunque buttate, ed e' il caso che la sola
+/// lista non sa esprimere.
 fn segna_tutti_i_provider(world: &mut World) {
-    // Anche quando non resta nessun provider: le assegnazioni esistenti vanno
-    // comunque buttate.
     world.dirty.invalida_coverage();
-    let ids: Vec<BuildingId> = world.buildings.keys().collect();
-    for id in ids {
-        world.dirty.segna_coverage(id);
-    }
 }

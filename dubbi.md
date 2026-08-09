@@ -1,0 +1,7 @@
+- Trait sui comandi per evitare il match. tipo `TryApply` o simili.
+- `segna_tutti_i_provider` può essere scritto meglio: per ogni buildings viene fatta una bynary search, il che non è performante. O forse si? va capito meglio
+- `calcola_da_zero` usa `BTreeMap<TileIdx, Vec<HouseId>>` ma perché `Vec`? si putrebbe usare `[_; 4]`? O usare collect che è meglio.
+- `propagate_coverage` usa `calcola_da_zero` e poi modifica i flag delle case. Probabilmente si può fare meglio.
+- perché `world.data` è dentro un `Arc`? dove serve?
+- le case necessiatano solo di cibo? in `production` c'è solo cibo e non acqua
+- la gestione del cibo è semplicistica e booleana "ha mangiato"/"non ha mangiato". Sarebbe meglio se avesse un livello di cibo arrivato in modo da avere anche una logica di "me ne vado"/"sto"/"sto & cresco". Inoltre i migranti potrebbero andare solo nelle case code "si sta bene".

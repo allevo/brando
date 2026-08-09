@@ -70,6 +70,15 @@ pub struct DirtyFlags {
     pub roads: bool,
     /// Provider la cui copertura va ricalcolata. `Vec` ordinato, non un
     /// `HashSet` (D4).
+    ///
+    /// **Oggi nessuno ne legge il contenuto**: il passo 3 ricalcola tutto e
+    /// guarda solo [`DirtyFlags::coverage_da_rivedere`]. La lista esiste per
+    /// l'invalidazione mirata, che e' l'ottimizzazione vera del passo 3 —
+    /// tenerla popolata adesso costa poco e dice quale informazione servira'.
+    /// Per questo "tutti dirty" **non** si esprime elencando tutti i provider
+    /// ma con [`DirtyFlags::invalida_coverage`]: il giorno in cui la lista
+    /// verra' letta, "tutti" e' esattamente il caso da evitare, non da
+    /// enumerare.
     pub coverage: Vec<BuildingId>,
     /// La copertura va rivista anche se nessun provider e' nella lista.
     ///
@@ -82,9 +91,14 @@ pub struct DirtyFlags {
 }
 
 impl DirtyFlags {
-    /// Segna un provider come da ricalcolare, senza duplicati e mantenendo
-    /// l'ordine per `BuildingId`: l'ordine di iterazione dei provider decide
-    /// chi vince le case contese (fase 06), quindi e' semantica di gioco.
+    /// Segna un provider come da ricalcolare, senza duplicati e in ordine di
+    /// `BuildingId`.
+    ///
+    /// L'ordine qui e' igiene, non semantica: e' l'ordine di iterazione di
+    /// `World::buildings` a decidere chi vince le case contese (fase 06), e
+    /// questa lista non viene ancora letta da nessuno. Tenerla ordinata serve
+    /// a renderla confrontabile e a rendere l'inserimento una push in coda,
+    /// visto che i provider arrivano quasi sempre in ordine crescente.
     pub fn segna_coverage(&mut self, id: BuildingId) {
         self.coverage_invalidata = true;
         if let Err(pos) = self.coverage.binary_search(&id) {
