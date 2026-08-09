@@ -13,6 +13,8 @@
 
 use std::collections::BTreeMap;
 
+use slotmap::SecondaryMap;
+
 use crate::ids::{BuildingId, HouseId, TileIdx};
 use crate::network::bfs_strade;
 use crate::service::ServiceKind;
@@ -145,11 +147,26 @@ impl CasePerTile {
 /// cambiato; e cio' che il test di equivalenza coglie e' un'invalidazione
 /// dimenticata, non un errore di algoritmo.
 pub fn calcola_da_zero(world: &World) -> Coverage {
-    let mut cov = Coverage::default();
-
     // Mappa inversa tile strada -> case che vi si affacciano. Costruita una
     // volta per ricalcolo invece che una volta per provider.
     let case_per_tile = CasePerTile::nuova(world);
+
+    // Le assegnazioni si accumulano qui, non nella `Coverage`, e per una
+    // ragione di costo: durante il calcolo vanno **interrogate** una volta per
+    // candidata di ogni provider — ~100.000 volte alla scala di riferimento,
+    // perche' `scelte_entro_capacita` scorre tutte le candidate e non si ferma
+    // alla saturazione (salta chi non ci sta, A5). Un `BTreeMap` con 3.750
+    // chiavi pagherebbe ~13 confronti ogni volta; una `SecondaryMap` e' densa
+    // sull'indice di slot, quindi costa un accesso. La `Coverage` si
+    // materializza alla fine, una volta sola.
+    let mut assegnate: SecondaryMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]> =
+        SecondaryMap::new();
+    // Marca temporale per candidata, per non contare due volte una casa che il
+    // BFS raggiunge da piu' tile: il valore e' l'indice del provider corrente,
+    // cosi' non serve ripulire fra un provider e l'altro.
+    let mut vista: SecondaryMap<HouseId, u32> = SecondaryMap::new();
+    let mut ordinate: Vec<(u16, TileIdx, HouseId)> = Vec::new();
+    let mut ingressi: Vec<TileIdx> = Vec::new();
 
     // I provider si scorrono in ordine di BuildingId: e' l'ordine che decide
     // chi vince una casa contesa, quindi e' semantica di gioco.
@@ -164,7 +181,8 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
     // messaggio di `gli_hash_coincidono_con_quelli_committati` — hash diversi
     // senza che il bilanciamento sia cambiato significa fermarsi e cercare la
     // fonte, non rigenerare.
-    for (provider, b) in world.buildings() {
+    for (epoca, (provider, b)) in world.buildings().enumerate() {
+        let epoca = epoca as u32;
         let Some(def) = world.data().def(b.kind) else {
             continue;
         };
@@ -177,7 +195,7 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
         };
         let kind = servizio.kind;
 
-        let ingressi = world.ingressi_edificio(provider);
+        world.ingressi_edificio_in(provider, &mut ingressi);
         if ingressi.is_empty() {
             // Un provider non agganciato alla rete non serve nessuno: una casa
             // non adiacente a nessuna strada non e' raggiungibile, a qualunque
@@ -185,18 +203,26 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
             continue;
         }
 
-        // Candidate: casa -> distanza minima a cui e' stata raggiunta.
-        let mut candidate: BTreeMap<HouseId, u16> = BTreeMap::new();
+        // Candidate, con la distanza minima a cui sono state raggiunte.
+        //
+        // Il minimo non va cercato: `bfs_strade` visita per distanza crescente,
+        // quindi **il primo avvistamento di una casa e' gia' il suo minimo**.
+        // Basta ignorare gli avvistamenti successivi, che arrivano quando la
+        // casa si affaccia su piu' di un tile raggiunto.
+        ordinate.clear();
         bfs_strade(world.grid(), &ingressi, raggio, |tile, d| {
             for h in case_per_tile.get(tile) {
-                candidate
-                    .entry(*h)
-                    .and_modify(|best| {
-                        if d < *best {
-                            *best = d;
-                        }
-                    })
-                    .or_insert(d);
+                if vista.get(*h) == Some(&epoca) {
+                    continue;
+                }
+                vista.insert(*h, epoca);
+                let Some(casa) = world.house(*h) else {
+                    continue;
+                };
+                let Some(idx) = world.grid().idx(casa.origin) else {
+                    continue;
+                };
+                ordinate.push((d, idx, *h));
             }
         });
 
@@ -206,31 +232,45 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
         // secondo criterio due case equidistanti sarebbero ordinate
         // dall'ordine di visita del BFS, cioe' da un dettaglio implementativo,
         // e il golden replay diventerebbe fragile.
-        let mut ordinate: Vec<(u16, TileIdx, HouseId)> = candidate
-            .into_iter()
-            .filter_map(|(h, d)| {
-                let origin = world.house(h)?.origin;
-                let idx = world.grid().idx(origin)?;
-                Some((d, idx, h))
-            })
-            .collect();
         ordinate.sort_unstable();
 
         // Contesa: in M0 la casa e' servita e basta, vince il primo provider
         // nell'ordine di iterazione. Le case gia' prese si tolgono **prima**
         // del riempimento, non dentro: una casa contesa non deve consumare la
         // capacita' di chi arriva secondo.
-        let libere = ordinate
-            .iter()
-            .filter(|(_, _, h)| cov.provider(*h, kind).is_none())
-            .filter_map(|(_, _, h)| Some((*h, world.house(*h)?.abitanti)));
+        let libere = ordinate.iter().filter_map(|(_, _, h)| {
+            let presa = assegnate
+                .get(*h)
+                .is_some_and(|servizi| servizi[kind.index()].is_some());
+            if presa {
+                return None;
+            }
+            Some((*h, world.house(*h)?.abitanti))
+        });
         let scelte: Vec<HouseId> = scelte_entro_capacita(libere, capacita).collect();
 
         for h in scelte {
-            cov.served_by.entry(h).or_default()[kind.index()] = Some(provider);
+            if assegnate.get(h).is_none() {
+                assegnate.insert(h, [None; ServiceKind::COUNT]);
+            }
+            if let Some(servizi) = assegnate.get_mut(h) {
+                servizi[kind.index()] = Some(provider);
+            }
         }
     }
 
+    // Materializzazione finale. Entrano **solo** le case con almeno un
+    // servizio: e' la stessa condizione di prima, quando la voce nasceva
+    // dall'`entry().or_default()` dentro il ciclo delle scelte. Inserire anche
+    // le case senza servizi cambierebbe l'insieme delle chiavi restituito da
+    // `assegnazioni()` e `case_servite_da()` — nessun test lo coglierebbe,
+    // perche' cambierebbero entrambi i lati del confronto.
+    let mut cov = Coverage::default();
+    for (h, servizi) in &assegnate {
+        if servizi.iter().any(Option::is_some) {
+            cov.served_by.insert(h, *servizi);
+        }
+    }
     cov
 }
 

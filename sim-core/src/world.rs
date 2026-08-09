@@ -291,11 +291,19 @@ impl World {
     /// "un tile d'ingresso designato", e allora questa e' la funzione da
     /// cambiare.
     pub fn ingressi_edificio(&self, id: BuildingId) -> Vec<TileIdx> {
+        let mut out = Vec::new();
+        self.ingressi_edificio_in(id, &mut out);
+        out
+    }
+
+    /// Come [`World::ingressi_edificio`], scrivendo in un buffer riusabile.
+    pub fn ingressi_edificio_in(&self, id: BuildingId, out: &mut Vec<TileIdx>) {
+        out.clear();
         let Some(b) = self.buildings.get(id) else {
-            return Vec::new();
+            return;
         };
         let footprint = self.data.def(b.kind).map_or((1, 1), |d| d.footprint);
-        self.ingressi(b.origin, footprint)
+        self.ingressi_in(b.origin, footprint, out);
     }
 
     /// Come [`World::ingressi_edificio`], per una casa.
