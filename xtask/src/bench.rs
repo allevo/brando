@@ -198,6 +198,39 @@ fn profilo(
         )),
     );
 
+    // F. Una strada, non un edificio. E' il caso peggiore strutturale: cambiare
+    //    la topologia invalida *tutto* — la rete va rietichettata e nessuna
+    //    furbizia sull'incrementalita' della copertura puo' aiutare. D misura
+    //    il caso frequente in partita (si costruisce), F quello che nessuna
+    //    cache potra' mai coprire, e servono entrambi: un'ottimizzazione che
+    //    fa scendere D e lascia F dov'e' ha coperto meta' del problema.
+    let posa = Command::PlaceRoad {
+        at: piano.slot_strada,
+    };
+    let togli = Command::Demolish {
+        at: piano.slot_strada,
+    };
+    let f = misura(ripetizioni, |i| {
+        let cmd = if i % 2 == 0 { posa } else { togli };
+        let r = step(&mut w, &[cmd]);
+        assert!(r.rejected.is_empty(), "comando rifiutato: {:?}", r.rejected);
+    });
+    riga("F. tick, 1 strada posata o tolta", &f, None);
+
+    // G. Il solo passo 3, senza il resto del tick. E' la misura che attribuisce
+    //    il costo invece di dedurlo per differenza da D e A, ed e' quella da
+    //    guardare quando si ottimizza la copertura: D contiene anche
+    //    produzione, eventi e validazione del comando.
+    let g = misura(ripetizioni, |_| {
+        let _ = sim_core::coverage::calcola_da_zero(&w);
+    });
+    let per_provider = g.mediana / w.n_edifici().max(1) as u128;
+    riga(
+        "G. solo calcola_da_zero (passo 3)",
+        &g,
+        Some(format!("{per_provider} ns/provider")),
+    );
+
     Ok(())
 }
 
@@ -221,13 +254,21 @@ struct Piano {
     n_strade: u32,
     /// Slot 1x1 liberi oltre la citta', per le misure D ed E.
     slot_liberi: Vec<TilePos>,
+    /// Slot riservato alla misura F, che ci costruisce e demolisce una strada.
+    /// Separato da `slot_liberi` perche' D ed E possono lasciarci sopra un
+    /// edificio se il numero di ripetizioni e' dispari.
+    slot_strada: TilePos,
     strada_qualsiasi: TilePos,
 }
 
 /// Quante celle 1x1 utilizzabili ha un isolato sull'anello.
 const SLOT_ANELLO: u32 = 5;
-/// Quanti slot liberi servono a D (1) ed E (i restanti).
-const SLOT_DI_PROVA: u32 = 51;
+/// Quanti slot liberi servono a D (1), E (i 50 restanti) ed F (1).
+///
+/// Passando da 51 a 52 il reticolo non cambia — `52.div_ceil(5)` e
+/// `51.div_ceil(5)` fanno entrambi 11 isolati — quindi le misure restano
+/// confrontabili con quelle registrate in `plan/09-invarianti-chiusura.md`.
+const SLOT_DI_PROVA: u32 = 52;
 /// Quanti comandi invalidi si mandano nella misura C.
 const LOTTO_RIFIUTI: usize = 10_000;
 
@@ -327,6 +368,7 @@ impl Piano {
             // Il quadrato coperto dal reticolo meno i 3x3 degli isolati.
             n_strade: lato_usato * lato_usato - blocchi_per_lato * blocchi_per_lato * 9,
             slot_liberi: Vec::new(),
+            slot_strada: TilePos::new(0, 0),
             strada_qualsiasi: TilePos::new(0, 0),
         };
         piano.slot_liberi = (blocchi_citta..blocchi_totali)
@@ -339,8 +381,12 @@ impl Piano {
             .take(SLOT_DI_PROVA as usize)
             .collect();
         if piano.slot_liberi.len() < SLOT_DI_PROVA as usize {
-            return Err("non restano abbastanza slot liberi per le misure D ed E".into());
+            return Err("non restano abbastanza slot liberi per le misure D, E ed F".into());
         }
+        piano.slot_strada = piano
+            .slot_liberi
+            .pop()
+            .ok_or("nessuno slot per la misura F")?;
         Ok(piano)
     }
 }

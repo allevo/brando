@@ -79,6 +79,30 @@ numero di partenza registrato qui, e accorgersi se in M1 diventa dieci volte peg
 
 Città di riferimento a fine partita: 3.750 case, 1.219 provider, 6.541 tile strada.
 
+#### Due misure aggiunte dopo (`2026-08-09`)
+
+Le misure sopra dicevano *quanto* costa un tick con un comando, non *dove* va il tempo. `F` e
+`G` rispondono a quella domanda, e sono state aggiunte prima di ottimizzare il passo 3.
+
+| Misura | 100×100 | 200×200 |
+|---|---|---|
+| F. tick, 1 strada posata o tolta | 3,48 ms | 20,20 ms |
+| G. solo `calcola_da_zero` (passo 3) | 3,43 ms → 14,0 µs/provider | **19,83 ms → 16,3 µs/provider** |
+
+Cosa dicono, e perché servivano entrambe:
+
+- **`G` chiude la questione dell'attribuzione.** 19,83 ms su 20,05 di `D`: il ricalcolo della
+  copertura **è** il costo del tick, non una sua componente. Tutto il resto — validazione del
+  comando, produzione su 3.750 case, emissione degli eventi — sta nei 250 µs di `A`.
+- **Il costo è per provider, non per mappa.** 14,0 µs contro 16,3 µs a fronte di 4× i tile:
+  quasi piatto. Quindi il totale scala col numero di provider, e ciò che va tolto è il costo
+  *dentro* il ciclo per provider.
+- **`F` è il caso che nessuna cache potrà coprire.** Posare una strada invalida la topologia:
+  la rete va rietichettata e ogni BFS va rifatto. Che `F ≈ D` significa che anche il caso
+  frequente (costruire un edificio) oggi paga il prezzo pieno del caso peggiore. Un'ottimizzazione
+  che fa scendere `D` e lascia `F` dov'è ha risolto metà del problema, e senza `F` nessuno se ne
+  accorgerebbe.
+
 **Cosa dicono questi numeri.** Rispondono alla prima domanda aperta di
 [10-oltre-m0.md](10-oltre-m0.md) — *il passo 3 è davvero l'hot path, o lo è il rebuild della
 rete?*
