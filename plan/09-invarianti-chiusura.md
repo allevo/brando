@@ -103,6 +103,39 @@ Cosa dicono, e perché servivano entrambe:
   che fa scendere `D` e lascia `F` dov'è ha risolto metà del problema, e senza `F` nessuno se ne
   accorgerebbe.
 
+#### Dopo le ottimizzazioni del passo 3 (`2026-08-09`)
+
+Stessa macchina, stessi profili. Tre interventi, tutti a risultato bit-identico — gli hash
+stampati dal bench non si sono mai mossi e `regen-golden --check` è rimasto verde a ogni passo.
+
+| Misura | 200×200 prima | 200×200 dopo | |
+|---|---|---|---|
+| A. tick a vuoto | 256 µs | 248 µs | invariata, come doveva |
+| B. 1 comando rifiutato | 263 µs | 248 µs | invariata |
+| C. 10.000 rifiutati | 291 µs | 274 µs | invariata, 2 ns/comando |
+| D. 1 comando accettato | 20,05 ms | **3,35 ms** | **6,0×** |
+| E. 50 comandi accettati | 20,19 ms | 3,36 ms | 1,00× D |
+| F. 1 strada | 20,20 ms | 3,42 ms | 5,9× |
+| G. solo `calcola_da_zero` | 19,83 ms | **3,05 ms** | **6,5×** — 16,3 → 2,5 µs/provider |
+
+I tre interventi, in ordine di resa:
+
+1. `case_per_tile` da `BTreeMap<TileIdx, Vec<HouseId>>` a CSR indicizzato: 19,83 → 12,38 ms.
+2. Le altre due `BTreeMap` del ciclo per provider — la ricerca del minimo fra le candidate (che
+   non serviva: il BFS visita per distanza crescente) e il controllo di contesa, che veniva
+   fatto su *tutte* le candidate e non solo su quelle che entrano in capacità: 12,38 → 4,85 ms.
+3. Lo scratch del BFS, allocato una volta per provider invece che una per ricalcolo:
+   4,85 → 3,05 ms.
+
+**La cosa più informativa non è il 6,5×, è che il costo per provider è diventato piatto**:
+2517 ns a 100×100 contro 2500 a 200×200, dove prima erano 14,0 e 16,3 µs. La dipendenza dalla
+dimensione della mappa è sparita del tutto, ed era tutta nell'intervento 3.
+
+`A` resta 248 µs ed è ora il numero da guardare, perché si paga a **ogni** tick mentre `D` solo
+quando il giocatore costruisce. Dentro `A`, il candidato più probabile è `production`, che fa
+una `coverage.provider(h, Cibo)` per casa — 3.750 lookup per tick nella stessa `BTreeMap` che
+l'intervento 2 ha tolto dal passo 3, ma sul percorso caldo di ogni tick. Non misurato ancora.
+
 **Cosa dicono questi numeri.** Rispondono alla prima domanda aperta di
 [10-oltre-m0.md](10-oltre-m0.md) — *il passo 3 è davvero l'hot path, o lo è il rebuild della
 rete?*

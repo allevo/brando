@@ -28,9 +28,12 @@ sono finite altrove rispetto a come erano state scritte.
 | A8 | **Chiusa**: `Arc<DataSet>` si tiene | serve a `World: Clone`, non al borrow checker |
 | A9 | **Chiusa**: l'acqua è copertura, non una risorsa | ma `servizi_richiesti` è dato dichiarativo che M1 deve iniziare a leggere |
 | A10 | **Chiusa in linea di principio**, da implementare in M1 | la soddisfazione è un accumulatore di tempo, non un livello di risorsa |
+| A11 | **Chiusa: non si fa**, con la condizione per riaprirla | l'invalidazione mirata della copertura; il costo era altrove, e toglierlo ha dato 6,5× senza stato nuovo |
 
 Sono nate smarcando `dubbi.md` (2026-08-09): tre erano domande di design, e le risposte
-valevano più della domanda. A9 e A10 sono prerequisiti di M1 fase 1–2.
+valevano più della domanda. A9 e A10 sono prerequisiti di M1 fase 1–2. A11 è l'unica che dice
+di **non** fare qualcosa, ed è quella con la storia più utile: l'ipotesi di partenza era
+sbagliata, e la misura l'ha detto prima che costasse.
 
 ---
 
@@ -287,3 +290,55 @@ in abitanti (A5). Quando arriva, `RngDomain::Migration` viene usato per la prima
 
 **Attenzione a un dettaglio meccanico:** ogni campo nuovo su `House` va aggiunto a mano a
 `hash_world` (A3). Se ci si dimentica, `l_hash_copre_tutto_lo_stato` fallisce — la rete c'è.
+
+---
+
+## A11 — L'invalidazione mirata della copertura non si fa (per ora)
+
+Il passo 3 costava 19,83 ms per ricalcolo alla scala di riferimento, e l'ipotesi ovvia era che
+il problema fosse *quante volte* si rifà il BFS: qualunque comando accettato invalida tutti i
+1.219 provider. La cura ovvia era cachare per provider i tile raggiunti — il BFS dipende solo
+da strade, posizione e raggio, **non dalle case**, quindi piazzare una casa non dovrebbe
+invalidare niente.
+
+**Non è stata l'ipotesi giusta.** Il costo non era il numero di BFS, era ciò che ciascuno si
+portava dietro: tre `BTreeMap` nel ciclo interno e uno scratch grande quanto la griglia
+allocato per provider. Toglierli ha dato **6,5×** senza aggiungere un byte di stato
+([09-invarianti-chiusura.md](09-invarianti-chiusura.md) per i numeri).
+
+**Decisione:** con `G` a 3,05 ms e 2,5 µs per provider, la cache non si fa adesso.
+
+- Eliminerebbe la sola traversata del BFS, cioè una parte dei 2,5 µs residui — non tutti:
+  restano l'ordinamento delle candidate, il riempimento della capacità e gli ingressi.
+- Non farebbe nulla per `F`, il caso in cui si posa una strada: lì la topologia cambia e ogni
+  BFS va rifatto comunque. Oggi `F ≈ D`, quindi coprirebbe metà dei casi.
+- In cambio chiede la prima **struttura derivata persistente** del `World` (~0,5 MB, più grande
+  della griglia), clonata a ogni `World::clone`, e un contratto di invalidazione che qualcuno
+  deve ricordarsi di onorare. È anche il primo di questi interventi che può introdurre un bug
+  di correttezza invece che solo di lentezza.
+
+Gli altri tre erano riscritture a risultato bit-identico di codice che già c'era. Questa è
+un'altra categoria, e `CLAUDE.md` è esplicito su entrambe le cose: *non ottimizzare prima del
+profiler*, e *ogni sistema nuovo dev'essere raggiungibile e osservabile*.
+
+**Quando riaprirla.** Quando un batch di partite di M2 mostra il tempo dominato dai tick in cui
+si costruisce; o quando M1 fa crescere molto il numero di provider; o quando un profiler mostra
+`bfs_strade` come voce dominante di `calcola_da_zero`. Prima di allora, il numero da guardare
+non è `D` ma `A` — 248 µs pagati a **ogni** tick, contro 3,35 ms pagati solo quando il giocatore
+costruisce.
+
+**Se si farà, tre cose sono già decise**, perché sono le trappole e non i dettagli:
+
+1. La cache va indicizzata con la **chiave intera** (`slotmap::SecondaryMap<BuildingId, _>`),
+   mai con il solo indice di slot. Uno slot riusato da un edificio nuovo erediterebbe in
+   silenzio i tile del vecchio, e se raggio e strade coincidono la copertura risulterebbe
+   sbagliata **senza nessun segnale**. `SecondaryMap` confronta anche la versione e tratta il
+   mismatch come assenza: il miss è automatico.
+2. `calcola_da_zero` deve restare **senza cache**. È l'oracolo di `equivalenza_copertura`: se
+   leggesse la cache del mondo, il test più importante della fase 06 diventerebbe una
+   tautologia. Serve un test che lo fissi, avvelenando la cache e verificando che
+   `calcola_da_zero` la ignori.
+3. Memorizzare accanto ai tile il **raggio** con cui sono stati calcolati. Così la voce si
+   autovalida contro il livello dell'edificio (M1) invece di dipendere da chi si ricorda di
+   invalidarla. Resta non presidiata l'origine: se un giorno arriverà un `Command::Move`, dovrà
+   invalidare la cache a mano.
