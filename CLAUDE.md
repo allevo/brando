@@ -16,7 +16,7 @@ Three non-functional requirements drive the whole architecture:
 Language: Rust. Edition 2021+.
 
 Every identifier, comment and document in this repository is in English. Any word you do not
-recognise is in [GLOSSARY.md](GLOSSARY.md), together with the Italian it replaced.
+recognise is defined in [GLOSSARY.md](GLOSSARY.md).
 
 ---
 

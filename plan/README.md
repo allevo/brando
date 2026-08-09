@@ -82,8 +82,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-Every identifier in this repository is in English. Any word you do not recognise is in
-[GLOSSARY.md](../GLOSSARY.md), together with the Italian it replaced.
+Every identifier in this repository is in English. Any word you do not recognise is defined in
+[GLOSSARY.md](../GLOSSARY.md).
 
 ## Regenerating the recordings without losing the signal
 
@@ -119,3 +119,6 @@ plan.
 The document carries on past M0: A7–A11 came out of clearing up that same `dubbi.md`, A12–A16 out of planning
 M1. For each one, alongside the recommendation, there is **how it really went** — which is almost
 always the more useful information, because it diverges.
+
+## Implemented till
+Everything is implemented till 9 included.
