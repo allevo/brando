@@ -249,7 +249,7 @@ fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     // are.
     let size = world
         .data
-        .kind_by_id("casa")
+        .kind_by_id("house")
         .and_then(|k| world.data.def(k))
         .map_or((1, 1), |d| d.size);
     clear_tiles(world, h.origin, size);

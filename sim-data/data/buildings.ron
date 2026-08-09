@@ -3,7 +3,7 @@
 (
     buildings: [
         (
-            id: "casa",
+            id: "house",
             size: (1, 1),
             cost: 10,
             levels: 1,
@@ -11,7 +11,7 @@
             required_services: ["water", "food"],
         ),
         (
-            id: "pozzo",
+            id: "well",
             size: (1, 1),
             cost: 12,
             levels: 1,
@@ -28,7 +28,7 @@
             required_services: [],
         ),
         (
-            id: "fattoria",
+            id: "farm",
             size: (2, 2),
             cost: 40,
             levels: 1,

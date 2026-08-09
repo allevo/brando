@@ -3,7 +3,7 @@
 (
     buildings: [
         (
-            id: "pozzo",
+            id: "well",
             size: (1, 1),
             cost: 12,
             levels: 2,

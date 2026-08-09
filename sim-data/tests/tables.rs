@@ -46,9 +46,9 @@ fn the_production_tables_load() {
         assert!(d.terrain(t).is_some(), "terrain {t:?} missing");
     }
 
-    let house = d.kind_by_id("casa").expect("the house exists");
-    let well = d.kind_by_id("pozzo").expect("the well exists");
-    let farm = d.kind_by_id("fattoria").expect("the farm exists");
+    let house = d.kind_by_id("house").expect("the house exists");
+    let well = d.kind_by_id("well").expect("the well exists");
+    let farm = d.kind_by_id("farm").expect("the farm exists");
     assert_eq!(d.kind_by_id("pyramid"), None);
 
     let house = d.def(house).expect("the house's def");
@@ -87,9 +87,7 @@ fn the_production_tables_load() {
 #[test]
 fn the_farms_capacity_is_what_its_output_sustains() {
     let d = sim_data::load_default().expect("valid tables");
-    let f = d
-        .def(d.kind_by_id("fattoria").expect("the farm"))
-        .expect("def");
+    let f = d.def(d.kind_by_id("farm").expect("the farm")).expect("def");
     let s = f.service.as_ref().expect("service");
 
     let residents = i32::from(d.rules.residents_per_house_level[0]);

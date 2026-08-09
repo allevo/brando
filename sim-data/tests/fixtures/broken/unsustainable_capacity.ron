@@ -10,7 +10,7 @@
 (
     buildings: [
         (
-            id: "fattoria",
+            id: "farm",
             size: (2, 2),
             cost: 40,
             levels: 1,

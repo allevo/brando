@@ -81,7 +81,7 @@ pub fn dataset() -> Arc<DataSet> {
 
     let buildings = vec![
         BuildingDef {
-            id: "casa".into(),
+            id: "house".into(),
             size: (1, 1),
             cost: Coins::new(HOUSE_COST),
             levels: 1,
@@ -91,7 +91,7 @@ pub fn dataset() -> Arc<DataSet> {
             max_stock: None,
         },
         BuildingDef {
-            id: "pozzo".into(),
+            id: "well".into(),
             size: (1, 1),
             cost: Coins::new(WELL_COST),
             levels: 1,
@@ -106,7 +106,7 @@ pub fn dataset() -> Arc<DataSet> {
             max_stock: None,
         },
         BuildingDef {
-            id: "fattoria".into(),
+            id: "farm".into(),
             size: (2, 2),
             cost: Coins::new(FARM_COST),
             levels: 1,
@@ -120,7 +120,7 @@ pub fn dataset() -> Arc<DataSet> {
             max_stock: Some(Milli::from_millis(20_000)),
         },
         BuildingDef {
-            id: "pozzetto".into(),
+            id: "small_well".into(),
             size: (1, 1),
             cost: Coins::new(WELL_COST),
             levels: 1,

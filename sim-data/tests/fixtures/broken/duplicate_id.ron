@@ -1,7 +1,7 @@
 // Two buildings with the same id: the second would never be reachable.
 (
     buildings: [
-        (id: "casa", size: (1, 1), cost: 10, levels: 1, service: None, required_services: []),
-        (id: "casa", size: (1, 1), cost: 10, levels: 1, service: None, required_services: []),
+        (id: "house", size: (1, 1), cost: 10, levels: 1, service: None, required_services: []),
+        (id: "house", size: (1, 1), cost: 10, levels: 1, service: None, required_services: []),
     ],
 )

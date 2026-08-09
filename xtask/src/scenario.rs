@@ -36,9 +36,9 @@ fn kind(data: &DataSet, id: &str) -> sim_core::BuildingKindId {
 /// A road, a well, a farm and four houses: all of them served, food to spare.
 /// This is the city that works.
 fn minimal(data: &DataSet) -> Scenario {
-    let house = kind(data, "casa");
-    let well = kind(data, "pozzo");
-    let farm = kind(data, "fattoria");
+    let house = kind(data, "house");
+    let well = kind(data, "well");
+    let farm = kind(data, "farm");
 
     let mut commands = Vec::new();
     for x in 1..=16u8 {
@@ -85,7 +85,7 @@ fn minimal(data: &DataSet) -> Scenario {
 /// what tells this scenario apart from how it behaved before capacity and
 /// output were made consistent, when a covered house could stay hungry forever.
 fn hunger(data: &DataSet) -> Scenario {
-    let house = kind(data, "casa");
+    let house = kind(data, "house");
     let mut s = minimal(data);
     s.name = "hunger";
     s.description = "more houses than the providers can cover";
