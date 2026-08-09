@@ -27,7 +27,7 @@ pub use data::{BuildingDef, CapacitaInsostenibile, DataSet, Rules, ServiceDef, T
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileOccupant};
 pub use ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
-pub use network::{ComponentId, RoadNetwork};
+pub use network::{ComponentId, RoadNetwork, Visitati};
 pub use production::FoodLedger;
 pub use rng::{RngDomain, RngSet};
 pub use service::{ServiceFlags, ServiceKind};

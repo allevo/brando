@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use slotmap::SecondaryMap;
 
 use crate::ids::{BuildingId, HouseId, TileIdx};
-use crate::network::bfs_strade;
+use crate::network::{Visitati, bfs_strade};
 use crate::service::ServiceKind;
 use crate::world::World;
 
@@ -167,6 +167,9 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
     let mut vista: SecondaryMap<HouseId, u32> = SecondaryMap::new();
     let mut ordinate: Vec<(u16, TileIdx, HouseId)> = Vec::new();
     let mut ingressi: Vec<TileIdx> = Vec::new();
+    // Uno solo per ricalcolo, riusato da tutti i provider: allocarlo per
+    // provider era l'ultimo costo per-provider proporzionale alla mappa.
+    let mut visitati = Visitati::nuovo(world.grid().len());
 
     // I provider si scorrono in ordine di BuildingId: e' l'ordine che decide
     // chi vince una casa contesa, quindi e' semantica di gioco.
@@ -210,7 +213,7 @@ pub fn calcola_da_zero(world: &World) -> Coverage {
         // Basta ignorare gli avvistamenti successivi, che arrivano quando la
         // casa si affaccia su piu' di un tile raggiunto.
         ordinate.clear();
-        bfs_strade(world.grid(), &ingressi, raggio, |tile, d| {
+        bfs_strade(world.grid(), &ingressi, raggio, &mut visitati, |tile, d| {
             for h in case_per_tile.get(tile) {
                 if vista.get(*h) == Some(&epoca) {
                     continue;

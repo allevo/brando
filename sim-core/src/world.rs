@@ -369,7 +369,10 @@ impl World {
             return None;
         }
         let mut migliore: Option<u16> = None;
-        crate::network::bfs_strade(&self.grid, &partenze, max, |t, d| {
+        // Uno scratch locale: questa non e' l'hot path — il passo 3 usa il
+        // proprio, riusato fra i provider.
+        let mut visitati = crate::network::Visitati::nuovo(self.grid.len());
+        crate::network::bfs_strade(&self.grid, &partenze, max, &mut visitati, |t, d| {
             if arrivi.binary_search(&t).is_ok() && migliore.is_none_or(|m| d < m) {
                 migliore = Some(d);
             }
