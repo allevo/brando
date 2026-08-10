@@ -31,6 +31,22 @@ impl Rules {
     pub const fn ticks_per_year(&self) -> u32 {
         self.ticks_per_month * self.months_per_year
     }
+
+    /// The most residents a house can hold at the given level (level 1 = index
+    /// 0).
+    ///
+    /// `None` out of range, like [`ServiceDef::range`] and
+    /// [`ServiceDef::capacity`]: a level that does not exist in the table is a
+    /// data error, not a panic.
+    ///
+    /// It is a function and not a direct access to the `Vec` because phase 13
+    /// restructures `residents_per_house_level` into a per-level table: there
+    /// the **body** changes, not the callers.
+    pub fn max_residents(&self, level: u8) -> Option<u16> {
+        self.residents_per_house_level
+            .get(usize::from(level).checked_sub(1)?)
+            .copied()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +115,50 @@ impl BuildingDef {
     }
 }
 
+/// An index into the profiles table.
+///
+/// Not an enum: difficulty is data (D6), and a civilisation or a scenario will
+/// be able to declare its own without touching the code.
+///
+/// No `Default`. It looks like an inconvenience and it is not: [`World::new`]
+/// has four callers, and a default is exactly the mechanism by which one of the
+/// four would be left behind with nothing to flag it.
+///
+/// It is not `Serialize` either, on purpose: what travels in a replay's header
+/// is the **textual** id, never this index. A `Serialize` impl here is the one
+/// thing that would make writing the index into a save file look natural (A13).
+///
+/// [`World::new`]: crate::world::World::new
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct DifficultyId(u8);
+
+impl DifficultyId {
+    /// Crate-private: outside `sim-core` an id can only be obtained from
+    /// [`DataSet::difficulty_by_id`], so one that resolves to no profile cannot
+    /// be built by mistake.
+    pub(crate) const fn new(v: u8) -> Self {
+        Self(v)
+    }
+
+    pub const fn get(self) -> u8 {
+        self.0
+    }
+}
+
+/// A difficulty profile: the knobs chosen at the start of a game.
+///
+/// Born with one field. Phases 13, 14 and 16 add theirs here without touching
+/// the replay's header or [`World::new`]'s signature again.
+///
+/// [`World::new`]: crate::world::World::new
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DifficultyDef {
+    pub id: String,
+    /// The residents of a newly-built house. Zero is legitimate: the house
+    /// fills up by migration (phase 15).
+    pub starting_residents_per_house: u16,
+}
+
 /// The validated tables, ready for the core.
 ///
 /// It lives behind an `Arc` inside the `World` (A2): loading is I/O and stays
@@ -110,6 +170,9 @@ pub struct DataSet {
     pub terrain: BTreeMap<Terrain, TerrainDef>,
     /// Indexed by [`BuildingKindId`].
     pub buildings: Vec<BuildingDef>,
+    /// Indexed by [`DifficultyId`]. At most 256 of them, which is what makes
+    /// the index a `u8`.
+    pub difficulties: Vec<DifficultyDef>,
     /// blake3 of the **validated** content, not of the files' bytes:
     /// reformatting a RON file or adding a comment does not change the hash,
     /// changing a number does. It feeds into the state hash (A2).
@@ -124,12 +187,14 @@ impl DataSet {
         rules: Rules,
         terrain: BTreeMap<Terrain, TerrainDef>,
         buildings: Vec<BuildingDef>,
+        difficulties: Vec<DifficultyDef>,
     ) -> Self {
-        let hash = dataset_hash(&rules, &terrain, &buildings);
+        let hash = dataset_hash(&rules, &terrain, &buildings, &difficulties);
         Self {
             rules,
             terrain,
             buildings,
+            difficulties,
             hash,
         }
     }
@@ -142,6 +207,25 @@ impl DataSet {
     pub fn kind_by_id(&self, id: &str) -> Option<BuildingKindId> {
         let pos = self.buildings.iter().position(|b| b.id == id)?;
         u16::try_from(pos).ok().map(BuildingKindId::new)
+    }
+
+    pub fn difficulty(&self, d: DifficultyId) -> Option<&DifficultyDef> {
+        self.difficulties.get(usize::from(d.get()))
+    }
+
+    /// Resolves the textual id used in the tables and in the replay headers.
+    pub fn difficulty_by_id(&self, id: &str) -> Option<DifficultyId> {
+        let pos = self.difficulties.iter().position(|d| d.id == id)?;
+        u8::try_from(pos).ok().map(DifficultyId::new)
+    }
+
+    /// The known profile ids, for error messages.
+    pub fn difficulty_ids(&self) -> String {
+        self.difficulties
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     pub fn terrain(&self, t: Terrain) -> Option<&TerrainDef> {
@@ -208,6 +292,37 @@ impl DataSet {
         }
         out
     }
+
+    /// The difficulty profiles that would build a house beyond its own
+    /// capacity.
+    ///
+    /// A cross-table check like [`DataSet::unsustainable_food_capacity`], and
+    /// it lives here for the same two reasons: it crosses `rules` and
+    /// `difficulties`, and `sim-core`'s test fixture does not go through
+    /// `sim-data`'s validation and could otherwise drift onto a balancing that
+    /// production would reject.
+    ///
+    /// A house born beyond `max_residents(1)` is a state the rest of the game
+    /// cannot represent: from phase 13 on, `residents <= max_residents(level)`
+    /// is assumed everywhere.
+    pub fn difficulty_beyond_house_capacity(&self) -> Vec<DifficultyBeyondCapacity> {
+        // No level 1 in the table is `rules.residents_per_house_level` being
+        // empty, which validation reports on its own: saying it twice would be
+        // noise.
+        let Some(max) = self.rules.max_residents(1) else {
+            return Vec::new();
+        };
+        self.difficulties
+            .iter()
+            .enumerate()
+            .filter(|(_, def)| def.starting_residents_per_house > max)
+            .map(|(profile, def)| DifficultyBeyondCapacity {
+                profile,
+                starting: def.starting_residents_per_house,
+                max,
+            })
+            .collect()
+    }
 }
 
 /// A food provider whose capacity exceeds what its output sustains.
@@ -222,4 +337,16 @@ pub struct UnsustainableCapacity {
     pub capacity: u16,
     /// Residents the output really sustains.
     pub sustainable: u16,
+}
+
+/// A difficulty profile that would build a house beyond its own capacity.
+/// [`DataSet::difficulty_beyond_house_capacity`] finds them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DifficultyBeyondCapacity {
+    /// Index into [`DataSet::difficulties`].
+    pub profile: usize,
+    /// Residents the profile puts in a newly-built house.
+    pub starting: u16,
+    /// Residents a house can hold at level 1.
+    pub max: u16,
 }

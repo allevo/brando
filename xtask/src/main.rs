@@ -42,7 +42,7 @@ fn exit_code(r: Result<(), String>) -> ExitCode {
 fn usage() {
     eprintln!("usage: cargo xtask <command>");
     eprintln!();
-    eprintln!("  run --scenario <name> --ticks <n> [--dump-every <n>]");
+    eprintln!("  run --scenario <name> --ticks <n> [--dump-every <n>] [--difficulty <id>]");
     eprintln!("  record --scenario <name> --out <file.ron>");
     eprintln!("  regen-expected [--check]");
     eprintln!("  bench [--side <n>] [--residents <n>] [--reps <n>]   (use --release)");
@@ -104,14 +104,28 @@ fn run(args: &[String]) -> Result<(), String> {
     let dump_every: u32 = number(args, "--dump-every")?.unwrap_or(30);
 
     let data = Arc::new(sim_data::load_default().map_err(|e| format!("tables: {e}"))?);
-    let sc = scenario::by_name(&name, &data).ok_or_else(|| format!("unknown scenario: {name}"))?;
+    let mut sc =
+        scenario::by_name(&name, &data).ok_or_else(|| format!("unknown scenario: {name}"))?;
+
+    // The scenario proposes a profile, the flag overrides it. An unknown id is
+    // an error and not a fallback: playing another game than the one asked for
+    // is worse than not playing.
+    let profile =
+        flag(args, "--difficulty").unwrap_or_else(|| scenario::RECORDED_DIFFICULTY.into());
+    sc.difficulty = data.difficulty_by_id(&profile).ok_or_else(|| {
+        format!(
+            "unknown difficulty profile: {profile:?} (known: {})",
+            data.difficulty_ids()
+        )
+    })?;
 
     println!("scenario '{}' — {}", sc.name, sc.description);
     println!(
-        "seed {}, grid {}x{}, dataset {}",
+        "seed {}, grid {}x{}, difficulty '{}', dataset {}",
         sc.seed,
         sc.side,
         sc.side,
+        profile,
         &data.hash_hex()[..16]
     );
     println!();

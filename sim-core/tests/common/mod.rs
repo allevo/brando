@@ -13,8 +13,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
-use sim_core::{BuildingKindId, Coins, Command, Grid, Milli, ServiceKind, Terrain, TilePos, World};
+use sim_core::data::{BuildingDef, DataSet, DifficultyDef, Rules, ServiceDef, TerrainDef};
+use sim_core::{
+    BuildingKindId, Coins, Command, DifficultyId, Grid, Milli, ServiceKind, Terrain, TilePos, World,
+};
 
 pub const HOUSE: BuildingKindId = BuildingKindId::new(0);
 pub const WELL: BuildingKindId = BuildingKindId::new(1);
@@ -43,6 +45,14 @@ pub const WELL_CAPACITY: u16 = 32;
 /// `invariants.rs::the_fixture_keeps_capacity_and_output_consistent` pins down.
 pub const FARM_CAPACITY: u16 = 20;
 pub const SMALL_WELL_CAPACITY: u16 = 4;
+
+/// The profile the tests play on unless they say otherwise: a house is born
+/// full, which is M0's behaviour and keeps every test written before phase 11
+/// saying what it said.
+pub const EASY: &str = "easy";
+/// A house born empty. It only fills up by migration (phase 15), so in these
+/// tests it stays at zero: that is exactly what makes the knob observable.
+pub const HARD: &str = "hard";
 
 pub fn dataset() -> Arc<DataSet> {
     let rules = Rules {
@@ -135,7 +145,31 @@ pub fn dataset() -> Arc<DataSet> {
         },
     ];
 
-    Arc::new(DataSet::new(rules, terrain, buildings))
+    // The same three profiles as production, and with the same meaning: `easy`
+    // fills a new house up to `RESIDENTS_PER_HOUSE`, `hard` leaves it empty.
+    // The values are the fixture's own, like every other number here.
+    let difficulties = vec![
+        DifficultyDef {
+            id: EASY.into(),
+            starting_residents_per_house: RESIDENTS_PER_HOUSE,
+        },
+        DifficultyDef {
+            id: "normal".into(),
+            starting_residents_per_house: RESIDENTS_PER_HOUSE / 2,
+        },
+        DifficultyDef {
+            id: HARD.into(),
+            starting_residents_per_house: 0,
+        },
+    ];
+
+    Arc::new(DataSet::new(rules, terrain, buildings, difficulties))
+}
+
+/// Resolves a profile in the fixture's dataset.
+pub fn difficulty(data: &DataSet, id: &str) -> DifficultyId {
+    data.difficulty_by_id(id)
+        .unwrap_or_else(|| panic!("the fixture must contain the '{id}' profile"))
 }
 
 /// A test world: a 32x32 grid of plain (A4), fixed seed.
@@ -144,8 +178,15 @@ pub fn world() -> World {
 }
 
 pub fn world_of(w: u16, h: u16) -> World {
+    world_at(w, h, EASY)
+}
+
+/// Like [`world_of`], on a chosen difficulty profile.
+pub fn world_at(w: u16, h: u16, profile: &str) -> World {
     let grid = Grid::new(w, h, Terrain::Plain).expect("valid dimensions");
-    World::new(grid, dataset(), 42)
+    let data = dataset();
+    let difficulty = difficulty(&data, profile);
+    World::new(grid, data, 42, difficulty)
 }
 
 /// Applies the commands in a single tick and returns the report.

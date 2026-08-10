@@ -10,7 +10,7 @@ use std::fmt;
 use sim_core::{Coins, Milli, ServiceKind, Terrain};
 
 use crate::raw::{RawBuildingDef, RawDataSet};
-use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
+use sim_core::data::{BuildingDef, DataSet, DifficultyDef, Rules, ServiceDef, TerrainDef};
 
 /// A single problem, with the logical path of the field that causes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +52,12 @@ pub enum ValidationErrorKind {
     )]
     CapacityBeyondOutput { capacity: u16, sustainable: u16 },
 
+    #[error(
+        "a house born with {starting} residents, but at level 1 it holds {max}: \
+         the rest of the game cannot represent a house beyond its own capacity"
+    )]
+    StartingResidentsBeyondCapacity { starting: u16, max: u16 },
+
     #[error("terrain missing from the table: {terrain:?}")]
     MissingTerrain { terrain: Terrain },
 
@@ -60,6 +66,9 @@ pub enum ValidationErrorKind {
 
     #[error("too many buildings in the table: the maximum is {max}")]
     TooManyBuildings { max: usize },
+
+    #[error("too many difficulty profiles in the table: the maximum is {max}")]
+    TooManyProfiles { max: usize },
 }
 
 /// The set of problems found in one validation pass.
@@ -115,6 +124,7 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
     let rules = validate_rules(raw, &mut rep);
     let terrain = validate_terrain(raw, &mut rep);
     let buildings = validate_buildings(raw, &mut rep);
+    let difficulties = validate_difficulty(raw, &mut rep);
 
     if !rep.is_empty() {
         return Err(rep);
@@ -123,14 +133,25 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
     // The checks **across** tables come afterwards, and only if the individual
     // tables are sound: the consistency between a food provider's capacity and
     // what its output sustains crosses `rules` and `buildings`, and on an
-    // already broken table it would produce noise instead of information.
-    let data = DataSet::new(rules, terrain, buildings);
+    // already broken table it would produce noise instead of information. The
+    // same goes for a house born beyond its own capacity, which crosses `rules`
+    // and `difficulty`.
+    let data = DataSet::new(rules, terrain, buildings, difficulties);
     for v in data.unsustainable_food_capacity() {
         rep.push(
             format!("buildings[{}].service.capacity_per_level", v.building),
             ValidationErrorKind::CapacityBeyondOutput {
                 capacity: v.capacity,
                 sustainable: v.sustainable,
+            },
+        );
+    }
+    for v in data.difficulty_beyond_house_capacity() {
+        rep.push(
+            format!("profiles[{}].starting_residents_per_house", v.profile),
+            ValidationErrorKind::StartingResidentsBeyondCapacity {
+                starting: v.starting,
+                max: v.max,
             },
         );
     }
@@ -308,6 +329,48 @@ fn validate_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<Build
             required_services,
             output_per_tick: b.output_per_tick.map(Milli::from_millis),
             max_stock: b.max_stock.map(Milli::from_millis),
+        });
+    }
+
+    out
+}
+
+fn validate_difficulty(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<DifficultyDef> {
+    let profiles = &raw.difficulty.profiles;
+
+    if profiles.is_empty() {
+        // With no profile there is no game to start: `World::new` wants an id
+        // and there would be none to give it.
+        rep.push("profiles", ValidationErrorKind::Empty);
+    }
+    // `DifficultyId` is a `u8`: profile 256 would be unreachable, and silently.
+    if profiles.len() > usize::from(u8::MAX) + 1 {
+        rep.push(
+            "profiles",
+            ValidationErrorKind::TooManyProfiles {
+                max: usize::from(u8::MAX) + 1,
+            },
+        );
+    }
+
+    let mut out = Vec::with_capacity(profiles.len());
+    for (i, p) in profiles.iter().enumerate() {
+        let path = format!("profiles[{i}]");
+
+        if p.id.trim().is_empty() {
+            rep.push(format!("{path}.id"), ValidationErrorKind::Empty);
+        } else if let Some(prev) = profiles.iter().take(i).position(|o| o.id == p.id) {
+            rep.push(
+                format!("{path}.id"),
+                ValidationErrorKind::DuplicateId {
+                    previous: format!("profiles[{prev}].id"),
+                },
+            );
+        }
+
+        out.push(DifficultyDef {
+            id: p.id.clone(),
+            starting_residents_per_house: p.starting_residents_per_house,
         });
     }
 

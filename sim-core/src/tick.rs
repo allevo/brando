@@ -114,14 +114,13 @@ fn place_building(
     let size = def.size;
     let cost = def.cost;
     let is_a_house = def.is_house();
+    // How full a new house is born is the difficulty's one knob (A13): at
+    // `hard` it is zero and the house only fills up by migration.
     let residents = if is_a_house {
         world
             .data
-            .rules
-            .residents_per_house_level
-            .first()
-            .copied()
-            .unwrap_or(0)
+            .difficulty(world.difficulty)
+            .map_or(0, |d| d.starting_residents_per_house)
     } else {
         0
     };

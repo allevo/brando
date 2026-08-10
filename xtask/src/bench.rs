@@ -38,7 +38,20 @@
 
 use std::sync::Arc;
 
-use sim_core::{BuildingKindId, Coins, Command, DataSet, Grid, Terrain, TilePos, World, step};
+use sim_core::{
+    BuildingKindId, Coins, Command, DataSet, DifficultyId, Grid, Terrain, TilePos, World, step,
+};
+
+/// The profile the benchmark measures on.
+///
+/// Chosen **explicitly**, never taken as the first in the table or as a
+/// default: if rebalancing the default moved these numbers, the tripwire would
+/// stop being comparable with the ones recorded in
+/// `plan/09-invariants-closeout.md`. `easy` and not another because it fills a
+/// new house up to its level-1 capacity, which is the population the recorded
+/// load was measured on; at `hard` the synthetic city would have zero residents
+/// and would be measuring something else.
+const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are
 /// the project's reference scale (200x200, ~15,000 residents) and an
@@ -51,7 +64,10 @@ pub fn bench(args: &[String]) -> Result<(), String> {
     let residents = super::number(args, "--residents")?;
 
     let real = sim_data::load_default().map_err(|e| format!("tables: {e}"))?;
-    println!("dataset {}", &real.hash_hex()[..16]);
+    println!(
+        "dataset {}, difficulty '{BENCH_DIFFICULTY}'",
+        &real.hash_hex()[..16]
+    );
     println!(
         "{} repetitions per measure — compare two runs on the same machine",
         reps
@@ -80,8 +96,11 @@ fn profile(real: &DataSet, name: &str, side: u16, residents: u32, reps: u32) -> 
     println!("\n=== {name}: {side}x{side}, {residents} residents ===");
 
     let data = Arc::new(with_unlimited_treasury(real));
-    let layout = Layout::new(&data, side, residents)?;
-    let mut w = build(&data, &layout, side)?;
+    let difficulty = data
+        .difficulty_by_id(BENCH_DIFFICULTY)
+        .ok_or_else(|| format!("the dataset has no '{BENCH_DIFFICULTY}' profile"))?;
+    let layout = Layout::new(&data, difficulty, side, residents)?;
+    let mut w = build(&data, &layout, side, difficulty)?;
 
     println!(
         "  {} houses ({} res.), {} providers, {} road tiles out of {} tiles",
@@ -261,7 +280,12 @@ const TEST_SLOTS: u32 = 52;
 const REJECT_BATCH: usize = 10_000;
 
 impl Layout {
-    fn new(data: &DataSet, side: u16, residents: u32) -> Result<Self, String> {
+    fn new(
+        data: &DataSet,
+        difficulty: DifficultyId,
+        side: u16,
+        residents: u32,
+    ) -> Result<Self, String> {
         let house = data
             .buildings
             .iter()
@@ -270,12 +294,14 @@ impl Layout {
             .map(BuildingKindId::new)
             .ok_or("the dataset contains no house")?;
 
+        // The residents a house is really born with, which is the difficulty's
+        // knob and not `rules.residents_per_house_level` (A13). At the profile
+        // the benchmark measures on the two coincide; reading the profile is
+        // what keeps the load honest if that ever stops being true.
         let per_house = u32::from(
-            *data
-                .rules
-                .residents_per_house_level
-                .first()
-                .ok_or("rules.residents_per_house_level is empty")?,
+            data.difficulty(difficulty)
+                .ok_or("the benchmark's profile is not in the dataset")?
+                .starting_residents_per_house,
         );
         if per_house == 0 {
             return Err("a house with zero residents does not make a city".into());
@@ -440,9 +466,14 @@ impl Spread {
     }
 }
 
-fn build(data: &Arc<DataSet>, layout: &Layout, side: u16) -> Result<World, String> {
+fn build(
+    data: &Arc<DataSet>,
+    layout: &Layout,
+    side: u16,
+    difficulty: DifficultyId,
+) -> Result<World, String> {
     let grid = Grid::new(side, side, Terrain::Plain).map_err(|e| format!("grid: {e}"))?;
-    let mut w = World::new(grid, Arc::clone(data), 42);
+    let mut w = World::new(grid, Arc::clone(data), 42, difficulty);
 
     // The roads first, all in one tick: the topology has to be there before the
     // buildings go looking for an entrance.
@@ -540,7 +571,12 @@ fn apply(w: &mut World, cmds: &[Command]) -> Result<(), String> {
 fn with_unlimited_treasury(real: &DataSet) -> DataSet {
     let mut rules = real.rules.clone();
     rules.starting_treasury = Coins::new(i32::MAX / 2);
-    DataSet::new(rules, real.terrain.clone(), real.buildings.clone())
+    DataSet::new(
+        rules,
+        real.terrain.clone(),
+        real.buildings.clone(),
+        real.difficulties.clone(),
+    )
 }
 
 // --- measuring and printing -------------------------------------------------

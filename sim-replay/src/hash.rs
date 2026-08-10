@@ -11,7 +11,7 @@
 //! recordings stop protecting it: it is the known risk of A3, mitigated by the
 //! `the_hash_covers_the_whole_state` test.
 
-use sim_core::{RngDomain, ServiceKind, World};
+use sim_core::{Building, Economy, House, RngDomain, ServiceKind, World};
 
 /// Domain prefix: keeps this hash apart from the dataset's.
 /// Changing it regenerates every recording.
@@ -19,9 +19,9 @@ const DOMAIN: &[u8] = b"brando/world/v1";
 
 /// The state hash, in an order fixed **here** and nowhere else.
 ///
-/// What goes in: the tick, the dataset hash, the grid's dimensions, the tiles
-/// in `TileIdx` order, the buildings and the houses in id order, the economy
-/// and the position of every RNG stream.
+/// What goes in: the tick, the dataset hash, the difficulty, the grid's
+/// dimensions, the tiles in `TileIdx` order, the buildings and the houses in id
+/// order, the economy and the position of every RNG stream.
 ///
 /// What does **not** go in: `RoadNetwork`, `Coverage`, `DirtyFlags`,
 /// `FoodTotals`. They are derived or diagnostic structures; if they went in, a
@@ -40,6 +40,11 @@ pub fn hash_world(w: &World) -> [u8; 32] {
 
     h.update(&w.tick().to_le_bytes());
     h.update(&w.data().hash);
+    // The difficulty is state, not a parameter of the run: it changes the
+    // simulation, so it enters the hash from tick 0 (A13). Two games with the
+    // same seed and the same commands on different profiles are different games
+    // and must not be confusable.
+    h.update(&[w.difficulty().get()]);
 
     let grid = w.grid();
     h.update(&grid.width().to_le_bytes());
@@ -59,23 +64,41 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     // --- buildings, in id order ---
     // Iterating a SlotMap goes by slot index, deterministic given the same
     // sequence of insertions and removals — guaranteed by the command log (D4).
+    //
+    // Destructured and not accessed field by field, here and below: the
+    // exhaustive pattern stops compiling the moment a field is added, which is
+    // the same compile-time canary `World::field_canary` gives the state as a
+    // whole — free wherever the fields are already `pub`.
     h.update(&(w.building_count() as u64).to_le_bytes());
     for (_, b) in w.buildings() {
-        h.update(&b.kind.get().to_le_bytes());
-        h.update(&[b.origin.x, b.origin.y, b.level]);
-        h.update(&b.stock.to_millis().to_le_bytes());
+        let Building {
+            kind,
+            origin,
+            level,
+            stock,
+        } = b;
+        h.update(&kind.get().to_le_bytes());
+        h.update(&[origin.x, origin.y, *level]);
+        h.update(&stock.to_millis().to_le_bytes());
     }
 
     // --- houses, in id order ---
     h.update(&(w.house_count() as u64).to_le_bytes());
     for (_, c) in w.houses() {
-        h.update(&[c.origin.x, c.origin.y, c.level]);
-        h.update(&c.residents.to_le_bytes());
-        h.update(&[c.served.bits()]);
+        let House {
+            origin,
+            level,
+            residents,
+            served,
+        } = c;
+        h.update(&[origin.x, origin.y, *level]);
+        h.update(&residents.to_le_bytes());
+        h.update(&[served.bits()]);
     }
 
     // --- economy ---
-    h.update(&w.economy().treasury.get().to_le_bytes());
+    let Economy { treasury } = w.economy();
+    h.update(&treasury.get().to_le_bytes());
 
     // --- position of the RNG streams ---
     // A state in which Events has consumed 5 values is not the same as one in

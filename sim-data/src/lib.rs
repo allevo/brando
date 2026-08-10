@@ -14,7 +14,9 @@ pub use load::{LoadError, from_ron_str, load_from_dir};
 /// The dataset definitions live in `sim-core` (the `World` holds them in an
 /// `Arc`, A2); what stays here is parsing, validation and I/O. Re-exported for
 /// the convenience of whoever loads the tables.
-pub use sim_core::data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef};
+pub use sim_core::data::{
+    BuildingDef, DataSet, DifficultyDef, DifficultyId, Rules, ServiceDef, TerrainDef,
+};
 pub use validate::{ValidationError, ValidationErrorKind, ValidationReport, validate};
 
 /// The directory of the production tables, resolved at compile time.

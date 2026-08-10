@@ -15,6 +15,14 @@ fn valid_terrain() -> String {
     read_data("terrain.ron")
 }
 
+fn valid_buildings() -> String {
+    read_data("buildings.ron")
+}
+
+fn valid_difficulty() -> String {
+    read_data("difficulty.ron")
+}
+
 fn read_data(name: &str) -> String {
     let p = sim_data::production_data_dir().join(name);
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
@@ -29,7 +37,22 @@ fn broken_fixture(name: &str) -> String {
 
 /// Loads the valid tables, replacing only `buildings.ron`.
 fn with_buildings(buildings: &str) -> Result<DataSet, LoadError> {
-    sim_data::from_ron_str(&valid_rules(), &valid_terrain(), buildings)
+    sim_data::from_ron_str(
+        &valid_rules(),
+        &valid_terrain(),
+        buildings,
+        &valid_difficulty(),
+    )
+}
+
+/// Loads the valid tables, replacing only `difficulty.ron`.
+fn with_difficulty(difficulty: &str) -> Result<DataSet, LoadError> {
+    sim_data::from_ron_str(
+        &valid_rules(),
+        &valid_terrain(),
+        &valid_buildings(),
+        difficulty,
+    )
 }
 
 // --- 1. the production fixture ---
@@ -128,10 +151,53 @@ fn no_food_provider_promises_more_than_it_produces() {
     assert_eq!(d.unsustainable_food_capacity(), vec![]);
 }
 
+/// The fourth table (A13). `easy` is deliberately today's behaviour — a house
+/// born at its full level-1 capacity — which is what makes phase 11's `.hashes`
+/// diff attributable to the difficulty byte alone.
+#[test]
+fn the_difficulty_profiles_load() {
+    let d = sim_data::load_default().expect("valid tables");
+
+    let easy = d.difficulty_by_id("easy").expect("the easy profile exists");
+    let hard = d.difficulty_by_id("hard").expect("the hard profile exists");
+    assert_eq!(d.difficulty_by_id("impossible"), None);
+    assert_ne!(easy, hard);
+
+    let max = d.rules.max_residents(1).expect("houses have a level 1");
+    assert_eq!(
+        d.difficulty(easy)
+            .expect("def")
+            .starting_residents_per_house,
+        max,
+        "at easy a house is born full: that is M0's behaviour"
+    );
+    assert_eq!(
+        d.difficulty(hard)
+            .expect("def")
+            .starting_residents_per_house,
+        0,
+        "at hard the house only fills up by migration"
+    );
+    assert_eq!(d.rules.max_residents(0), None, "levels start at 1");
+    assert_eq!(d.rules.max_residents(2), None, "one level only in M0");
+}
+
+/// No profile builds a house beyond its own capacity, and not just `easy`: any
+/// profile that gets added is covered.
+#[test]
+fn no_profile_builds_a_house_beyond_its_capacity() {
+    let d = sim_data::load_default().expect("valid tables");
+    assert_eq!(d.difficulty_beyond_house_capacity(), vec![]);
+}
+
 // --- 2. broken fixtures, one per check ---
 
 fn errors(buildings: &str) -> Vec<(String, ValidationErrorKind)> {
-    match with_buildings(buildings) {
+    errors_of(with_buildings(buildings))
+}
+
+fn errors_of(loaded: Result<DataSet, LoadError>) -> Vec<(String, ValidationErrorKind)> {
+    match loaded {
         Err(LoadError::Validation(r)) => r.errors.into_iter().map(|e| (e.path, e.kind)).collect(),
         Err(other) => panic!("expected a validation error, found: {other}"),
         Ok(_) => panic!("the broken table passed validation"),
@@ -203,6 +269,26 @@ fn capacity_beyond_the_output() {
                 }
             ),
         ]
+    );
+}
+
+/// The other check that crosses two tables: a profile cannot build a house
+/// beyond what a level-1 house holds.
+#[test]
+fn a_profile_beyond_the_house_capacity() {
+    let e = errors_of(with_difficulty(&broken_fixture(
+        "difficulty_beyond_capacity.ron",
+    )));
+    assert_eq!(
+        e,
+        [(
+            "profiles[0].starting_residents_per_house".to_string(),
+            ValidationErrorKind::StartingResidentsBeyondCapacity {
+                starting: 6,
+                max: 4
+            }
+        )],
+        "only the first profile is broken: the second is at the limit and legitimate"
     );
 }
 
@@ -289,8 +375,8 @@ fn the_hash_notices_a_balance_change() {
     assert_ne!(a.hash, b.hash);
 }
 
-/// The rules and the terrains go into the hash too: if only `buildings` did,
-/// changing the food consumption would make no recording fail.
+/// The rules, the terrains and the profiles go into the hash too: if only
+/// `buildings` did, changing the food consumption would make no recording fail.
 #[test]
 fn the_hash_covers_every_table() {
     let base = sim_data::load_default().expect("valid tables");
@@ -303,7 +389,8 @@ fn the_hash_covers_every_table() {
     let a = sim_data::from_ron_str(
         &modified_rules,
         &valid_terrain(),
-        &read_data("buildings.ron"),
+        &valid_buildings(),
+        &valid_difficulty(),
     )
     .expect("valid");
     assert_ne!(base.hash, a.hash, "the rules must go into the hash");
@@ -312,8 +399,31 @@ fn the_hash_covers_every_table() {
     let b = sim_data::from_ron_str(
         &valid_rules(),
         &modified_terrain,
-        &read_data("buildings.ron"),
+        &valid_buildings(),
+        &valid_difficulty(),
     )
     .expect("valid");
     assert_ne!(base.hash, b.hash, "the terrains must go into the hash");
+
+    // The knob of a profile nobody is playing on still has to move the hash:
+    // otherwise rebalancing `normal` would leave every recording green while
+    // the game has changed.
+    let modified_difficulty = valid_difficulty().replacen(
+        r#"(id: "normal", starting_residents_per_house: 2)"#,
+        r#"(id: "normal", starting_residents_per_house: 3)"#,
+        1,
+    );
+    assert_ne!(
+        modified_difficulty,
+        valid_difficulty(),
+        "the replacement has to have bitten"
+    );
+    let c = sim_data::from_ron_str(
+        &valid_rules(),
+        &valid_terrain(),
+        &valid_buildings(),
+        &modified_difficulty,
+    )
+    .expect("valid");
+    assert_ne!(base.hash, c.hash, "the profiles must go into the hash");
 }

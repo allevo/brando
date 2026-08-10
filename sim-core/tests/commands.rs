@@ -286,6 +286,32 @@ fn a_house_is_a_house_not_a_building() {
     ));
 }
 
+/// Phase 11 — the difficulty's one knob, seen from the core.
+///
+/// It is the whole mechanic: at `easy` a house is born full, at `hard` empty.
+/// A house at zero residents is a legitimate state and not a degenerate one —
+/// migration (phase 15) is what fills it, and until then it stays empty, which
+/// is the point of the profile.
+#[test]
+fn how_full_a_new_house_is_born_is_the_difficulty() {
+    let cases = [(EASY, RESIDENTS_PER_HOUSE), (HARD, 0)];
+
+    for (profile, expected) in cases {
+        let mut w = world_at(32, 32, profile);
+        let r = tick(
+            &mut w,
+            &[Command::PlaceBuilding {
+                kind: HOUSE,
+                origin: pos(1, 1),
+            }],
+        );
+
+        assert!(r.rejected.is_empty(), "{profile}: {:?}", r.rejected);
+        assert_eq!(w.house_count(), 1, "{profile}");
+        assert_eq!(w.population(), u32::from(expected), "{profile}");
+    }
+}
+
 #[test]
 fn one_invalid_command_does_not_stop_the_others() {
     let mut w = world();
