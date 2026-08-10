@@ -6,7 +6,7 @@
 //! obscure deserialisation one, and the files stay readable by eye.
 
 use serde::Deserialize;
-use sim_core::Terrain;
+use sim_core::{Mood, Terrain};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawRules {
@@ -15,6 +15,19 @@ pub struct RawRules {
     pub starting_treasury: i32,
     pub residents_per_house_level: Vec<u16>,
     pub food_per_resident: i32,
+    pub satisfaction: RawSatisfaction,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawSatisfaction {
+    pub max: u8,
+    pub step_up: u8,
+    pub step_down: u8,
+    /// A fixed-size array on purpose: the number of bands is decided by
+    /// [`Mood`], so a table with two thresholds or four is a deserialisation
+    /// error and needs no check of its own. In RON it is written as a tuple,
+    /// `(25, 50, 75)`, which is what serde asks of an array of fixed length.
+    pub mood_thresholds: [u8; Mood::COUNT - 1],
 }
 
 #[derive(Debug, Clone, Deserialize)]

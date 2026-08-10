@@ -173,6 +173,9 @@ fn houses_beyond_the_capacity_stay_uncovered_and_the_others_eat() {
         stocks_in_range(&w).expect("stocks in range");
     }
 
+    // Since phase 12 `served` means "covered" for the food bit too, so the
+    // count below is the covered ones — and the invariant that they all ate is
+    // `covered_but_unfed`, checked here as well.
     let covered = usize::from(FARM_CAPACITY / RESIDENTS_PER_HOUSE);
     let fed = w
         .houses()
@@ -183,6 +186,11 @@ fn houses_beyond_the_capacity_stay_uncovered_and_the_others_eat() {
         w.house_count() - fed,
         6 - covered,
         "the ones in excess go without food"
+    );
+    assert_eq!(
+        w.food().covered_but_unfed,
+        0,
+        "everyone the farm took on ate, on every one of those ticks"
     );
 }
 
@@ -275,6 +283,11 @@ fn hunger_is_cured_by_building_a_second_farm() {
             .count(),
         0,
         "the second farm takes over the houses the first did not cover"
+    );
+    assert_eq!(
+        w.food().covered_but_unfed,
+        0,
+        "and nobody was ever covered without eating"
     );
     conservation(&w).expect("conservation");
 }

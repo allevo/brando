@@ -327,6 +327,12 @@ fn the_hash_covers_the_whole_state() {
             let current = h.served.get(sim_core::ServiceKind::Water);
             h.served.set(sim_core::ServiceKind::Water, !current);
         }),
+        ("a house's satisfaction", |w| {
+            let id = w.houses().next().map(|(id, _)| id).expect("a house");
+            let h = w.house_mut(id).expect("alive");
+            let k = sim_core::ServiceKind::Food.index();
+            h.satisfaction[k] = h.satisfaction[k].wrapping_sub(1);
+        }),
         ("the treasury", |w| {
             w.economy_mut().treasury = w.economy().treasury.saturating_add(Coins::new(1));
         }),

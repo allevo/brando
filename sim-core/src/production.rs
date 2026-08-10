@@ -35,6 +35,20 @@ pub struct FoodTotals {
     /// demolishing a full producer would break the conservation equality, and
     /// the phase's most important test would report a bug that is not there.
     pub lost_to_demolition: i64,
+    /// House-ticks in which a house had a food provider assigned and still did
+    /// not eat. **It has to stay zero.**
+    ///
+    /// It is the observable form of *a house covered by food always eats* (A5),
+    /// and it exists because phase 12 took away the other way of checking it:
+    /// until then `House::served`'s food bit was written by step 4 and meant
+    /// "it ate", so comparing it against the coverage was a real question. Now
+    /// step 3 writes both bits and both mean "covered" (A9), and that
+    /// comparison would be `x == x`.
+    ///
+    /// The check that replaces it is this counter, and it is worth more than
+    /// what it replaces: it holds over the whole history rather than at the
+    /// moment it is looked at.
+    pub covered_but_unfed: u64,
 }
 
 impl FoodTotals {
@@ -73,28 +87,30 @@ pub(crate) fn production(world: &mut World) {
     // --- 2. the houses eat ---
     // In HouseId order: it is a deterministic order and it is a game rule, like
     // the (distance, TileIdx) ordering of phase 06.
+    //
+    // **Step 4 does not write `House::served` any more** (phase 12, A9). That
+    // bit means "covered", for water and for food alike, and step 3 is the only
+    // one that writes it: reading a field with two meanings depending on the
+    // bit was the trap A9 announced, and satisfaction is the first system to
+    // read it. What used to be said by rewriting the bit is now said by
+    // `covered_but_unfed`, which has to stay at zero.
     let houses: Vec<HouseId> = world.houses.keys().collect();
     for h in houses {
         let Some(house) = world.houses.get(h) else {
             continue;
         };
         let residents = i32::from(house.residents);
-        let provider = world.coverage.provider(h, ServiceKind::Food);
-
-        let ate = match provider {
-            None => false,
-            Some(p) => {
-                let needed = data
-                    .rules
-                    .food_per_resident
-                    .checked_mul_int(residents)
-                    .unwrap_or(Milli::ZERO);
-                take_from_stock(world, p, needed)
-            }
+        let Some(provider) = world.coverage.provider(h, ServiceKind::Food) else {
+            continue;
         };
 
-        if let Some(house) = world.houses.get_mut(h) {
-            house.served.set(ServiceKind::Food, ate);
+        let needed = data
+            .rules
+            .food_per_resident
+            .checked_mul_int(residents)
+            .unwrap_or(Milli::ZERO);
+        if !take_from_stock(world, provider, needed) {
+            world.food.covered_but_unfed += 1;
         }
     }
 }

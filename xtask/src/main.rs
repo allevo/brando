@@ -152,8 +152,8 @@ fn run(args: &[String]) -> Result<(), String> {
 
 fn table_header() {
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}",
-        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury"
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}  {:>7}",
+        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury", "sat."
     );
 }
 
@@ -168,8 +168,9 @@ fn row(w: &World) {
         .filter(|(_, h)| h.served.get(ServiceKind::Food))
         .count();
     let houses = w.house_count();
+    let max = w.data().rules.satisfaction.max;
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}",
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}  {:>3}/{:<3}",
         w.tick(),
         months,
         houses,
@@ -179,8 +180,37 @@ fn row(w: &World) {
         houses,
         with_food,
         houses,
-        w.economy().treasury
+        w.economy().treasury,
+        average_satisfaction(w),
+        max
     );
+}
+
+/// The average, over the houses, of the **worst** required service.
+///
+/// The worst and not the mean of the two: it is the quantity the mood is
+/// computed from, so the column and what the renderer would draw say the same
+/// thing. A house with water and no food is desperate, not half happy.
+fn average_satisfaction(w: &World) -> u32 {
+    let required: &[ServiceKind] = w
+        .data()
+        .house_def()
+        .map_or(&[], |d| d.required_services.as_slice());
+    let houses = w.house_count() as u32;
+    if houses == 0 || required.is_empty() {
+        return 0;
+    }
+    let total: u32 = w
+        .houses()
+        .map(|(_, h)| {
+            required
+                .iter()
+                .map(|k| u32::from(h.satisfaction[k.index()]))
+                .min()
+                .unwrap_or(0)
+        })
+        .sum();
+    total / houses
 }
 
 /// Formats thousandths as `12.500`, the way `Milli::Display` does.

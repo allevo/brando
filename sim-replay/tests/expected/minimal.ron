@@ -8,7 +8,7 @@ Recording(
       height: 32,
       terrain: Plain,
     ),
-    dataset_hash: "ab8711b750cbb5a046b8703c5132be379fdcab53d60d635061c91ad64d6157dd",
+    dataset_hash: "dac5407416dcb18fad45fc03a42b822198ca21ca5363f1111e5d89c23847a8eb",
   ),
   commands: [
     (0, PlaceRoad(

@@ -271,6 +271,22 @@ for water "it is covered" (written by step 3), for food "it ate" (rewritten by s
 invariant *covered ⇒ always eats* the two always coincide, so today the difference exists only on
 paper — but it is a trap for whoever reads that field in M1.
 
+> **Closed in phase 12**, the first phase to read that field. Both bits now mean "covered" and step 3
+> is the only writer; step 4 consumes and says nothing.
+>
+> The part that was not foreseen is what it cost. `covered_means_fed` was the invariant guarding
+> *covered ⇒ eats*, and it worked by comparing the two bits against the coverage — a real question
+> only because the sources were independent. Unifying them turned it into `x == x`: a test that would
+> have stayed green for ever, on the very property the new code depends on. It was replaced by
+> `FoodTotals::covered_but_unfed`, a counter step 4 raises when a house with a provider does not eat,
+> asserted at zero over a whole run.
+>
+> **The gap A9 named is still open**, and phase 12 made it observable rather than closing it:
+> coverage still assigns a service to a house that does not require it. Today that is harmless —
+> satisfaction ignores the unrequired slot — and `dataset_where_a_house_requires` is the fixture that
+> pins the behaviour down. It becomes a real decision in phase 13, when levels stop requiring the
+> same things.
+
 ---
 
 ## A10 — House satisfaction is an accumulator of time, not a resource level
@@ -293,7 +309,8 @@ today, because coverage does get lost (demolish a farm, break a road).
 > **Amended while planning M1.** The type is `[u8; ServiceKind::COUNT]`, not `[i16; …]`: the
 > accumulator is clamped to `0..=max` and never needs the sign or the range, and that way `House`
 > stays small. The rest of the decision holds unchanged, and [phase 12](12-satisfaction.md)
-> implements it to the letter.
+> implements it to the letter — with one addition it did not foresee, the `covered_but_unfed`
+> counter that A9 above explains.
 
 With **different thresholds for levelling up and decaying**: the hysteresis band stops the city
 oscillating on the boundary every tick, and it is also what keeps the recordings stable. Every

@@ -1,0 +1,24 @@
+// A satisfaction curve that cannot be drawn. Two problems, both in the same
+// block, so the report has to show both:
+//
+//   - step_down is larger than the maximum: the accumulator would go from full
+//     to empty in a single tick, which is not a curve;
+//   - the second mood band does not come after the first, so two bands overlap
+//     and the boundary between them means nothing.
+//
+// The first threshold is also legitimate as it stands (25 > 0): what makes a
+// satisfaction of zero always Desperate is that it is above zero, and that part
+// is fine here.
+(
+    ticks_per_month: 30,
+    months_per_year: 12,
+    starting_treasury: 1000,
+    residents_per_house_level: [4],
+    satisfaction: (
+        max: 100,
+        step_up: 4,
+        step_down: 120,
+        mood_thresholds: (25, 25, 75),
+    ),
+    food_per_resident: 20,
+)

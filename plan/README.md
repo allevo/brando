@@ -121,4 +121,4 @@ M1. For each one, alongside the recommendation, there is **how it really went** 
 always the more useful information, because it diverges.
 
 ## Implemented till
-Everything is implemented till 11 included.
+Everything is implemented till 12 included.

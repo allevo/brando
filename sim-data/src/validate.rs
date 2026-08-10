@@ -9,8 +9,10 @@ use std::fmt;
 
 use sim_core::{Coins, Milli, ServiceKind, Terrain};
 
-use crate::raw::{RawBuildingDef, RawDataSet};
-use sim_core::data::{BuildingDef, DataSet, DifficultyDef, Rules, ServiceDef, TerrainDef};
+use crate::raw::{RawBuildingDef, RawDataSet, RawSatisfaction};
+use sim_core::data::{
+    BuildingDef, DataSet, DifficultyDef, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+};
 
 /// A single problem, with the logical path of the field that causes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +41,15 @@ pub enum ValidationErrorKind {
 
     #[error("unknown service: {name:?} (known: {known})")]
     UnknownService { name: String, known: String },
+
+    #[error("{found} is beyond the maximum of {max}")]
+    BeyondMax { found: u16, max: u16 },
+
+    #[error(
+        "the mood bands have to be strictly ascending and above zero: \
+         {found} does not come after {previous}"
+    )]
+    MoodBandsOutOfOrder { previous: u16, found: u16 },
 
     #[error("a producer must have max_stock > 0")]
     ProducerWithoutStock,
@@ -210,6 +221,81 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
         starting_treasury: Coins::new(r.starting_treasury),
         residents_per_house_level: r.residents_per_house_level.clone(),
         food_per_resident: Milli::from_millis(r.food_per_resident),
+        satisfaction: validate_satisfaction(&r.satisfaction, rep),
+    }
+}
+
+/// The satisfaction curve (phase 12).
+///
+/// The cross-table check against the level thresholds arrives with phase 13,
+/// which is what introduces them. What is checked here is the shape: the curve
+/// has to be able to move, and the bands have to partition `0..=max` in order.
+fn validate_satisfaction(s: &RawSatisfaction, rep: &mut ValidationReport) -> SatisfactionRules {
+    const PATH: &str = "rules.satisfaction";
+
+    for (field, value) in [
+        ("max", s.max),
+        ("step_up", s.step_up),
+        ("step_down", s.step_down),
+    ] {
+        if value < 1 {
+            rep.push(
+                format!("{PATH}.{field}"),
+                ValidationErrorKind::TooSmall {
+                    min: 1,
+                    found: i64::from(value),
+                },
+            );
+        }
+    }
+
+    // A step larger than the maximum is not wrong arithmetically — it
+    // saturates — but it says the table means something it does not: a house
+    // that reaches the maximum in a single tick has no curve at all.
+    for (field, value) in [("step_up", s.step_up), ("step_down", s.step_down)] {
+        if value > s.max {
+            rep.push(
+                format!("{PATH}.{field}"),
+                ValidationErrorKind::BeyondMax {
+                    found: u16::from(value),
+                    max: u16::from(s.max),
+                },
+            );
+        }
+    }
+
+    // Strictly ascending and starting above zero. The first half keeps the
+    // bands from overlapping; the second is what makes a satisfaction of zero
+    // always `Mood::Desperate`, which the renderer's contract for a newly-built
+    // house depends on.
+    let mut previous = 0u8;
+    for (i, &t) in s.mood_thresholds.iter().enumerate() {
+        if t <= previous {
+            rep.push(
+                format!("{PATH}.mood_thresholds[{i}]"),
+                ValidationErrorKind::MoodBandsOutOfOrder {
+                    previous: u16::from(previous),
+                    found: u16::from(t),
+                },
+            );
+        }
+        if t > s.max {
+            rep.push(
+                format!("{PATH}.mood_thresholds[{i}]"),
+                ValidationErrorKind::BeyondMax {
+                    found: u16::from(t),
+                    max: u16::from(s.max),
+                },
+            );
+        }
+        previous = t;
+    }
+
+    SatisfactionRules {
+        max: s.max,
+        step_up: s.step_up,
+        step_down: s.step_down,
+        mood_thresholds: s.mood_thresholds,
     }
 }
 

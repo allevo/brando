@@ -90,10 +90,12 @@ pub fn hash_world(w: &World) -> [u8; 32] {
             level,
             residents,
             served,
+            satisfaction,
         } = c;
         h.update(&[origin.x, origin.y, *level]);
         h.update(&residents.to_le_bytes());
         h.update(&[served.bits()]);
+        h.update(satisfaction);
     }
 
     // --- economy ---

@@ -13,6 +13,7 @@
 //! | Treasury consistent: starting amount minus the sum of accepted costs | here, `the_treasury_adds_up` |
 //! | Food conserved: produced = consumed + lost + stock | here, `food_is_conserved` |
 //! | A house covered by food always eats | here, `covered_means_fed` |
+//! | Satisfaction inside `0..=max`, on every service | here, `satisfaction_stays_within_bounds` |
 //! | A rejected command mutates nothing | here, `rejected_commands_mutate_nothing` |
 //! | No panic on arbitrary commands, malformed ones included | here, `no_panic_on_ten_thousand_commands` |
 //! | Incremental coverage identical to from-scratch | `coverage.rs`, `coverage_equivalence` |
@@ -130,7 +131,8 @@ fn population_is_consistent(w: &World) -> Result<(), String> {
     Ok(())
 }
 
-/// A house covered by the food service has eaten this tick.
+/// A house covered by the food service has eaten, on every tick since the
+/// world began.
 ///
 /// It is not a property of the coverage code on its own: it follows from the
 /// **balancing**. If a food provider could take on more residents than it
@@ -141,18 +143,36 @@ fn population_is_consistent(w: &World) -> Result<(), String> {
 /// `the_fixture_keeps_capacity_and_output_consistent` pins down for these
 /// tests' fixture.
 ///
-/// `House::served` for food is written by step 4 and means "it ate";
-/// `Coverage` means "a farm reaches it". Here the two have to agree: if they
-/// diverge, hunger has gone back to being an absorbing state.
+/// **How it is asked changed in phase 12.** Until then `House::served`'s food
+/// bit was written by step 4 and meant "it ate", so comparing it against the
+/// coverage — which means "a farm reaches it" — was a real question with two
+/// independent sources. Phase 12 made both bits mean "covered" and both written
+/// by step 3 (A9), and that comparison became `x == x`. What replaces it is
+/// step 4's own counter, and it is the better question: it holds over the whole
+/// history, not just at the moment somebody looks.
 fn covered_houses_are_fed(w: &World) -> Result<(), String> {
+    let unfed = w.food().covered_but_unfed;
+    if unfed != 0 {
+        return Err(format!(
+            "{unfed} house-ticks with a food provider assigned and nothing eaten: \
+             hunger has gone back to being an absorbing state"
+        ));
+    }
+    Ok(())
+}
+
+/// Satisfaction inside `0..=max`, for every house and every service.
+///
+/// Never negative is guaranteed by the type, and that is half the reason it is
+/// a `u8`; the ceiling is game semantics and has to be checked.
+fn satisfaction_in_range(w: &World) -> Result<(), String> {
+    let max = w.data().rules.satisfaction.max;
     for (id, h) in w.houses() {
-        let covered = w.coverage().is_served(id, sim_core::ServiceKind::Food);
-        let ate = h.served.get(sim_core::ServiceKind::Food);
-        if covered != ate {
-            return Err(format!(
-                "{id:?} at {:?}: covered by food = {covered}, ate = {ate}",
-                h.origin
-            ));
+        for k in sim_core::ServiceKind::ALL {
+            let v = h.satisfaction[k.index()];
+            if v > max {
+                return Err(format!("{id:?} has {k:?} satisfaction {v}, beyond {max}"));
+            }
         }
     }
     Ok(())
@@ -293,6 +313,28 @@ proptest! {
         }
     }
 
+    /// Satisfaction saturates at both ends: after any sequence of commands and
+    /// any number of ticks it stays inside `0..=max`.
+    #[test]
+    fn satisfaction_stays_within_bounds(p in a_game()) {
+        let mut w = world();
+        for cmds in &p {
+            tick(&mut w, cmds);
+            if let Err(e) = satisfaction_in_range(&w) {
+                return Err(TestCaseError::fail(e));
+            }
+            // Long enough to reach the ceiling from zero, so the clamp is
+            // really exercised and not merely never approached.
+            let climb = w.data().rules.satisfaction.max / w.data().rules.satisfaction.step_up;
+            for _ in 0..=climb {
+                tick(&mut w, &[]);
+                if let Err(e) = satisfaction_in_range(&w) {
+                    return Err(TestCaseError::fail(e));
+                }
+            }
+        }
+    }
+
     /// A rejected command mutates nothing: the state after a tick made only of
     /// rejected commands is the one from before, tick aside.
     #[test]
@@ -376,7 +418,9 @@ fn no_panic_on_ten_thousand_commands() {
         );
         no_overlap(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
         population_is_consistent(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
+        satisfaction_in_range(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
     }
+    covered_houses_are_fed(&w).expect("no house stayed covered and hungry over 1,000 ticks");
 
     assert_eq!(w.tick(), TICKS as u32);
     assert_eq!(issued, COMMANDS, "the test has to issue every command");
