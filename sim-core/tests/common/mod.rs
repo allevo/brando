@@ -14,7 +14,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sim_core::data::{
-    BuildingDef, DataSet, DifficultyDef, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    BuildingDef, DataSet, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules, ServiceDef,
+    TerrainDef,
 };
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Milli, ServiceKind, Terrain, TilePos, World,
@@ -34,7 +35,23 @@ pub const WELL_COST: i32 = 12;
 pub const FARM_COST: i32 = 40;
 pub const PLAIN_ROAD_COST: i32 = 2;
 pub const STARTING_TREASURY: i32 = 1000;
+/// What a house holds at level 1, which is also what `easy` builds it with.
 pub const RESIDENTS_PER_HOUSE: u16 = 4;
+
+// The house ladder of the fixture (phase 13), one entry per level. Its own
+// numbers, like everything else here: a test about the mechanics must not break
+// when the production balancing moves. What a test may **not** do is copy them
+// — the horizons are computed from the `DataSet`, which is what makes them stay
+// true if these change.
+pub const LEVEL_RESIDENTS: [u16; HOUSE_LEVELS] = [RESIDENTS_PER_HOUSE, 8, 12];
+/// The satisfaction it takes to rise to each level. Level 1's is unread: a
+/// house is born there.
+pub const LEVEL_UP: [u8; HOUSE_LEVELS] = [0, 50, 90];
+/// The satisfaction below which a house at each level comes down. Level 1's is
+/// unread: there is no level 0. Strictly under [`LEVEL_UP`] on the same rung,
+/// which is the hysteresis band.
+pub const LEVEL_DECAY: [u8; HOUSE_LEVELS] = [0, 25, 60];
+pub const HOUSE_LEVELS: usize = 3;
 
 // The providers' capacity, in **residents served** and not in houses: once
 // houses have levels (M1) the population per house varies. Divided by
@@ -44,7 +61,7 @@ pub const WELL_CAPACITY: u16 = 32;
 /// residents, five houses. The fixture has to respect the same consistency as
 /// the production dataset, otherwise `sim-core`'s tests would run on a
 /// balancing that `sim-data`'s validation would reject — that is what
-/// `invariants.rs::the_fixture_keeps_capacity_and_output_consistent` pins down.
+/// `invariants.rs::the_fixture_has_no_inconsistencies` pins down.
 pub const FARM_CAPACITY: u16 = 20;
 pub const SMALL_WELL_CAPACITY: u16 = 4;
 
@@ -55,6 +72,10 @@ pub const SMALL_WELL_CAPACITY: u16 = 4;
 pub const SATISFACTION_MAX: u8 = 100;
 pub const SATISFACTION_STEP_UP: u8 = 4;
 pub const SATISFACTION_STEP_DOWN: u8 = 10;
+/// The cadence of the level review (phase 13). Divisible by nothing in
+/// particular: what the tests compute from it is *the first review after* a
+/// horizon, never a fixed tick.
+pub const TICKS_PER_MONTH: u32 = 30;
 
 /// The profile the tests play on unless they say otherwise: a house is born
 /// full, which is M0's behaviour and keeps every test written before phase 11
@@ -68,20 +89,58 @@ pub fn dataset() -> Arc<DataSet> {
     dataset_where_a_house_requires(&[ServiceKind::Water, ServiceKind::Food])
 }
 
-/// Like [`dataset`], with the house declaring the services it wants.
+/// Like [`dataset`], with **every** rung declaring the same services.
 ///
-/// It exists for the one thing today's tables cannot express: a house that does
+/// It exists for the one thing M0's tables could not express: a house that does
 /// **not** require a service the coverage reaches it with anyway. Coverage
 /// never reads `required_services` (the gap A9 names), so a house that requires
 /// only water is still assigned a farm — and its food satisfaction has to stay
-/// still all the same. Phase 13, which gives each level its own requirements,
-/// makes the case real.
+/// still all the same.
 pub fn dataset_where_a_house_requires(required: &[ServiceKind]) -> Arc<DataSet> {
+    dataset_with_levels_requiring(&[required; HOUSE_LEVELS])
+}
+
+/// Like [`dataset`], with a rung that asks for less than the rung above it:
+/// level 1 wants water alone, the two above want water and food.
+///
+/// This is the shape the production tables have since phase 13, and the one
+/// that makes the per-level requirements do real work — with three identical
+/// rungs the mechanism is there but nothing distinguishes it from reading the
+/// building's union.
+pub fn dataset_with_a_service_ladder() -> Arc<DataSet> {
+    const BOTH: &[ServiceKind] = &[ServiceKind::Water, ServiceKind::Food];
+    dataset_with_levels_requiring(&[&[ServiceKind::Water], BOTH, BOTH])
+}
+
+/// The fixture, with the requirements of each rung spelled out.
+///
+/// The building's `required_services` is derived as the **union** of the rungs,
+/// never written by hand: it is what `is_house()` reads, and a fixture where
+/// the two disagreed would be one `Inconsistency::InconsistentRequirements`
+/// away from failing for a reason that has nothing to do with the test using
+/// it.
+pub fn dataset_with_levels_requiring(levels: &[&[ServiceKind]]) -> Arc<DataSet> {
+    let house_levels: Vec<HouseLevelDef> = levels
+        .iter()
+        .enumerate()
+        .map(|(i, required)| HouseLevelDef {
+            max_residents: LEVEL_RESIDENTS[i.min(HOUSE_LEVELS - 1)],
+            required_services: required.to_vec(),
+            level_up_threshold: LEVEL_UP[i.min(HOUSE_LEVELS - 1)],
+            decay_threshold: LEVEL_DECAY[i.min(HOUSE_LEVELS - 1)],
+            taxable_per_resident: Milli::ZERO,
+        })
+        .collect();
+
+    let mut union: Vec<ServiceKind> = levels.iter().flat_map(|l| l.iter().copied()).collect();
+    union.sort_unstable();
+    union.dedup();
+
     let rules = Rules {
-        ticks_per_month: 30,
+        ticks_per_month: TICKS_PER_MONTH,
         months_per_year: 12,
         starting_treasury: Coins::new(STARTING_TREASURY),
-        residents_per_house_level: vec![RESIDENTS_PER_HOUSE],
+        house_levels,
         food_per_resident: Milli::from_millis(20),
         satisfaction: SatisfactionRules {
             max: SATISFACTION_MAX,
@@ -122,9 +181,9 @@ pub fn dataset_where_a_house_requires(required: &[ServiceKind]) -> Arc<DataSet> 
             id: "house".into(),
             size: (1, 1),
             cost: Coins::new(HOUSE_COST),
-            levels: 1,
+            levels: u8::try_from(levels.len()).expect("the fixture has few levels"),
             service: None,
-            required_services: required.to_vec(),
+            required_services: union,
             output_per_tick: None,
             max_stock: None,
         },

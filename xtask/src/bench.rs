@@ -295,7 +295,7 @@ impl Layout {
             .ok_or("the dataset contains no house")?;
 
         // The residents a house is really born with, which is the difficulty's
-        // knob and not `rules.residents_per_house_level` (A13). At the profile
+        // knob and not `rules.house_levels` (A13). At the profile
         // the benchmark measures on the two coincide; reading the profile is
         // what keeps the load honest if that ever stops being true.
         let per_house = u32::from(

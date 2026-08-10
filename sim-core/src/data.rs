@@ -22,9 +22,61 @@ pub struct Rules {
     pub months_per_year: u32,
     pub starting_treasury: Coins,
     /// Indexed by house level (level 1 = index 0).
-    pub residents_per_house_level: Vec<u16>,
+    pub house_levels: Vec<HouseLevelDef>,
     pub food_per_resident: Milli,
     pub satisfaction: SatisfactionRules,
+}
+
+/// One rung of the house ladder (phase 13): what it holds, what it demands,
+/// and what it is worth to the treasury.
+///
+/// **Why in `Rules` and not in `BuildingDef`.** `House` does not carry a
+/// [`BuildingKindId`], and in M1 there is only one kind of house. Adding one so
+/// that a per-kind table could be indexed would be the invented abstraction D6
+/// forbids before the second civilisation. When it really is needed,
+/// [`Rules::max_residents`] is once again the only place to change — that is
+/// why it is a function.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HouseLevelDef {
+    /// The most residents it can hold. It is the house's ceiling, **not** what
+    /// the coverage counts a provider's capacity against: that is counted on
+    /// the residents who actually live there (A12). A house that can hold 8
+    /// with two residents weighs two, not eight.
+    pub max_residents: u16,
+    /// The services needed to **rise to** this level and to **stay at** it.
+    ///
+    /// This is where `required_services` stops being declarative data read only
+    /// by [`BuildingDef::is_house`] — the gap noted in A9. Three systems read
+    /// it: the mood and the decay check use the house's **own** level, the
+    /// level-up check the **destination's**.
+    ///
+    /// What it does **not** decide is which satisfaction accumulators move:
+    /// those follow the union declared by [`BuildingDef::required_services`],
+    /// and they have to, or a level introducing a service the level below does
+    /// not require would be unreachable — its accumulator would sit frozen at
+    /// zero for ever. See `satisfaction::update`.
+    pub required_services: Vec<ServiceKind>,
+    /// The minimum satisfaction on **each** of [`HouseLevelDef::required_services`]
+    /// to rise here.
+    ///
+    /// Unread at level 1: a house is born there and nobody rises into it.
+    pub level_up_threshold: u8,
+    /// Below this, on any one of [`HouseLevelDef::required_services`], a house
+    /// **at this level** decays.
+    ///
+    /// Together with the field above it forms the hysteresis band
+    /// `decay_threshold..level_up_threshold`, inside which a house stays where
+    /// it is whichever side it came from. A band that is not strictly positive
+    /// is [`Inconsistency::NoHysteresis`] — hysteresis is a **check**, not a
+    /// comment (A10).
+    ///
+    /// Unread at level 1: there is no level 0 to fall to.
+    pub decay_threshold: u8,
+    /// The taxable base per resident (phase 16). Zero until then, and read by
+    /// nobody: it is declared now because the ladder is the table phase 16 will
+    /// want it in, and adding it later would regenerate the recordings a second
+    /// time for one number.
+    pub taxable_per_resident: Milli,
 }
 
 /// How fast a house's satisfaction rises and falls, and where the bands the
@@ -55,6 +107,12 @@ impl Rules {
         self.ticks_per_month * self.months_per_year
     }
 
+    /// The definition of a house level (level 1 = index 0), `None` out of
+    /// range.
+    pub fn house_level(&self, level: u8) -> Option<&HouseLevelDef> {
+        self.house_levels.get(usize::from(level).checked_sub(1)?)
+    }
+
     /// The most residents a house can hold at the given level (level 1 = index
     /// 0).
     ///
@@ -63,12 +121,43 @@ impl Rules {
     /// data error, not a panic.
     ///
     /// It is a function and not a direct access to the `Vec` because phase 13
-    /// restructures `residents_per_house_level` into a per-level table: there
-    /// the **body** changes, not the callers.
+    /// restructured the flat `residents_per_house_level` into the per-level
+    /// table: the **body** changed, not the callers. It is still the one place
+    /// to change the day houses come in kinds.
     pub fn max_residents(&self, level: u8) -> Option<u16> {
-        self.residents_per_house_level
-            .get(usize::from(level).checked_sub(1)?)
-            .copied()
+        Some(self.house_level(level)?.max_residents)
+    }
+
+    /// The services a house at this level requires.
+    ///
+    /// Empty out of range, and that is deliberate: the callers are the mood and
+    /// the decay check, and a level that does not exist has to demand nothing
+    /// rather than panic. A level that really demands nothing is refused by
+    /// validation.
+    pub fn required_at(&self, level: u8) -> &[ServiceKind] {
+        self.house_level(level)
+            .map_or(&[], |l| l.required_services.as_slice())
+    }
+
+    /// The highest level a house can reach. Zero if the table is empty, which
+    /// validation refuses.
+    pub fn top_house_level(&self) -> u8 {
+        u8::try_from(self.house_levels.len()).unwrap_or(u8::MAX)
+    }
+
+    /// Whether this tick is a month boundary — when the level review happens
+    /// (step 6.2).
+    ///
+    /// The cadence is what makes the absence of oscillation **structural**
+    /// rather than a consequence of the thresholds: thirty ticks pass between
+    /// two decisions, so a house cannot change level more than twelve times a
+    /// year whatever the balancing does. Tick 0 is a boundary and the review
+    /// there is a no-op: every accumulator is still at zero.
+    ///
+    /// The guard on zero is not defensive noise: `ticks_per_month` comes from a
+    /// table, a modulo by zero is a panic, and the core does not panic on data.
+    pub const fn is_month_boundary(&self, tick: u32) -> bool {
+        self.ticks_per_month != 0 && tick.is_multiple_of(self.ticks_per_month)
     }
 }
 
@@ -277,6 +366,145 @@ impl DataSet {
         self.hash.iter().map(|b| format!("{b:02x}")).collect()
     }
 
+    /// Every inconsistency *between* tables, in one place.
+    ///
+    /// It lives in the core because that is where the definitions live (A2) and
+    /// because it is also needed by the fixture in
+    /// `sim-core/tests/common/mod.rs`, which does not go through `sim-data`.
+    /// Adding a check here automatically makes it active on the fixture too: it
+    /// is the generalisation of A5's lesson — a number that has to stand in a
+    /// relation with another one is a **check**, not a comment.
+    ///
+    /// The split with `sim-data` is by kind, not by convenience: what can be
+    /// checked on one field of one table (a negative cost, an unknown service
+    /// name, a list of the wrong length) stays in `sim-data`'s validation, and
+    /// everything **relational** comes here, where the fixture is protected by
+    /// it too.
+    ///
+    /// The order of the checks is fixed and is part of the contract: it is the
+    /// order the validation report comes out in, and tests assert on whole
+    /// vectors.
+    pub fn inconsistencies(&self) -> Vec<Inconsistency> {
+        let mut out = Vec::new();
+        self.check_the_house_agrees_with_the_ladder(&mut out);
+        self.check_the_ladder(&mut out);
+        self.check_the_levels_can_be_served(&mut out);
+        self.check_food_capacity(&mut out);
+        self.check_difficulty(&mut out);
+        out
+    }
+
+    /// The house building and `rules.house_levels` describe the same house.
+    ///
+    /// [`BuildingDef::is_house`] is a heuristic — no service, and it requires
+    /// some. If the per-level lists were to become the only place requirements
+    /// live and the building's line disappeared, **the house would stop being a
+    /// house** and half the game would change behaviour in silence. These three
+    /// checks are what makes that impossible: one says a house exists at all,
+    /// one that the levels are as many as declared, one that the building's
+    /// list is exactly the union of the levels'.
+    fn check_the_house_agrees_with_the_ladder(&self, out: &mut Vec<Inconsistency>) {
+        let Some(house) = self.house_def() else {
+            out.push(Inconsistency::NoHouse);
+            return;
+        };
+        if usize::from(house.levels) != self.rules.house_levels.len() {
+            out.push(Inconsistency::LevelCountMismatch {
+                declared: house.levels,
+                in_table: self.rules.house_levels.len(),
+            });
+        }
+
+        let union = sorted(
+            self.rules
+                .house_levels
+                .iter()
+                .flat_map(|l| l.required_services.iter().copied()),
+        );
+        let declared = sorted(house.required_services.iter().copied());
+        if declared != union {
+            out.push(Inconsistency::InconsistentRequirements {
+                declared,
+                in_levels: union,
+            });
+        }
+    }
+
+    /// The ladder goes up, and each rung has a hysteresis band you can stand
+    /// on.
+    fn check_the_ladder(&self, out: &mut Vec<Inconsistency>) {
+        let max = self.rules.satisfaction.max;
+        let mut previous: Option<u16> = None;
+        for (i, def) in self.rules.house_levels.iter().enumerate() {
+            let level = level_of(i);
+            if let Some(previous) = previous
+                && def.max_residents <= previous
+            {
+                out.push(Inconsistency::CapacityNotIncreasing {
+                    level,
+                    max_residents: def.max_residents,
+                    previous,
+                });
+            }
+            previous = Some(def.max_residents);
+
+            // Level 1's thresholds are unread — nobody rises into it and there
+            // is no level 0 to fall to — so checking them would report on
+            // numbers that decide nothing.
+            if level < 2 {
+                continue;
+            }
+            if def.decay_threshold >= def.level_up_threshold {
+                out.push(Inconsistency::NoHysteresis {
+                    level,
+                    decay: def.decay_threshold,
+                    level_up: def.level_up_threshold,
+                });
+            }
+            // Only the upper threshold is compared against the ceiling: with
+            // the band above green, `decay < level_up <= max` follows.
+            if def.level_up_threshold > max {
+                out.push(Inconsistency::UnreachableThreshold {
+                    level,
+                    threshold: def.level_up_threshold,
+                    max,
+                });
+            }
+        }
+    }
+
+    /// Somebody provides what the levels ask for, and to a house that is full.
+    fn check_the_levels_can_be_served(&self, out: &mut Vec<Inconsistency>) {
+        for (i, def) in self.rules.house_levels.iter().enumerate() {
+            let level = level_of(i);
+            for &service in &def.required_services {
+                let best = self
+                    .buildings
+                    .iter()
+                    .filter_map(|b| b.service.as_ref())
+                    .filter(|s| s.kind == service)
+                    .filter_map(|s| s.capacity_per_level.iter().copied().max())
+                    .max();
+                match best {
+                    None => out.push(Inconsistency::ServiceWithoutProvider { level, service }),
+                    // With A12 this is not a blocker — the house is servable as
+                    // long as it stays half empty — but it is a dataset in
+                    // which a level can never be served in full, and the city
+                    // plugs up without saying why.
+                    Some(best) if best < def.max_residents => {
+                        out.push(Inconsistency::CapacityBeyondEveryProvider {
+                            level,
+                            service,
+                            max_residents: def.max_residents,
+                            best,
+                        });
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+    }
+
     /// The food providers that claim more capacity than their output can
     /// sustain.
     ///
@@ -297,13 +525,12 @@ impl DataSet {
     /// via real logistics walkers, capacity will stop depending on local
     /// output, and this check has to go along with the simplification it
     /// guards.
-    pub fn unsustainable_food_capacity(&self) -> Vec<UnsustainableCapacity> {
-        let mut out = Vec::new();
+    fn check_food_capacity(&self, out: &mut Vec<Inconsistency>) {
         let per_resident = self.rules.food_per_resident.to_millis();
         if per_resident <= 0 {
             // Free food: any capacity is sustainable. It is not this check's
             // job to say the dataset makes no sense.
-            return out;
+            return;
         }
 
         for (building, def) in self.buildings.iter().enumerate() {
@@ -321,72 +548,158 @@ impl DataSet {
             let sustainable = u16::try_from(available / per_resident).unwrap_or(u16::MAX);
             for (i, &capacity) in service.capacity_per_level.iter().enumerate() {
                 if capacity > sustainable {
-                    out.push(UnsustainableCapacity {
+                    out.push(Inconsistency::CapacityBeyondOutput {
                         building,
-                        level: u8::try_from(i + 1).unwrap_or(u8::MAX),
+                        level: level_of(i),
                         capacity,
                         sustainable,
                     });
                 }
             }
         }
-        out
     }
 
-    /// The difficulty profiles that would build a house beyond its own
-    /// capacity.
-    ///
-    /// A cross-table check like [`DataSet::unsustainable_food_capacity`], and
-    /// it lives here for the same two reasons: it crosses `rules` and
-    /// `difficulties`, and `sim-core`'s test fixture does not go through
-    /// `sim-data`'s validation and could otherwise drift onto a balancing that
-    /// production would reject.
+    /// No difficulty profile builds a house beyond its own capacity.
     ///
     /// A house born beyond `max_residents(1)` is a state the rest of the game
-    /// cannot represent: from phase 13 on, `residents <= max_residents(level)`
-    /// is assumed everywhere.
-    pub fn difficulty_beyond_house_capacity(&self) -> Vec<DifficultyBeyondCapacity> {
-        // No level 1 in the table is `rules.residents_per_house_level` being
-        // empty, which validation reports on its own: saying it twice would be
-        // noise.
-        let Some(max) = self.rules.max_residents(1) else {
-            return Vec::new();
+    /// cannot represent: since phase 13, `residents <= max_residents(level)` is
+    /// assumed everywhere.
+    fn check_difficulty(&self, out: &mut Vec<Inconsistency>) {
+        // No level 1 in the table is `rules.house_levels` being empty, which
+        // validation reports on its own: saying it twice would be noise.
+        let Some(max_residents) = self.rules.max_residents(1) else {
+            return;
         };
-        self.difficulties
-            .iter()
-            .enumerate()
-            .filter(|(_, def)| def.starting_residents_per_house > max)
-            .map(|(profile, def)| DifficultyBeyondCapacity {
-                profile,
-                starting: def.starting_residents_per_house,
-                max,
-            })
-            .collect()
+        for (difficulty, def) in self.difficulties.iter().enumerate() {
+            if def.starting_residents_per_house > max_residents {
+                out.push(Inconsistency::StartingResidentsBeyondCapacity {
+                    difficulty,
+                    starting: def.starting_residents_per_house,
+                    max_residents,
+                });
+            }
+        }
     }
 }
 
-/// A food provider whose capacity exceeds what its output sustains.
-/// [`DataSet::unsustainable_food_capacity`] finds them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnsustainableCapacity {
-    /// Index into [`DataSet::buildings`].
-    pub building: usize,
-    /// The level at which the capacity overshoots, counting from 1.
-    pub level: u8,
-    /// Residents claimed in the table.
-    pub capacity: u16,
-    /// Residents the output really sustains.
-    pub sustainable: u16,
+/// A relation between two tables that does not hold.
+///
+/// [`DataSet::inconsistencies`] finds them; `sim-data` turns each one into a
+/// validation error with the path of the field that causes it. The message
+/// lives here, next to the check, because the *why* is what makes it useful.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Inconsistency {
+    #[error(
+        "no building is a house: `is_house()` classifies as a house whatever \
+         requires services without providing any, and with none of them the \
+         houses stop levelling up, stop eating and stop being taxed, in silence"
+    )]
+    NoHouse,
+
+    #[error("the house declares {declared} levels, rules.house_levels has {in_table}")]
+    LevelCountMismatch { declared: u8, in_table: usize },
+
+    #[error(
+        "the house requires {} but its levels require {}: the building's list \
+         has to stay the union, or `is_house()` stops recognising it",
+        ids(declared),
+        ids(in_levels)
+    )]
+    InconsistentRequirements {
+        declared: Vec<ServiceKind>,
+        in_levels: Vec<ServiceKind>,
+    },
+
+    #[error(
+        "level {level} holds {max_residents} residents, no more than level {} \
+         with {previous}: levelling up would shrink the house",
+        level.saturating_sub(1)
+    )]
+    CapacityNotIncreasing {
+        level: u8,
+        max_residents: u16,
+        previous: u16,
+    },
+
+    #[error(
+        "level {level} decays below {decay} and is reached at {level_up}: with \
+         no hysteresis band the city oscillates at every review"
+    )]
+    NoHysteresis { level: u8, decay: u8, level_up: u8 },
+
+    #[error(
+        "level {level} is reached at a satisfaction of {threshold}, beyond the \
+         maximum of {max}: it is unreachable by construction"
+    )]
+    UnreachableThreshold { level: u8, threshold: u8, max: u8 },
+
+    #[error("level {level} requires {}, which no building provides", service.as_id())]
+    ServiceWithoutProvider { level: u8, service: ServiceKind },
+
+    #[error(
+        "level {level} holds {max_residents} residents and the largest provider \
+         of {} takes {best}: the level can never be served in full",
+        service.as_id()
+    )]
+    CapacityBeyondEveryProvider {
+        level: u8,
+        service: ServiceKind,
+        max_residents: u16,
+        best: u16,
+    },
+
+    #[error(
+        "capacity of {capacity} residents, but the output sustains {sustainable}: \
+         the houses in excess would stay assigned to a provider that does not feed them"
+    )]
+    CapacityBeyondOutput {
+        /// Index into [`DataSet::buildings`].
+        building: usize,
+        /// The level at which the capacity overshoots, counting from 1.
+        level: u8,
+        /// Residents claimed in the table.
+        capacity: u16,
+        /// Residents the output really sustains.
+        sustainable: u16,
+    },
+
+    #[error(
+        "a house born with {starting} residents, but at level 1 it holds \
+         {max_residents}: the rest of the game cannot represent a house beyond \
+         its own capacity"
+    )]
+    StartingResidentsBeyondCapacity {
+        /// Index into [`DataSet::difficulties`].
+        difficulty: usize,
+        /// Residents the profile puts in a newly-built house.
+        starting: u16,
+        /// Residents a house can hold at level 1.
+        max_residents: u16,
+    },
 }
 
-/// A difficulty profile that would build a house beyond its own capacity.
-/// [`DataSet::difficulty_beyond_house_capacity`] finds them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DifficultyBeyondCapacity {
-    /// Index into [`DataSet::difficulties`].
-    pub profile: usize,
-    /// Residents the profile puts in a newly-built house.
-    pub starting: u16,
-    /// Residents a house can hold at level 1.
-    pub max: u16,
+/// A level number from an index into a per-level table (index 0 = level 1).
+fn level_of(index: usize) -> u8 {
+    u8::try_from(index + 1).unwrap_or(u8::MAX)
+}
+
+/// The services, in a canonical order and without repeats, so two lists can be
+/// compared as sets.
+fn sorted(services: impl IntoIterator<Item = ServiceKind>) -> Vec<ServiceKind> {
+    let mut v: Vec<ServiceKind> = services.into_iter().collect();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// The service ids of a list, for an error message.
+fn ids(services: &[ServiceKind]) -> String {
+    if services.is_empty() {
+        return "nothing".to_string();
+    }
+    services
+        .iter()
+        .map(|s| s.as_id())
+        .collect::<Vec<_>>()
+        .join(", ")
 }

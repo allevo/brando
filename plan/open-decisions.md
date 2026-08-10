@@ -442,10 +442,22 @@ Two technical consequences, both favourable:
 
 - **The food arithmetic becomes tight.** Capacity and consumption are now in the same unit, so
   `capacity × consumption ≤ output` is exact instead of an upper bound. No output wasted on half-empty
-  houses, and `unsustainable_food_capacity` does not change a line.
+  houses, and the check on it does not change a line.
 - **Levelling up does not touch the coverage.** Going up a level brings no people in, it brings
   permission to hold more of them: no gate on levelling up is needed, and phase 13 is simpler than it
   looked.
+
+**How the second one really went** (phase 13, done). It held exactly as written, and it is measured
+rather than asserted: `A` at the reference scale is 280 µs before and 282 µs after, and the recorded
+recomputation count does not move across a review that promotes a house. The gate that an early draft
+of phase 13 wanted was never written. What the phase did add is the **other** half of the same
+statement, as a test: `population_stays_consistent` now also says that a promoted house gains
+permission and not people, so if levelling up ever started bringing residents in, an invariant would
+go red before the performance did.
+
+The only place `residents` moves in phase 13 is eviction on decay, and that does invalidate the
+coverage — the first application of the contract phase 14 generalises. It cannot fire yet under a
+dataset that passes validation, which is written up in that phase's notes.
 
 ### The alternative that was rejected, and why it was looked at
 

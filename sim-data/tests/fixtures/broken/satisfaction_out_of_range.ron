@@ -13,7 +13,19 @@
     ticks_per_month: 30,
     months_per_year: 12,
     starting_treasury: 1000,
-    residents_per_house_level: [4],
+    // A single rung, matching the house in the production buildings.ron: this
+    // fixture is about the satisfaction curve, and a ladder that also disagreed
+    // with the buildings table would drown the two errors it is here to show.
+    // One rung means level 1 only, whose thresholds are read by nobody.
+    house_levels: [
+        (
+            max_residents: 4,
+            required_services: ["water", "food"],
+            level_up_threshold: 0,
+            decay_threshold: 0,
+            taxable_per_resident: 0,
+        ),
+    ],
     satisfaction: (
         max: 100,
         step_up: 4,

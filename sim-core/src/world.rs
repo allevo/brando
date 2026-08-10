@@ -13,6 +13,7 @@ use crate::coverage::Coverage;
 use crate::data::{DataSet, DifficultyId};
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::levels::PopulationTotals;
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
@@ -161,6 +162,10 @@ pub struct World {
     /// Diagnostic bookkeeping, outside the hash: it influences no game
     /// decision.
     pub(crate) food: FoodTotals,
+    /// Diagnostic like [`FoodTotals`], and outside the hash for the same
+    /// reason. It is where the flows of population accumulate: one of them in
+    /// phase 13, all four in phase 14.
+    pub(crate) population: PopulationTotals,
     /// Indexes from origin tile to id. They are `BTreeMap`s and not `HashMap`s
     /// (D4): the iteration order is a contract.
     pub(crate) buildings_by_origin: BTreeMap<TileIdx, BuildingId>,
@@ -198,6 +203,7 @@ impl World {
             roads: RoadNetwork::new(tiles),
             coverage: Coverage::default(),
             food: FoodTotals::default(),
+            population: PopulationTotals::default(),
             buildings_by_origin: BTreeMap::new(),
             houses_by_origin: BTreeMap::new(),
             data,
@@ -239,6 +245,12 @@ impl World {
 
     pub const fn food(&self) -> &FoodTotals {
         &self.food
+    }
+
+    /// The running totals of the population's flows, as opposed to
+    /// [`World::population`], which is how many people there are right now.
+    pub const fn population_totals(&self) -> &PopulationTotals {
+        &self.population
     }
 
     /// The sum of every producer's stock, in thousandths.
@@ -504,6 +516,7 @@ impl World {
             roads: _,
             coverage: _,
             food: _,
+            population: _,
             buildings_by_origin: _,
             houses_by_origin: _,
             data: _,

@@ -7,6 +7,13 @@
 // The second farm in the table is identical but with a stock smaller than one
 // tick's output: the bottleneck there is not how much it produces, but how
 // much it can hold.
+//
+// The house and the well come **after** the two farms, so the indices in the
+// expected report do not move. They are here because since phase 13 the
+// cross-table checks also want a table to contain a house at all, as many rungs
+// as the house declares, and a provider for every service the rungs ask for: a
+// buildings table of nothing but farms would produce four more errors and bury
+// the two this fixture exists for.
 (
     buildings: [
         (
@@ -28,6 +35,22 @@
             required_services: [],
             output_per_tick: Some(400),
             max_stock: Some(100),
+        ),
+        (
+            id: "house",
+            size: (1, 1),
+            cost: 10,
+            levels: 3,
+            service: None,
+            required_services: ["water", "food"],
+        ),
+        (
+            id: "well",
+            size: (1, 1),
+            cost: 12,
+            levels: 1,
+            service: Some((kind: "water", range_per_level: [12], capacity_per_level: [32])),
+            required_services: [],
         ),
     ],
 )

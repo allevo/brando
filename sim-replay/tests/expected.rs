@@ -321,6 +321,13 @@ fn the_hash_covers_the_whole_state() {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
             w.house_mut(id).expect("alive").residents += 1;
         }),
+        // Hashed since M0, but it only started meaning anything in phase 13:
+        // a perturbation of its own is what says the recordings would notice a
+        // change to the levelling rules and not merely to the tables.
+        ("a house's level", |w| {
+            let id = w.houses().next().map(|(id, _)| id).expect("a house");
+            w.house_mut(id).expect("alive").level += 1;
+        }),
         ("a house's services", |w| {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
             let h = w.house_mut(id).expect("alive");

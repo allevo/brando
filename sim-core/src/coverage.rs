@@ -295,14 +295,14 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
 /// but would leave places unused: a provider declared for twenty residents
 /// would serve sixteen, and the capacity in the table would stop telling the
 /// truth. For a producer that gap would also break the consistency between
-/// capacity and output that [`unsustainable_food_capacity`] guards. Worse, one
+/// capacity and output that [`CapacityBeyondOutput`] guards. Worse, one
 /// large house built near the provider would cut out *all* those beyond it,
 /// while places sat free.
 ///
 /// Distance is still the priority order: no candidate is jumped over out of
 /// preference, only out of impossibility.
 ///
-/// [`unsustainable_food_capacity`]: crate::data::DataSet::unsustainable_food_capacity
+/// [`CapacityBeyondOutput`]: crate::data::Inconsistency::CapacityBeyondOutput
 fn pick_within_capacity<T>(
     candidates: impl IntoIterator<Item = (T, u16)>,
     capacity: u16,

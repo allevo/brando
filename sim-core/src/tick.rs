@@ -42,7 +42,7 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     propagate_coverage(world); // 3
     production(world); // 4
     step_walkers(world); // 5
-    houses_and_migration(world); // 6
+    houses_and_migration(world, &mut r); // 6
     finance(world); // 7
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
@@ -291,15 +291,23 @@ fn step_walkers(_world: &mut World) {}
 ///
 /// The internal order is **game semantics** as much as the order of the ten
 /// steps, and the same rule applies: do not reorder without regenerating the
-/// recordings and writing down why. In this phase only 6.1 exists; phases 13,
-/// 14 and 15 add the later sub-steps **below** it, never above.
+/// recordings and writing down why. Phases 14 and 15 add their sub-steps
+/// **below** these, never above.
 ///
 /// 6.1 comes first because it reads only what steps 3 and 4 have written *this*
 /// tick, and all the rest of step 6 reads it. If it came after levelling up, a
 /// house would level up on the previous tick's data: correct on average,
 /// unreadable in a recording you are trying to follow by hand.
-fn houses_and_migration(world: &mut World) {
+///
+/// 6.2 runs only on a month boundary. The cadence is what makes the absence of
+/// oscillation structural rather than a consequence of the thresholds, and it
+/// makes the recordings readable: a level that can only change at multiples of
+/// `ticks_per_month` can be followed by eye.
+fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     crate::satisfaction::update(world); // 6.1
+    if world.data.rules.is_month_boundary(world.tick) {
+        crate::levels::review(world, r); // 6.2
+    }
 }
 
 /// Step 7 — treasury and taxes, M1.
@@ -318,11 +326,7 @@ fn check_objectives(_world: &mut World, _r: &mut StepReport) {}
 /// the boundary with the renderer, and the wrong choice here would cost 40,000
 /// events per tick.
 fn emit_events(world: &mut World, before: &[HouseState], r: &mut StepReport) {
-    let rules = &world.data.rules.satisfaction;
-    let required: &[ServiceKind] = world
-        .data
-        .house_def()
-        .map_or(&[], |d| d.required_services.as_slice());
+    let rules = &world.data.rules;
 
     for (house, h) in world.houses() {
         // A house born this tick has no "before": it starts uncovered and at
@@ -344,7 +348,10 @@ fn emit_events(world: &mut World, before: &[HouseState], r: &mut StepReport) {
             }
         }
 
-        let mood = crate::satisfaction::mood_of(h, required, rules);
+        // Against the house's level **as it is now**: a house promoted by step
+        // 6.2 into a stricter requirement can lose mood in the same tick, and
+        // the renderer has to hear about it.
+        let mood = crate::satisfaction::mood_of(h, rules);
         if mood != previous.mood {
             r.events.push(Event::HouseMoodChanged { house, mood });
         }
@@ -379,18 +386,14 @@ impl HouseState {
 /// the satisfaction, and a second copy of it in the state would be one more
 /// field to hash, to keep in step and to get wrong.
 fn house_snapshot(world: &World) -> Vec<HouseState> {
-    let rules = &world.data.rules.satisfaction;
-    let required: &[ServiceKind] = world
-        .data
-        .house_def()
-        .map_or(&[], |d| d.required_services.as_slice());
+    let rules = &world.data.rules;
 
     let mut v: Vec<HouseState> = world
         .houses()
         .map(|(id, h)| HouseState {
             id,
             served: h.served,
-            mood: crate::satisfaction::mood_of(h, required, rules),
+            mood: crate::satisfaction::mood_of(h, rules),
         })
         .collect();
     v.sort_unstable_by_key(|s| s.id);

@@ -13,14 +13,21 @@ rand = { workspace = true }
 rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
-# Direct-mutation hooks on the state, for other crates' tests (phase 08).
-# Not an extension of the API: the only write channel into the core is still
-# the Command queue.
+# Direct-mutation hooks on the state, for tests — other crates' since phase 08,
+# this crate's own since phase 13. Not an extension of the API: the only write
+# channel into the core is still the Command queue.
 [features]
 test-util = []
 
 [dev-dependencies]
 proptest = { workspace = true }
+# A dependency on itself, which is how a crate turns one of its own features on
+# for its own tests. It exists for the eviction tests of phase 13: decay sends
+# away whoever no longer fits, and under a dataset that passes validation no
+# house can ever be over its capacity — so the only honest way to reach that
+# branch is to put the residents there by hand, which is what `house_mut` is for.
+# Phase 14 makes the branch live and this dependency ordinary.
+sim-core = { path = ".", features = ["test-util"] }
 
 [lints]
 workspace = true

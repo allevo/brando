@@ -11,7 +11,8 @@ use sim_core::{Coins, Milli, ServiceKind, Terrain};
 
 use crate::raw::{RawBuildingDef, RawDataSet, RawSatisfaction};
 use sim_core::data::{
-    BuildingDef, DataSet, DifficultyDef, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    BuildingDef, DataSet, DifficultyDef, HouseLevelDef, Inconsistency, Rules, SatisfactionRules,
+    ServiceDef, TerrainDef,
 };
 
 /// A single problem, with the logical path of the field that causes it.
@@ -57,17 +58,16 @@ pub enum ValidationErrorKind {
     #[error("max_stock on a building that produces nothing")]
     StockWithoutOutput,
 
-    #[error(
-        "capacity of {capacity} residents, but the output sustains {sustainable}: \
-         the houses in excess would stay assigned to a provider that does not feed them"
-    )]
-    CapacityBeyondOutput { capacity: u16, sustainable: u16 },
-
-    #[error(
-        "a house born with {starting} residents, but at level 1 it holds {max}: \
-         the rest of the game cannot represent a house beyond its own capacity"
-    )]
-    StartingResidentsBeyondCapacity { starting: u16, max: u16 },
+    /// A relation between two tables that does not hold.
+    ///
+    /// One variant for all of them, and the message comes from `sim-core`:
+    /// [`Inconsistency`] is where the checks live, because the fixture in
+    /// `sim-core/tests/common/mod.rs` does not come through here and has to be
+    /// protected by the same rules. Adding a check there is then one place, not
+    /// two, and what `sim-data` adds is only the path of the RON field to
+    /// blame.
+    #[error(transparent)]
+    Inconsistent(Inconsistency),
 
     #[error("terrain missing from the table: {terrain:?}")]
     MissingTerrain { terrain: Terrain },
@@ -142,35 +142,48 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
     }
 
     // The checks **across** tables come afterwards, and only if the individual
-    // tables are sound: the consistency between a food provider's capacity and
-    // what its output sustains crosses `rules` and `buildings`, and on an
-    // already broken table it would produce noise instead of information. The
-    // same goes for a house born beyond its own capacity, which crosses `rules`
-    // and `difficulty`.
+    // tables are sound: they cross `rules`, `buildings` and `difficulty`, and
+    // on an already broken table they would produce noise instead of
+    // information. They live in `sim-core` so that `sim-core`'s own fixture,
+    // which never comes through here, is protected by the same rules.
     let data = DataSet::new(rules, terrain, buildings, difficulties);
-    for v in data.unsustainable_food_capacity() {
-        rep.push(
-            format!("buildings[{}].service.capacity_per_level", v.building),
-            ValidationErrorKind::CapacityBeyondOutput {
-                capacity: v.capacity,
-                sustainable: v.sustainable,
-            },
-        );
-    }
-    for v in data.difficulty_beyond_house_capacity() {
-        rep.push(
-            format!("profiles[{}].starting_residents_per_house", v.profile),
-            ValidationErrorKind::StartingResidentsBeyondCapacity {
-                starting: v.starting,
-                max: v.max,
-            },
-        );
+    for i in data.inconsistencies() {
+        rep.push(path_of(&i), ValidationErrorKind::Inconsistent(i));
     }
     if !rep.is_empty() {
         return Err(rep);
     }
 
     Ok(data)
+}
+
+/// The RON field to blame for an inconsistency.
+///
+/// It is the one thing `sim-data` adds to a check that lives in `sim-core`: the
+/// core knows the relation, this crate knows what the file it came from is
+/// shaped like.
+fn path_of(i: &Inconsistency) -> String {
+    /// The path of a rung, from a level counting from 1.
+    fn rung(level: u8, field: &str) -> String {
+        format!("rules.house_levels[{}].{field}", level.saturating_sub(1))
+    }
+
+    match *i {
+        Inconsistency::NoHouse => "buildings".to_string(),
+        Inconsistency::LevelCountMismatch { .. }
+        | Inconsistency::InconsistentRequirements { .. } => "rules.house_levels".to_string(),
+        Inconsistency::CapacityNotIncreasing { level, .. }
+        | Inconsistency::CapacityBeyondEveryProvider { level, .. } => rung(level, "max_residents"),
+        Inconsistency::NoHysteresis { level, .. } => rung(level, "decay_threshold"),
+        Inconsistency::UnreachableThreshold { level, .. } => rung(level, "level_up_threshold"),
+        Inconsistency::ServiceWithoutProvider { level, .. } => rung(level, "required_services"),
+        Inconsistency::CapacityBeyondOutput { building, .. } => {
+            format!("buildings[{building}].service.capacity_per_level")
+        }
+        Inconsistency::StartingResidentsBeyondCapacity { difficulty, .. } => {
+            format!("profiles[{difficulty}].starting_residents_per_house")
+        }
+    }
 }
 
 fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
@@ -200,12 +213,6 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
             ValidationErrorKind::TooSmall { min: 1, found: 0 },
         );
     }
-    if r.residents_per_house_level.is_empty() {
-        rep.push(
-            "rules.residents_per_house_level",
-            ValidationErrorKind::Empty,
-        );
-    }
     if r.food_per_resident < 0 {
         rep.push(
             "rules.food_per_resident",
@@ -219,10 +226,57 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
         ticks_per_month: r.ticks_per_month,
         months_per_year: r.months_per_year,
         starting_treasury: Coins::new(r.starting_treasury),
-        residents_per_house_level: r.residents_per_house_level.clone(),
+        house_levels: validate_house_levels(raw, rep),
         food_per_resident: Milli::from_millis(r.food_per_resident),
         satisfaction: validate_satisfaction(&r.satisfaction, rep),
     }
+}
+
+/// The house ladder (phase 13), checked field by field.
+///
+/// **Shape only.** Everything relational — the capacity that has to grow, the
+/// hysteresis band, a threshold beyond the ceiling, a service nobody provides —
+/// is [`Inconsistency`], because those are the checks that also have to protect
+/// `sim-core`'s fixture.
+///
+/// The one relation that stays here is a level requiring **nothing**: `all()`
+/// over an empty list is true, so such a level would be reached for free, and
+/// the reason it is not an `Inconsistency` is that it is a property of one
+/// field of one table.
+fn validate_house_levels(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<HouseLevelDef> {
+    let levels = &raw.rules.house_levels;
+    if levels.is_empty() {
+        rep.push("rules.house_levels", ValidationErrorKind::Empty);
+    }
+
+    let mut out = Vec::with_capacity(levels.len());
+    for (i, l) in levels.iter().enumerate() {
+        let path = format!("rules.house_levels[{i}]");
+
+        if l.required_services.is_empty() {
+            rep.push(
+                format!("{path}.required_services"),
+                ValidationErrorKind::Empty,
+            );
+        }
+        if l.taxable_per_resident < 0 {
+            rep.push(
+                format!("{path}.taxable_per_resident"),
+                ValidationErrorKind::Negative {
+                    found: i64::from(l.taxable_per_resident),
+                },
+            );
+        }
+
+        out.push(HouseLevelDef {
+            max_residents: l.max_residents,
+            required_services: services(&l.required_services, &path, rep),
+            level_up_threshold: l.level_up_threshold,
+            decay_threshold: l.decay_threshold,
+            taxable_per_resident: Milli::from_millis(l.taxable_per_resident),
+        });
+    }
+    out
 }
 
 /// The satisfaction curve (phase 12).
@@ -403,7 +457,7 @@ fn validate_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<Build
         }
 
         let service = validate_service(b, &path, rep);
-        let required_services = validate_required_services(b, &path, rep);
+        let required_services = services(&b.required_services, &path, rep);
         validate_output(b, &path, rep);
 
         out.push(BuildingDef {
@@ -508,13 +562,13 @@ fn validate_service(
     })
 }
 
-fn validate_required_services(
-    b: &RawBuildingDef,
-    path: &str,
-    rep: &mut ValidationReport,
-) -> Vec<ServiceKind> {
-    let mut out = Vec::with_capacity(b.required_services.len());
-    for (j, name) in b.required_services.iter().enumerate() {
+/// Resolves a list of service ids, reporting every unknown one.
+///
+/// Shared by the buildings' `required_services` and the house levels': the path
+/// is passed in, so both report `<owner>.required_services[j]`.
+fn services(names: &[String], path: &str, rep: &mut ValidationReport) -> Vec<ServiceKind> {
+    let mut out = Vec::with_capacity(names.len());
+    for (j, name) in names.iter().enumerate() {
         match ServiceKind::from_id(name) {
             Some(k) => out.push(k),
             None => rep.push(
