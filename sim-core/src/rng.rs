@@ -69,12 +69,19 @@ impl RngDomain {
     }
 }
 
-/// One RNG stream, with a count of how many values it has produced.
+/// One RNG stream, with a count of how many times it has stepped the generator.
 ///
 /// The count is of no use to the game: it serves the state hash (phase 08).
 /// For a given seed, the number of draws uniquely determines the generator's
 /// state, so hashing `(seed, draws)` covers the RNG's state without having to
 /// serialise its internals.
+///
+/// That sentence is an **invariant of this type**, not a remark about it: it
+/// holds only as long as every method of [`RngCore`] adds the number of steps
+/// it really takes. `fill_bytes` is the one that does not take exactly one, and
+/// `fill_bytes_counts_a_draw_per_step` is what pins it down. Get it wrong and
+/// two states with divergent generators hash the same — which is to say the
+/// recorded replays stop protecting the RNG, silently.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Stream {
     rng: Pcg64,
@@ -94,26 +101,36 @@ impl Stream {
         self.draws
     }
 
-    const fn count_draw(&mut self) {
+    const fn count_draws(&mut self, n: u64) {
         // Wrapping rather than `+=`: the core does not panic. In practice it is
         // never reached, 2^64 draws are not attainable within one game.
-        self.draws = self.draws.wrapping_add(1);
+        self.draws = self.draws.wrapping_add(n);
     }
 }
 
 impl RngCore for Stream {
     fn next_u32(&mut self) -> u32 {
-        self.count_draw();
+        self.count_draws(1);
         self.rng.next_u32()
     }
 
     fn next_u64(&mut self) -> u64 {
-        self.count_draw();
+        self.count_draws(1);
         self.rng.next_u64()
     }
 
     fn fill_bytes(&mut self, dst: &mut [u8]) {
-        self.count_draw();
+        // Not one draw. `Lcg128Xsl64::fill_bytes` is `impls::fill_bytes_via_next`,
+        // which steps the generator once per eight bytes plus once for the tail
+        // — exactly `len.div_ceil(8)`. (`next_u32` and `next_u64` really are one
+        // step each, so those two are right as they stand.)
+        //
+        // Counting one here would break the invariant on `draws` documented
+        // above: two streams from the same seed, one filling eight bytes and
+        // one sixty-four, would report the same count from divergent
+        // generators, and `hash_world` — which hashes the count and nothing
+        // else about the RNG — would call the two states identical.
+        self.count_draws(u64::try_from(dst.len().div_ceil(8)).unwrap_or(u64::MAX));
         self.rng.fill_bytes(dst);
     }
 }
@@ -311,5 +328,40 @@ mod tests {
             b.get(RngDomain::Events).next_u64();
         }
         assert_eq!(a, b);
+    }
+
+    /// `fill_bytes` counts every step it takes, not one per call.
+    ///
+    /// This is the test that keeps the previous one's assumption true. A single
+    /// count per call left two streams from the same seed reporting `draws = 1`
+    /// with generators eight steps apart — and the state hash, which knows
+    /// nothing about the RNG except that number, would have said they were the
+    /// same state. Nothing draws yet, so today it costs no recording; the first
+    /// system that does (phase 14) is where it would have stopped being free.
+    #[test]
+    fn fill_bytes_counts_a_draw_per_step() {
+        let mut short = RngSet::from_seed(7);
+        let mut long = RngSet::from_seed(7);
+        short.get(RngDomain::Events).fill_bytes(&mut [0u8; 8]);
+        long.get(RngDomain::Events).fill_bytes(&mut [0u8; 64]);
+
+        assert_eq!(short.draws(RngDomain::Events), 1);
+        assert_eq!(long.draws(RngDomain::Events), 8);
+        assert_ne!(short, long, "eight steps apart, and the count has to say so");
+
+        // The count is not merely different, it is *right*: filling 64 bytes
+        // leaves the generator exactly where eight `next_u64` would.
+        let mut stepped = RngSet::from_seed(7);
+        for _ in 0..8 {
+            stepped.get(RngDomain::Events).next_u64();
+        }
+        assert_eq!(stepped, long);
+
+        // The tail costs a step of its own, whatever its length.
+        for (bytes, expected) in [(0usize, 0u64), (1, 1), (5, 1), (9, 2), (17, 3)] {
+            let mut s = RngSet::from_seed(7);
+            s.get(RngDomain::Events).fill_bytes(&mut vec![0u8; bytes]);
+            assert_eq!(s.draws(RngDomain::Events), expected, "{bytes} bytes");
+        }
     }
 }
