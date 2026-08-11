@@ -526,6 +526,28 @@ fn the_fixture_has_no_inconsistencies() {
     }
 }
 
+/// And the check the fixture is protected by really does catch something.
+///
+/// `the_fixture_has_no_inconsistencies` says the dataset is clean; on its own
+/// that is also what a check which never fires would say. A food provider that
+/// declares a capacity and grows nothing sustains nobody, and it is the shape
+/// that used to pass: `check_food_capacity` read `output_per_tick` and
+/// `max_stock` as a pair and skipped whatever was missing one, so the houses it
+/// won stayed covered for ever and fed never — absorbing hunger, which is
+/// exactly what `CapacityBeyondOutput`'s doc comment claims cannot happen.
+#[test]
+fn a_food_provider_that_grows_nothing_is_an_inconsistency() {
+    assert_eq!(
+        dataset_with_a_farm_that_grows_nothing().inconsistencies(),
+        vec![sim_core::Inconsistency::CapacityBeyondOutput {
+            building: 2,
+            level: level(1),
+            capacity: FARM_CAPACITY,
+            sustainable: 0,
+        }],
+    );
+}
+
 /// A command off the map is always rejected, never a panic and never a silent
 /// success.
 #[test]

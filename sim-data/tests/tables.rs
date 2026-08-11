@@ -413,6 +413,34 @@ fn capacity_beyond_the_output() {
     );
 }
 
+/// The limit case of the same check: a food provider that declares no output
+/// at all sustains nobody, so any capacity it claims is beyond it.
+///
+/// It is worth a fixture of its own because for a long time it was the shape
+/// that got through: `validate_output` cannot see the service, and
+/// `check_food_capacity` read the two fields as a pair and skipped whatever
+/// was missing one. The message reads correctly with `sustainable: 0` — that
+/// is what says the general form of the check was the right one all along, and
+/// only its guard was wrong.
+#[test]
+fn capacity_without_any_output() {
+    let e = errors(&broken_fixture("capacity_without_output.ron"));
+    assert_eq!(
+        e,
+        [(
+            "buildings[0].service.capacity_per_level".to_string(),
+            ValidationErrorKind::Inconsistent(Inconsistency::CapacityBeyondOutput {
+                building: 0,
+                level: level(1),
+                capacity: 20,
+                sustainable: 0
+            })
+        )],
+        "the phantom farm, and nothing else: the house and the well are there \
+         precisely so no other check fires"
+    );
+}
+
 /// The other check that crosses two tables: a profile cannot build a house
 /// beyond what a level-1 house holds.
 #[test]
@@ -613,6 +641,13 @@ fn a_rung_nobody_can_reach() {
 
 /// A service the rungs ask for and no building supplies. One error per rung
 /// that asks for it: each is a level that can never be held.
+///
+/// The replacement makes the **well** declare food, so it also produces one
+/// `CapacityBeyondOutput`: a water provider carries no `output_per_tick`, and
+/// as a food provider that means it sustains nobody. It is a second real fault
+/// in this table and not noise — the check that reports it used to skip a
+/// provider with no output entirely, and this expectation is one of the places
+/// that would have stayed green either way.
 #[test]
 fn a_service_no_building_provides() {
     let e = errors_of(with_buildings(&replaced(
@@ -620,7 +655,7 @@ fn a_service_no_building_provides() {
         r#"kind: "water","#,
         r#"kind: "food","#,
     )));
-    let expected: Vec<_> = (1..=3)
+    let mut expected: Vec<_> = (1..=3)
         .map(level)
         .map(|at| {
             (
@@ -632,6 +667,17 @@ fn a_service_no_building_provides() {
             )
         })
         .collect();
+    // After the rungs: `inconsistencies()` runs the levels before the food
+    // capacity, and that order is part of its contract.
+    expected.push((
+        "buildings[1].service.capacity_per_level".to_string(),
+        ValidationErrorKind::Inconsistent(Inconsistency::CapacityBeyondOutput {
+            building: 1,
+            level: level(1),
+            capacity: 32,
+            sustainable: 0,
+        }),
+    ));
     assert_eq!(e, expected);
 }
 

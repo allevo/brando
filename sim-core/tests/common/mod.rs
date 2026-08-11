@@ -126,6 +126,29 @@ pub fn dataset_with_a_service_ladder() -> Arc<DataSet> {
 /// away from failing for a reason that has nothing to do with the test using
 /// it.
 pub fn dataset_with_levels_requiring(levels: &[&[ServiceKind]]) -> Arc<DataSet> {
+    dataset_built(levels, FarmOutput::AsProduction)
+}
+
+/// Like [`dataset`], with a farm that keeps its declared capacity and grows
+/// **nothing**: no `output_per_tick` and no `max_stock`.
+///
+/// The only constructor here that deliberately builds a dataset
+/// `inconsistencies()` refuses, and it is the counterpart of
+/// `the_fixture_has_no_inconsistencies`: that test says the fixture is clean,
+/// this one gives the check something to catch. Without it, a hole in
+/// `check_food_capacity` leaves both green — which is how the hole survived.
+pub fn dataset_with_a_farm_that_grows_nothing() -> Arc<DataSet> {
+    const BOTH: &[ServiceKind] = &[ServiceKind::Water, ServiceKind::Food];
+    dataset_built(&[BOTH; HOUSE_LEVELS], FarmOutput::None)
+}
+
+/// Whether the fixture's farm produces what its capacity claims.
+enum FarmOutput {
+    AsProduction,
+    None,
+}
+
+fn dataset_built(levels: &[&[ServiceKind]], farm_output: FarmOutput) -> Arc<DataSet> {
     let house_levels: Vec<HouseLevelDef> = levels
         .iter()
         .enumerate()
@@ -219,8 +242,14 @@ pub fn dataset_with_levels_requiring(levels: &[&[ServiceKind]]) -> Arc<DataSet> 
                 capacity_per_level: vec![FARM_CAPACITY],
             }),
             required_services: vec![],
-            output_per_tick: Some(Milli::from_millis(400)),
-            max_stock: Some(Milli::from_millis(20_000)),
+            output_per_tick: match farm_output {
+                FarmOutput::AsProduction => Some(Milli::from_millis(400)),
+                FarmOutput::None => None,
+            },
+            max_stock: match farm_output {
+                FarmOutput::AsProduction => Some(Milli::from_millis(20_000)),
+                FarmOutput::None => None,
+            },
         },
         BuildingDef {
             id: "small_well".into(),

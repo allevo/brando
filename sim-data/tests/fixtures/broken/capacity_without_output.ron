@@ -1,0 +1,48 @@
+// A farm that declares a food service and grows nothing at all: no
+// `output_per_tick` and no `max_stock`. It is the same error as
+// `unsustainable_capacity.ron` taken to its limit — a capacity of 20 residents
+// against an output that sustains none — and for a long time it was the one
+// shape neither crate refused. `validate_output` says nothing, because a
+// building with no output and no stock is also exactly what a well and a house
+// look like and it cannot see the service; `check_food_capacity` skipped it,
+// because it read the two fields as a pair and gave up when either was missing.
+//
+// What the game did with it is the reason this fixture exists: the coverage
+// never consults `output_per_tick`, so the phantom farm won its houses on
+// distance, they were served for ever and fed never, and their food
+// satisfaction climbed to the ceiling on an empty stock. Absorbing hunger, the
+// state A5 was dissolved to remove.
+//
+// The house and the well come **after** the farm, so the indices in the
+// expected report do not move. They are here for the reason spelled out in
+// `unsustainable_capacity.ron`: without them the cross-table checks fill the
+// report with a missing house and a missing water provider, and bury the one
+// error this fixture is about.
+(
+    buildings: [
+        (
+            id: "phantom_farm",
+            size: (2, 2),
+            cost: 40,
+            levels: 1,
+            service: Some((kind: "food", range_per_level: [10], capacity_per_level: [20])),
+            required_services: [],
+        ),
+        (
+            id: "house",
+            size: (1, 1),
+            cost: 10,
+            levels: 3,
+            service: None,
+            required_services: ["water", "food"],
+        ),
+        (
+            id: "well",
+            size: (1, 1),
+            cost: 12,
+            levels: 1,
+            service: Some((kind: "water", range_per_level: [12], capacity_per_level: [32])),
+            required_services: [],
+        ),
+    ],
+)
