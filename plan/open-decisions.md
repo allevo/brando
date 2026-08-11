@@ -617,8 +617,10 @@ declared in D4 and leaves their state outside the hash, i.e. outside the recordi
 
 ## A17 — The per-tick recomputation cost — **OPEN**, to close before M2
 
-The project's only open decision, and that is no accident: it is the debt
-[A12](#a12--the-services-chase-the-population) opens on purpose.
+The first decision in this project to stay open, and that is no accident: it is the debt
+[A12](#a12--the-services-chase-the-population) opens on purpose. (It was the only one until
+[A18](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15) joined it, which is
+also A12's doing, from the other side.)
 
 With the services chasing the population, the coverage is recomputed almost every tick instead of only
 when the player builds. The typical tick goes from 248 µs to ~3.3 ms — **~13×** — and that cost is

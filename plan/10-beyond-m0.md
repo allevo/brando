@@ -26,7 +26,8 @@ watched a single tick run, and every number decided in the abstract has to be re
 >    services to be sized *before* the population. The opposite was chosen:
 >    [A12](open-decisions.md), **the services chase the population**, with a recomputation every
 >    tick and its price (~13× on the empty tick). That is where [A17](open-decisions.md) comes
->    from, the project's only open decision.
+>    from, the first decision in this project to stay open — and, after the bug hunt that follows
+>    phase 13, [A18](open-decisions.md) as well.
 > 2. The five phases became **eight**. "House levels" and "migration" were two lines that contained
 >    four phases; and the closing phase was missing entirely, which in M0 was 09 and is where the
 >    lessons get written down instead of remembered.

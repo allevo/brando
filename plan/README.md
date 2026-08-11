@@ -60,8 +60,19 @@ that touches the hot path.
 The decision all of M1 rests on is [A12](open-decisions.md): **the services chase the population**. A
 provider's capacity is counted on the residents present, so the coverage is recomputed when anyone
 moves — that is, on almost every tick. It is a gameplay choice paid for in computation time, taken in
-full knowledge, and the debt it opens is [A17](open-decisions.md): **the project's only open
-decision**, to be closed before M2. Both are worth reading before phase 13.
+full knowledge, and the debt it opens is [A17](open-decisions.md), to be closed before M2. Both are
+worth reading before phase 13.
+
+Between **13** and **14**, as between M0 and M1, there is a batch of work with no phase file: a review
+of the whole tree on 2026-08-11, kept in [bug-hunt-2026-08-11.md](bug-hunt-2026-08-11.md). Six
+findings, all of them latent — the suite was green throughout. Five were bugs and were fixed; the
+sixth was a question nobody had asked, and it became [A18](open-decisions.md), the second decision
+open at the same time as A17.
+
+Three of the six were done **there** rather than later for the same reason phase 11 comes early: they
+touch what the recordings see, and each of the two phases after 13 makes one of them more expensive.
+The one to read is the first, because its lesson is A5's in a new place — the check that guarantees
+*a house covered by food always eats* had a hole in the guard itself.
 
 ## What gets built and what does not
 
@@ -117,8 +128,8 @@ the recommendation; if one gets overturned, it changes the content of that phase
 plan.
 
 The document carries on past M0: A7–A11 came out of clearing up that same `dubbi.md`, A12–A16 out of planning
-M1. For each one, alongside the recommendation, there is **how it really went** — which is almost
-always the more useful information, because it diverges.
+M1, A18 out of the bug hunt after phase 13. For each one, alongside the recommendation, there is
+**how it really went** — which is almost always the more useful information, because it diverges.
 
 ## Implemented till
-Everything is implemented till 13 included.
+Everything is implemented till 13 included, plus the bug hunt that follows it.
