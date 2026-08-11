@@ -726,6 +726,32 @@ fn a_rung_that_asks_for_nothing() {
     );
 }
 
+/// A year that does not fit in a `u32`, reported as itself.
+///
+/// The branch had no test at all, which is how it kept reporting an overflow as
+/// `expected at least 1, found 0` against `rules.months_per_year` — a message
+/// about a different problem, blaming a field that is fine. Both operands are
+/// legitimate on their own here; it is the product that is not, and that is why
+/// the error is filed under `rules` rather than either of them.
+#[test]
+fn a_year_that_does_not_fit_in_a_u32() {
+    let e = errors_of(with_rules(&replaced(
+        &valid_rules(),
+        "ticks_per_month: 30,",
+        "ticks_per_month: 4294967295,",
+    )));
+    assert_eq!(
+        e,
+        [(
+            "rules".to_string(),
+            ValidationErrorKind::YearTooLong {
+                ticks_per_month: u32::MAX,
+                months_per_year: 12
+            }
+        )]
+    );
+}
+
 /// A replacement that has to have bitten: a `replacen` that matched nothing
 /// would leave the table valid and the test green for the wrong reason.
 fn replaced(table: &str, from: &str, to: &str) -> String {

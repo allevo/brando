@@ -103,8 +103,16 @@ pub struct SatisfactionRules {
 impl Rules {
     /// Ticks in a game year. Scenario objectives are expressed in months and
     /// years, never in ticks (M1).
+    ///
+    /// Saturating for [`is_month_boundary`]'s reason: both operands come from a
+    /// table, and the core does not panic on data. Tables loaded through
+    /// `sim-data` cannot overflow it — `validate_rules` refuses them — but the
+    /// hand-built fixtures (`sim-core/tests/common/mod.rs`, `xtask`'s bench)
+    /// never go through that door.
+    ///
+    /// [`is_month_boundary`]: Self::is_month_boundary
     pub const fn ticks_per_year(&self) -> u32 {
-        self.ticks_per_month * self.months_per_year
+        self.ticks_per_month.saturating_mul(self.months_per_year)
     }
 
     /// The definition of a house level, `None` out of range.

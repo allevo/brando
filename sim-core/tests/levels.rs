@@ -510,6 +510,60 @@ mod levels {
         );
     }
 
+    /// Coming down from a level the ladder does not contain evicts **nobody**.
+    ///
+    /// `decays()` sends a house at an unknown level down on purpose, because
+    /// descending converges on a level that exists. But the rung below can be
+    /// off the table too, and reading its capacity as zero emptied the house in
+    /// one review — a population wipe wearing the clothes of a convergence.
+    ///
+    /// Unreachable in play from three directions at once (`rises` is bounded by
+    /// `top_house_level`, `residents_within_capacity` would flag a house at an
+    /// off-table level, and levels only ever start at 1), which is why it takes
+    /// `house_mut` to get here. It is written down because zero is a strange
+    /// answer to "what does this rung hold?" when the honest answer is "no
+    /// idea", and the two differ by the whole population of the house.
+    #[test]
+    fn coming_down_from_a_level_off_the_table_evicts_nobody() {
+        let (mut w, house) = a_served_house();
+        let month = w.data().rules.ticks_per_month;
+        let top = w
+            .data()
+            .rules
+            .top_house_level()
+            .expect("the ladder is not empty");
+        let full = w.data().rules.max_residents(top).expect("the top rung");
+        let above = top.next().expect("a rung above the top");
+        let two_above = above.next().expect("two rungs above the top");
+        assert!(
+            w.data().rules.house_level(above).is_none(),
+            "the ladder has to stop below the rungs this test invents"
+        );
+        {
+            let h = w.house_mut(house).expect("alive");
+            h.level = two_above;
+            h.residents = full;
+        }
+        let evicted_before = w.population_totals().evicted;
+
+        // Two reviews: the first lands on a rung that is still off the table,
+        // the second on the top one, which exists and holds them all.
+        let after_two_reviews = (w.tick() / month + 2) * month + 1;
+        run_to(&mut w, after_two_reviews);
+
+        assert_eq!(
+            house_level(&w, house),
+            top,
+            "it converges on a rung that exists"
+        );
+        assert_eq!(
+            w.house(house).expect("alive").residents,
+            full,
+            "and it still has everybody: the unknown rung evicted nobody"
+        );
+        assert_eq!(w.population_totals().evicted, evicted_before);
+    }
+
     /// Eviction is the only point in this phase where `residents` changes, so
     /// it is the only one that has to invalidate the coverage: capacity is
     /// counted on the residents present (A12).
