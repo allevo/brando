@@ -8,6 +8,7 @@
 //! Unit of time: 1 tick = 1 game day.
 
 use crate::command::{Command, CommandError, OccupantKind};
+use crate::data::BuildingDef;
 use crate::event::Event;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
 use crate::satisfaction::Mood;
@@ -220,20 +221,33 @@ fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), Co
 }
 
 fn remove_building(world: &mut World, id: BuildingId, r: &mut StepReport) {
-    let Some(b) = world.buildings.remove(id) else {
+    let Some(b) = world.buildings.get(id) else {
         return;
     };
-    let Some(def) = world.data.def(b.kind) else {
-        return;
-    };
-    let size = def.size;
+    let (origin, stock) = (b.origin, b.stock);
+    // Read before the removal, and with the same fallback as `remove_house`.
+    // Looking the kind up afterwards meant a failed lookup returned with the
+    // building already out of the `SlotMap` and everything else left standing:
+    // the tiles still occupied, `buildings_by_origin` still holding a dead id —
+    // so `World::occupant` resolved to a building that was not there, which is
+    // what `no_overlap` calls "points at a dead building" — the coverage never
+    // forgotten and never invalidated. Unreachable through play, the kind
+    // having been validated at placement and the dataset being immutable behind
+    // an `Arc`, but it was the one place in this file that did not hold the
+    // discipline `place_road` and `place_building` state out loud.
+    let def = world.data.def(b.kind);
+    let size = def.map_or((1, 1), |d| d.size);
+    let produces = def.is_some_and(BuildingDef::is_producer);
+
+    // From here on nothing can fail: no partial mutation.
+    world.buildings.remove(id);
     // The stock disappears with the producer: it has to be recorded, otherwise
     // food conservation stops being an equality (phase 07).
-    if def.is_producer() {
-        world.food.lost_to_demolition += i64::from(b.stock.to_millis());
+    if produces {
+        world.food.lost_to_demolition += i64::from(stock.to_millis());
     }
-    clear_tiles(world, b.origin, size);
-    if let Some(idx) = world.grid.idx(b.origin) {
+    clear_tiles(world, origin, size);
+    if let Some(idx) = world.grid.idx(origin) {
         world.buildings_by_origin.remove(&idx);
     }
     world.dirty.forget_coverage(id);
