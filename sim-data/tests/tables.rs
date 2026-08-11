@@ -45,6 +45,16 @@ fn with_buildings(buildings: &str) -> Result<DataSet, LoadError> {
     )
 }
 
+/// Loads the valid tables, replacing only `rules.ron`.
+fn with_rules(rules: &str) -> Result<DataSet, LoadError> {
+    sim_data::from_ron_str(
+        rules,
+        &valid_terrain(),
+        &valid_buildings(),
+        &valid_difficulty(),
+    )
+}
+
 /// Loads the valid tables, replacing only `difficulty.ron`.
 fn with_difficulty(difficulty: &str) -> Result<DataSet, LoadError> {
     sim_data::from_ron_str(
@@ -190,6 +200,47 @@ fn no_profile_builds_a_house_beyond_its_capacity() {
     assert_eq!(d.difficulty_beyond_house_capacity(), vec![]);
 }
 
+/// The satisfaction curve (phase 12): the shape the balancing means, expressed
+/// as relations rather than as the numbers themselves.
+///
+/// Rewriting `max: 100, step_up: 4` here would be a copy of the table, green by
+/// construction and unable to notice anything. What is worth pinning down is
+/// what the numbers were chosen *for*.
+#[test]
+fn the_satisfaction_curve_has_the_shape_the_balancing_means() {
+    let d = sim_data::load_default().expect("valid tables");
+    let s = &d.rules.satisfaction;
+
+    let climb = u32::from(s.max).div_ceil(u32::from(s.step_up));
+    assert!(
+        climb > 1 && climb < d.rules.ticks_per_month,
+        "a house has to earn its satisfaction over days, not in one tick and \
+         not in more than a month: {climb} ticks"
+    );
+    assert!(
+        s.step_down > s.step_up,
+        "it is lost faster than it is gained: losing the water is an event, \
+         getting it back is an investment"
+    );
+
+    let mut previous = 0;
+    for (i, &t) in s.mood_thresholds.iter().enumerate() {
+        assert!(
+            t > previous,
+            "band {i} does not come after the one before it"
+        );
+        assert!(t <= s.max, "band {i} is beyond the maximum");
+        previous = t;
+    }
+    assert_eq!(
+        sim_core::Mood::of(0, s),
+        sim_core::Mood::Desperate,
+        "a house at zero has to be Desperate: it is the mood the renderer \
+         assumes for a newly-built one"
+    );
+    assert_eq!(sim_core::Mood::of(s.max, s), sim_core::Mood::Thriving);
+}
+
 // --- 2. broken fixtures, one per check ---
 
 fn errors(buildings: &str) -> Vec<(String, ValidationErrorKind)> {
@@ -289,6 +340,51 @@ fn a_profile_beyond_the_house_capacity() {
             }
         )],
         "only the first profile is broken: the second is at the limit and legitimate"
+    );
+}
+
+/// The satisfaction curve, in the only table where a `rules.ron` fixture is
+/// broken on purpose: both problems have to show up, not just the first.
+#[test]
+fn a_satisfaction_curve_that_cannot_be_drawn() {
+    let e = errors_of(with_rules(&broken_fixture("satisfaction_out_of_range.ron")));
+    assert_eq!(e.len(), 2, "both problems, not just the first: {e:?}");
+
+    assert_eq!(e[0].0, "rules.satisfaction.step_down");
+    assert_eq!(
+        e[0].1,
+        ValidationErrorKind::BeyondMax {
+            found: 120,
+            max: 100
+        }
+    );
+
+    assert_eq!(e[1].0, "rules.satisfaction.mood_thresholds[1]");
+    assert_eq!(
+        e[1].1,
+        ValidationErrorKind::MoodBandsOutOfOrder {
+            previous: 25,
+            found: 25
+        }
+    );
+}
+
+/// A band at zero is not merely odd: it would leave `Mood::Desperate` empty,
+/// and a newly-built house would be born into a band nobody expects.
+#[test]
+fn a_mood_band_at_zero_is_refused() {
+    let rules = valid_rules().replacen("mood_thresholds: (25,", "mood_thresholds: (0,", 1);
+    assert_ne!(rules, valid_rules(), "the replacement has to have bitten");
+    let e = errors_of(with_rules(&rules));
+    assert_eq!(
+        e,
+        vec![(
+            "rules.satisfaction.mood_thresholds[0]".to_string(),
+            ValidationErrorKind::MoodBandsOutOfOrder {
+                previous: 0,
+                found: 0
+            }
+        )]
     );
 }
 
@@ -394,6 +490,30 @@ fn the_hash_covers_every_table() {
     )
     .expect("valid");
     assert_ne!(base.hash, a.hash, "the rules must go into the hash");
+
+    // The satisfaction curve is a block inside the rules, and a nested table is
+    // exactly the kind that gets forgotten in a hash written by hand (A3):
+    // without this, rebalancing the curve would leave every recording green
+    // while the game has changed.
+    for (from, to) in [
+        ("step_up: 4", "step_up: 5"),
+        (
+            "mood_thresholds: (25, 50, 75)",
+            "mood_thresholds: (20, 50, 75)",
+        ),
+    ] {
+        let modified = valid_rules().replacen(from, to, 1);
+        assert_ne!(
+            modified,
+            valid_rules(),
+            "the replacement has to have bitten"
+        );
+        let d = with_rules(&modified).expect("valid");
+        assert_ne!(
+            base.hash, d.hash,
+            "the satisfaction curve must go into the hash ({from})"
+        );
+    }
 
     let modified_terrain = valid_terrain().replacen("road_cost: 2", "road_cost: 3", 1);
     let b = sim_data::from_ron_str(

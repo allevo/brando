@@ -12,6 +12,28 @@
     // fixed: migration arrives with M1.
     residents_per_house_level: [4],
 
+    // How long a service has to have been arriving before the house is content
+    // (phase 12). It measures time, not quantity: with capacity and output
+    // consistent, a covered house always receives 100%, so "how much arrives"
+    // would be a constant.
+    satisfaction: (
+        max: 100,
+        // 25 ticks, a little under a month, from zero to the maximum.
+        step_up: 4,
+        // It is lost faster than it is gained: losing the water is an event,
+        // getting it back is an investment.
+        step_down: 8,
+        // Where the bands the renderer draws begin: 25 is the lower bound of
+        // Unhappy, 50 of Happy, 75 of Thriving, and below 25 the house is
+        // Desperate. Ascending and above zero, so a house at zero is always
+        // Desperate.
+        //
+        // A tuple and not a list, like `size` in buildings.ron: the arity is
+        // fixed by the number of bands, so one threshold too many is a
+        // deserialisation error rather than a check somebody has to write.
+        mood_thresholds: (25, 50, 75),
+    ),
+
     // Thousandths of food one resident eats in one tick. With 4 residents per
     // house that makes 80 milli/house/tick: a farm producing 400 sustains 5 of
     // them, and that is exactly the capacity the farm declares — validation

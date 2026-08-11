@@ -16,7 +16,7 @@ use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
-use crate::service::ServiceFlags;
+use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::{Coins, Milli};
 
 /// A building that provides a service or produces goods.
@@ -41,6 +41,24 @@ pub struct House {
     pub residents: u16,
     /// Which services reach it this tick.
     pub served: ServiceFlags,
+    /// How long the service has been there, **not how much of it arrives**
+    /// (A10). One slot per service, including the ones the current level does
+    /// not require: if the house levels up, the time already accumulated on a
+    /// service it was receiving anyway was not a lie.
+    ///
+    /// Goes up by `step_up` when the service is satisfied this tick, down by
+    /// `step_down` when it is missing, saturating in `0..=max` (phase 12,
+    /// step 6.1). `u8` and not `i16`: it is clamped and never needs the sign.
+    ///
+    /// **What it reads is [`House::served`], which means "covered".** Since
+    /// phase 12 that is true of the food bit too: step 4 stops rewriting it to
+    /// mean "it ate", and the two coincide only because a covered house always
+    /// eats (A5). The day that invariant falls over — M3, when the goods come
+    /// from a warehouse — satisfaction will rise for a house that did not eat.
+    /// It is written here because here is where it would be an inexplicable
+    /// balancing bug, and `FoodTotals::covered_but_unfed` is what says out loud
+    /// that it has happened.
+    pub satisfaction: [u8; ServiceKind::COUNT],
 }
 
 /// A real logistics walker (D3): goods transport, trade caravans, immigrants.

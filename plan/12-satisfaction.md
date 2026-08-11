@@ -85,12 +85,30 @@ announced.
 
 **Decision: `served` means "covered", for both bits.** Step 4 stops rewriting the food bit and
 merely consumes. A covered house that does not eat becomes an invariant violation — which is exactly
-what it has to be, and it is already guarded by `covered_means_fed`.
+what it has to be.
+
+> **Correction, made while implementing.** The sentence that followed here said the violation "is
+> already guarded by `covered_means_fed`". It is not, and the mistake is worth keeping written down
+> because it is the shape of mistake this whole phase is about. That invariant compared
+> `coverage().is_served(id, Food)` against `House::served`'s food bit — a real question precisely
+> because the two had **independent sources**, step 3 and step 4. Make both bits come from step 3 and
+> the comparison becomes `x == x`: the project would have lost a real check at the exact moment it
+> started depending on it, and nothing would have gone red.
+>
+> What replaces it is a counter in `FoodTotals`, `covered_but_unfed`, incremented by step 4 when a
+> house with a provider assigned fails to eat, and asserted at zero. It is diagnostic, outside the
+> hash, free on the happy path — and it is a **better** question than the one it replaces, because it
+> holds over the whole history instead of at the moment somebody looks. The 1,000-tick fuzz test
+> checks it once at the end and thereby covers all 1,000 ticks.
+>
+> The general lesson, next to phase 09's: when two fields are made to agree by construction, the test
+> that compared them does not become redundant — it becomes **vacuous**, which looks the same in CI
+> and is the opposite thing.
 
 The cost: if one day the invariant fell over (M3, when the goods come from a warehouse),
 satisfaction would rise for a house that did not eat. That has to be written **now** in the field's
 doc comment, because now is when it is understood; in M3 it would show up as an inexplicable
-balancing bug.
+balancing bug. `covered_but_unfed` is what will say out loud that it has happened.
 
 ### The table, in `rules.ron`
 
@@ -102,12 +120,24 @@ satisfaction: (
     // It is lost faster than it is gained: losing the water is an event,
     // getting it back is an investment.
     step_down: 8,
+    // Written as a tuple, not a list: see below.
+    mood_thresholds: (25, 50, 75),
 ),
 ```
 
 Validation of shape: the three values greater than zero, `step_up` and `step_down` no greater than
 `max`. The **cross-table** check against the level thresholds arrives with phase 13, which
 introduces them.
+
+The bands live here too, and they are a `[u8; Mood::COUNT - 1]` rather than a `Vec`: the arity is
+decided by the enum, so a table with two thresholds or four is a **deserialisation** error and needs
+no check anybody has to remember to write. The price is that RON spells a fixed-length array as a
+tuple, `(25, 50, 75)` — which is what `size: (2, 2)` in `buildings.ron` already does, and for the
+same reason.
+
+Two order checks that are not decoration: strictly ascending, and the first one above zero. The
+second is what makes "satisfaction 0 ⇒ `Desperate`" true **by construction**, and the event's
+contract for a newly-built house rests on it.
 
 ### The event
 
@@ -124,6 +154,17 @@ Event::HouseMoodChanged { house: HouseId, mood: Mood }
 
 The band boundaries live in `rules.ron`, not in the code. The mood is the minimum across the
 services the level requires: a house with water and no food is desperate, not half happy.
+
+Two things settled while implementing. The mood is **not** a field of `House`: it is derived from the
+satisfaction, and a second copy in the state would be one more thing to hash, to keep in step and to
+get wrong. It is computed twice per house per tick — once into the start-of-tick snapshot step 10
+already builds for the coverage deltas, once when comparing — which is a handful of `u8` comparisons
+against a pass that was being made anyway.
+
+And a **newly-built house emits nothing**: it is born at zero, which the validation above makes
+always `Desperate`, so the snapshot's default for a house that did not exist yet is the right answer
+rather than a placeholder. `Desperate` is the mood the renderer has to assume from `HousePlaced`, and
+that belongs in the event's doc comment, not here.
 
 ### The hash
 
@@ -154,6 +195,14 @@ thresholds, the hysteresis and the monthly evaluation are phase 13.
 5. **Services not required**: a service outside the level's `required_services` is not touched.
    Today the house requires both, so the test is written on a fixture with a house that requires
    only one — and it is the case phase 13 will make real.
+
+   In practice that has to be a **second dataset**, not a second kind of house in the same one:
+   `House` does not record its `BuildingKindId`, so two house kinds are indistinguishable once
+   placed. `common::dataset_where_a_house_requires(&[Water])` is the fixture, and the case it
+   produces is sharper than expected — coverage does not read `required_services` either (the gap A9
+   names), so the farm assigns itself to that house anyway, `served` says food is there, and the
+   accumulator still has to stay at zero. It is not "the service is absent", it is "the service is
+   present and irrelevant", which is the one phase 13 needs.
 6. **An event on the band, not on the value**: a house going from satisfaction 40 to 44 within the
    same band emits nothing; one that crosses a boundary emits exactly once. It is phase 07's test 7
    rewritten for the mood, and for the same reason.
@@ -169,13 +218,45 @@ cargo xtask regen-expected                      # a deliberate regeneration: a n
 cargo xtask bench                               # measure A: step 6 had never cost anything
 ```
 
-The `xtask run` dump gains a column with the average satisfaction. It serves to close the phase by
-eye: if it rises too fast or too slowly, that is balancing (`sim-data`), not code — but it has to be
-looked at now, because `regen-expected` freezes it into a recording.
+The `xtask run` dump gains a column with the average satisfaction — of the **worst** required
+service, not the mean of the two, so the column and the mood say the same thing. It serves to close
+the phase by eye: if it rises too fast or too slowly, that is balancing (`sim-data`), not code — but
+it has to be looked at now, because `regen-expected` freezes it into a recording. At `--dump-every
+30` the climb is already over by the first row; `--ticks 40 --dump-every 4` is what actually shows
+the curve.
 
 `bench` is worth looking at in this phase more than in the others: step 6 has always cost zero, and
 from here it costs one pass over every house on every tick. The measure to compare is `A`, the empty
 tick, which [A11](open-decisions.md) names as the number to keep an eye on.
 
+Two notes from doing it.
+
+**The filter has to match, and cargo filters on the test's name, not on its file.** None of this
+phase's six tests naturally contains the word "satisfaction", so `cargo test -p sim-core
+satisfaction` ran zero of them while looking green. They live in a `mod satisfaction { … }` inside
+`tests/satisfaction.rs` so the names carry the phase's word — cheaper than bending six names, and it
+is the same reason the unit tests in `src/satisfaction.rs` were matched all along.
+
+**Reading the `.hashes` diff, this phase, says nothing.** Protocol point 5 asks for the first
+diverging tick, and here both movers act at tick 0 — the new field in the state and the new block in
+the dataset hash — so divergence at the first checkpoint is what you would see whatever happened.
+What rules out a third cause is the phase-11 corroboration, and here it is unusually strong, because
+this phase is defined by having **no consequences**: `cargo xtask run --ticks 360` on both scenarios,
+from a worktree at the previous commit and from this one, has to print the same table row for row.
+It does, the new column aside.
+
 **Done when:** tests 1 and 2 pass with the ticks computed from the `DataSet`, and the dump at 120
 ticks can be read.
+
+## How it went
+
+The curve behaves as designed: the houses go up at tick 2, the satisfaction is at 100 at tick 27 —
+25 ticks, `max / step_up`, a little under a month. Nothing to rebalance.
+
+`A` at the reference scale went from ~254 µs to ~285 µs, +12%, about 8 ns per house per tick for
+step 6.1 plus the mood in the snapshot and in the comparison. At mid game the difference is inside
+the machine's noise. Both figures are medians of two runs at `--reps 100` on the same machine; a
+single run at the default reps had `A` at mid game apparently rising 2.3×, which was noise, and
+that is worth remembering the next time this number is used to judge something.
+
+`G` did not move, as expected: nothing in this phase touches step 3.

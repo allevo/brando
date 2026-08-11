@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use crate::data_hash::dataset_hash;
 use crate::grid::Terrain;
 use crate::ids::BuildingKindId;
+use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
 use crate::units::{Coins, Milli};
 
@@ -23,6 +24,28 @@ pub struct Rules {
     /// Indexed by house level (level 1 = index 0).
     pub residents_per_house_level: Vec<u16>,
     pub food_per_resident: Milli,
+    pub satisfaction: SatisfactionRules,
+}
+
+/// How fast a house's satisfaction rises and falls, and where the bands the
+/// renderer draws begin (phase 12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SatisfactionRules {
+    /// The ceiling of the accumulator. `max / step_up` ticks take a served
+    /// house from zero to here.
+    pub max: u8,
+    /// Added when the service is there this tick.
+    pub step_up: u8,
+    /// Subtracted when it is missing. Larger than `step_up` in the production
+    /// tables: losing the water is an event, getting it back is an investment.
+    pub step_down: u8,
+    /// The lower bound, inclusive, of each band above [`Mood::Desperate`], in
+    /// ascending order.
+    ///
+    /// Validated as strictly ascending, above zero and no greater than `max`:
+    /// that is what makes a satisfaction of zero always `Desperate`, and
+    /// [`Mood::of`] total.
+    pub mood_thresholds: [u8; Mood::COUNT - 1],
 }
 
 impl Rules {
@@ -205,6 +228,19 @@ impl DataSet {
 
     pub fn def(&self, kind: BuildingKindId) -> Option<&BuildingDef> {
         self.buildings.get(kind.as_usize())
+    }
+
+    /// The definition of the house.
+    ///
+    /// Found by [`BuildingDef::is_house`] and not by the textual id `"house"`:
+    /// it is the same classifier the placing of a building uses to decide
+    /// whether what is being built is a house, so a building placed as a house
+    /// is also read as one afterwards. A civilisation whose houses are called
+    /// something else keeps working; one with two kinds of house does not, and
+    /// that is a limit `House` will dissolve when it starts carrying its own
+    /// kind (M3).
+    pub fn house_def(&self) -> Option<&BuildingDef> {
+        self.buildings.iter().find(|b| b.is_house())
     }
 
     /// Resolves the textual id used in the tables and in the scenarios.

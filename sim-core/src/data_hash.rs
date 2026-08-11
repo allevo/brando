@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use crate::grid::Terrain;
 
-use crate::data::{BuildingDef, DifficultyDef, Rules, TerrainDef};
+use crate::data::{BuildingDef, DifficultyDef, Rules, SatisfactionRules, TerrainDef};
 
 /// Domain prefix: keeps this hash apart from any other blake3 in the project.
 /// Changing it regenerates every recording.
@@ -38,6 +38,7 @@ pub(crate) fn dataset_hash(
         starting_treasury,
         residents_per_house_level,
         food_per_resident,
+        satisfaction,
     } = rules;
     h.update(&ticks_per_month.to_le_bytes());
     h.update(&months_per_year.to_le_bytes());
@@ -47,6 +48,15 @@ pub(crate) fn dataset_hash(
         h.update(&a.to_le_bytes());
     }
     h.update(&food_per_resident.to_millis().to_le_bytes());
+
+    let SatisfactionRules {
+        max,
+        step_up,
+        step_down,
+        mood_thresholds,
+    } = satisfaction;
+    h.update(&[*max, *step_up, *step_down]);
+    h.update(mood_thresholds);
 
     // --- terrain, in Terrain order (the BTreeMap guarantees it) ---
     h.update(&(terrain.len() as u64).to_le_bytes());

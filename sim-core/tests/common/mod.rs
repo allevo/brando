@@ -13,7 +13,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use sim_core::data::{BuildingDef, DataSet, DifficultyDef, Rules, ServiceDef, TerrainDef};
+use sim_core::data::{
+    BuildingDef, DataSet, DifficultyDef, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+};
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Milli, ServiceKind, Terrain, TilePos, World,
 };
@@ -46,6 +48,14 @@ pub const WELL_CAPACITY: u16 = 32;
 pub const FARM_CAPACITY: u16 = 20;
 pub const SMALL_WELL_CAPACITY: u16 = 4;
 
+// The satisfaction curve of the fixture (phase 12). Deliberately divisible:
+// `MAX / STEP_UP` and `MAX / STEP_DOWN` are whole numbers of ticks, so a test
+// that computes its own horizon from the `DataSet` gets an exact answer instead
+// of one off by a rounding.
+pub const SATISFACTION_MAX: u8 = 100;
+pub const SATISFACTION_STEP_UP: u8 = 4;
+pub const SATISFACTION_STEP_DOWN: u8 = 10;
+
 /// The profile the tests play on unless they say otherwise: a house is born
 /// full, which is M0's behaviour and keeps every test written before phase 11
 /// saying what it said.
@@ -55,12 +65,30 @@ pub const EASY: &str = "easy";
 pub const HARD: &str = "hard";
 
 pub fn dataset() -> Arc<DataSet> {
+    dataset_where_a_house_requires(&[ServiceKind::Water, ServiceKind::Food])
+}
+
+/// Like [`dataset`], with the house declaring the services it wants.
+///
+/// It exists for the one thing today's tables cannot express: a house that does
+/// **not** require a service the coverage reaches it with anyway. Coverage
+/// never reads `required_services` (the gap A9 names), so a house that requires
+/// only water is still assigned a farm — and its food satisfaction has to stay
+/// still all the same. Phase 13, which gives each level its own requirements,
+/// makes the case real.
+pub fn dataset_where_a_house_requires(required: &[ServiceKind]) -> Arc<DataSet> {
     let rules = Rules {
         ticks_per_month: 30,
         months_per_year: 12,
         starting_treasury: Coins::new(STARTING_TREASURY),
         residents_per_house_level: vec![RESIDENTS_PER_HOUSE],
         food_per_resident: Milli::from_millis(20),
+        satisfaction: SatisfactionRules {
+            max: SATISFACTION_MAX,
+            step_up: SATISFACTION_STEP_UP,
+            step_down: SATISFACTION_STEP_DOWN,
+            mood_thresholds: [25, 50, 75],
+        },
     };
 
     let mut terrain = BTreeMap::new();
@@ -96,7 +124,7 @@ pub fn dataset() -> Arc<DataSet> {
             cost: Coins::new(HOUSE_COST),
             levels: 1,
             service: None,
-            required_services: vec![ServiceKind::Water, ServiceKind::Food],
+            required_services: required.to_vec(),
             output_per_tick: None,
             max_stock: None,
         },
@@ -183,8 +211,12 @@ pub fn world_of(w: u16, h: u16) -> World {
 
 /// Like [`world_of`], on a chosen difficulty profile.
 pub fn world_at(w: u16, h: u16, profile: &str) -> World {
+    world_with(dataset(), w, h, profile)
+}
+
+/// Like [`world_at`], on a dataset of your own.
+pub fn world_with(data: Arc<DataSet>, w: u16, h: u16, profile: &str) -> World {
     let grid = Grid::new(w, h, Terrain::Plain).expect("valid dimensions");
-    let data = dataset();
     let difficulty = difficulty(&data, profile);
     World::new(grid, data, 42, difficulty)
 }

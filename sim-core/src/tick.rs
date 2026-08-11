@@ -10,6 +10,7 @@
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::event::Event;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::satisfaction::Mood;
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
 use crate::world::{Building, House, Occupant, World};
@@ -33,9 +34,9 @@ impl StepReport {
 /// Advances the world by one tick, applying the incoming commands.
 pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     let mut r = StepReport::default();
-    // A snapshot of the services at the start of the tick: it is the reference
+    // A snapshot of the houses at the start of the tick: it is the reference
     // step 10 emits its deltas against.
-    let services_before = service_snapshot(world);
+    let before = house_snapshot(world);
     apply_commands(world, cmds, &mut r); // 1
     rebuild_roads(world); // 2
     propagate_coverage(world); // 3
@@ -45,7 +46,7 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     finance(world); // 7
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
-    emit_events(world, &services_before, &mut r); // 10
+    emit_events(world, &before, &mut r); // 10
     world.tick = world.tick.saturating_add(1);
     r
 }
@@ -168,6 +169,9 @@ fn place_building(
             level: 1,
             residents,
             served: crate::service::ServiceFlags::empty(),
+            // At zero, not at the maximum: step 3 covers it in this same tick,
+            // but its first levelling up costs the full time all the same.
+            satisfaction: [0; ServiceKind::COUNT],
         });
         world.houses_by_origin.insert(origin_idx, id);
         occupy(world, &tiles, origin_idx, true);
@@ -246,11 +250,7 @@ fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     // A house's size is the one of its kind; in M0 houses are 1x1, but the size
     // is re-read from the table so as not to get stuck the day they no longer
     // are.
-    let size = world
-        .data
-        .kind_by_id("house")
-        .and_then(|k| world.data.def(k))
-        .map_or((1, 1), |d| d.size);
+    let size = world.data.house_def().map_or((1, 1), |d| d.size);
     clear_tiles(world, h.origin, size);
     if let Some(idx) = world.grid.idx(h.origin) {
         world.houses_by_origin.remove(&idx);
@@ -287,8 +287,20 @@ fn production(world: &mut World) {
 /// Step 5 — real logistics walkers, M3 (D3).
 fn step_walkers(_world: &mut World) {}
 
-/// Step 6 — levelling up, decay and migration, M1.
-fn houses_and_migration(_world: &mut World) {}
+/// Step 6 — levelling up, decay and migration.
+///
+/// The internal order is **game semantics** as much as the order of the ten
+/// steps, and the same rule applies: do not reorder without regenerating the
+/// recordings and writing down why. In this phase only 6.1 exists; phases 13,
+/// 14 and 15 add the later sub-steps **below** it, never above.
+///
+/// 6.1 comes first because it reads only what steps 3 and 4 have written *this*
+/// tick, and all the rest of step 6 reads it. If it came after levelling up, a
+/// house would level up on the previous tick's data: correct on average,
+/// unreadable in a recording you are trying to follow by hand.
+fn houses_and_migration(world: &mut World) {
+    crate::satisfaction::update(world); // 6.1
+}
 
 /// Step 7 — treasury and taxes, M1.
 fn finance(_world: &mut World) {}
@@ -299,43 +311,89 @@ fn random_events(_world: &mut World) {}
 /// Step 9 — scenario objectives, M1 (needs `sim-scenario`).
 fn check_objectives(_world: &mut World, _r: &mut StepReport) {}
 
-/// Step 10 — emits the coverage deltas.
+/// Step 10 — emits the coverage and mood deltas.
 ///
 /// Only the **changes** relative to the start of the tick: a house that has
 /// been hungry for ten ticks generates one event on the first, not ten. This is
 /// the boundary with the renderer, and the wrong choice here would cost 40,000
 /// events per tick.
-fn emit_events(world: &mut World, before: &[(HouseId, ServiceFlags)], r: &mut StepReport) {
-    for (house, _) in world.houses() {
-        let now = world
-            .house(house)
-            .map_or(ServiceFlags::empty(), |h| h.served);
-        // A house born this tick has no "before": it starts uncovered, so if it
-        // is served the event is there.
+fn emit_events(world: &mut World, before: &[HouseState], r: &mut StepReport) {
+    let rules = &world.data.rules.satisfaction;
+    let required: &[ServiceKind] = world
+        .data
+        .house_def()
+        .map_or(&[], |d| d.required_services.as_slice());
+
+    for (house, h) in world.houses() {
+        // A house born this tick has no "before": it starts uncovered and at
+        // zero satisfaction, so if it is served the event is there, and its
+        // mood is the `Desperate` the renderer already assumes.
         let previous = before
-            .binary_search_by_key(&house, |(h, _)| *h)
-            .map_or(ServiceFlags::empty(), |i| before[i].1);
-        if now == previous {
-            continue;
-        }
-        for service in ServiceKind::ALL {
-            if now.get(service) != previous.get(service) {
-                r.events.push(Event::ServiceCoverageChanged {
-                    house,
-                    service,
-                    served: now.get(service),
-                });
+            .binary_search_by_key(&house, |s| s.id)
+            .map_or(HouseState::newborn(house), |i| before[i]);
+
+        if h.served != previous.served {
+            for service in ServiceKind::ALL {
+                if h.served.get(service) != previous.served.get(service) {
+                    r.events.push(Event::ServiceCoverageChanged {
+                        house,
+                        service,
+                        served: h.served.get(service),
+                    });
+                }
             }
+        }
+
+        let mood = crate::satisfaction::mood_of(h, required, rules);
+        if mood != previous.mood {
+            r.events.push(Event::HouseMoodChanged { house, mood });
         }
     }
 }
 
-/// Every house's service flags, sorted by `HouseId` so step 10's comparison is
-/// a binary search and not a scan.
-fn service_snapshot(world: &World) -> Vec<(HouseId, ServiceFlags)> {
-    let mut v: Vec<(HouseId, ServiceFlags)> =
-        world.houses().map(|(id, h)| (id, h.served)).collect();
-    v.sort_unstable_by_key(|(id, _)| *id);
+/// What step 10 compares against: the part of a house the renderer is told
+/// about, as it was at the start of the tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HouseState {
+    id: HouseId,
+    served: ServiceFlags,
+    mood: Mood,
+}
+
+impl HouseState {
+    /// The state a house that did not exist at the start of the tick is
+    /// compared against.
+    const fn newborn(id: HouseId) -> Self {
+        Self {
+            id,
+            served: ServiceFlags::empty(),
+            mood: Mood::Desperate,
+        }
+    }
+}
+
+/// Every house's renderer-visible state, sorted by `HouseId` so step 10's
+/// comparison is a binary search and not a scan.
+///
+/// The mood is computed here and not stored on the `House`: it is derived from
+/// the satisfaction, and a second copy of it in the state would be one more
+/// field to hash, to keep in step and to get wrong.
+fn house_snapshot(world: &World) -> Vec<HouseState> {
+    let rules = &world.data.rules.satisfaction;
+    let required: &[ServiceKind] = world
+        .data
+        .house_def()
+        .map_or(&[], |d| d.required_services.as_slice());
+
+    let mut v: Vec<HouseState> = world
+        .houses()
+        .map(|(id, h)| HouseState {
+            id,
+            served: h.served,
+            mood: crate::satisfaction::mood_of(h, required, rules),
+        })
+        .collect();
+    v.sort_unstable_by_key(|s| s.id);
     v
 }
 
