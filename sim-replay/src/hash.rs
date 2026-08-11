@@ -11,7 +11,7 @@
 //! recordings stop protecting it: it is the known risk of A3, mitigated by the
 //! `the_hash_covers_the_whole_state` test.
 
-use sim_core::{Building, Economy, House, RngDomain, ServiceKind, World};
+use sim_core::{Building, Economy, House, RngDomain, ServiceKind, Walker, World};
 
 /// Domain prefix: keeps this hash apart from the dataset's.
 /// Changing it regenerates every recording.
@@ -21,13 +21,19 @@ const DOMAIN: &[u8] = b"brando/world/v1";
 ///
 /// What goes in: the tick, the dataset hash, the difficulty, the grid's
 /// dimensions, the tiles in `TileIdx` order, the buildings and the houses in id
-/// order, the economy and the position of every RNG stream.
+/// order, the walkers, the economy and the position of every RNG stream.
 ///
 /// What does **not** go in: `RoadNetwork`, `Coverage`, `DirtyFlags`,
-/// `FoodTotals`. They are derived or diagnostic structures; if they went in, a
-/// rebuild bug would show up as a hash divergence, while the test meant to
-/// catch it is the incremental-versus-from-scratch equivalence of phase 06 —
-/// which also says *where* the problem is.
+/// `FoodTotals`, `PopulationTotals`. They are derived or diagnostic structures;
+/// if they went in, a rebuild bug would show up as a hash divergence, while the
+/// test meant to catch it is the incremental-versus-from-scratch equivalence of
+/// phase 06 — which also says *where* the problem is.
+///
+/// Between those two lists there is no third category, and the walkers spent M0
+/// and most of M1 in it: state by D3, missing from the body, and missing from
+/// this paragraph too — so the omission read as an oversight and not as a
+/// decision. Whatever gets added to `World` goes in one list or the other, and
+/// saying which is part of adding it.
 ///
 /// `House::served` on the other hand **does** go in, even though it is computed
 /// from the coverage: it is a field of the state and it is the input M1 will
@@ -96,6 +102,17 @@ pub fn hash_world(w: &World) -> [u8; 32] {
         h.update(&residents.to_le_bytes());
         h.update(&[served.bits()]);
         h.update(satisfaction);
+    }
+
+    // --- walkers, in order (D3) ---
+    // Empty until M3, and hashed all the same. The length prefix on its own is
+    // what makes the first walker to exist move a recording, and adding it now
+    // costs one regeneration of two `.hashes` files; adding it once M3 fills
+    // the vector would mean the recordings had been blind on it in between.
+    h.update(&(w.walkers().len() as u64).to_le_bytes());
+    for walker in w.walkers() {
+        let Walker { at } = walker;
+        h.update(&[at.x, at.y]);
     }
 
     // --- economy ---

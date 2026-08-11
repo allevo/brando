@@ -345,6 +345,11 @@ fn the_hash_covers_the_whole_state() {
             let k = sim_core::ServiceKind::Food.index();
             h.satisfaction[k] = h.satisfaction[k].wrapping_sub(1);
         }),
+        // The walkers are empty until M3, so this is the one perturbation that
+        // cannot arise from replaying anything: it has to be put there by hand.
+        // That is exactly why it was missing — and why `field_canary` could not
+        // help, since `walkers: _` was already written into it.
+        ("a walker", |w| w.push_walker(TilePos::new(3, 4))),
         ("the treasury", |w| {
             w.economy_mut().treasury = w.economy().treasury.saturating_add(Coins::new(1));
         }),

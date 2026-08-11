@@ -151,6 +151,12 @@ pub struct World {
     /// guarantees (D4). It is a non-obvious invariant the state hash depends on.
     pub(crate) buildings: SlotMap<BuildingId, Building>,
     pub(crate) houses: SlotMap<HouseId, House>,
+    /// State, and **in** the hash — unlike the four derived structures below.
+    /// Empty until M3, and hashed all the same: the length prefix alone is what
+    /// makes the first walker to exist move a recording. It was left out until
+    /// the phase-13 review, and the two guards against exactly that (the field
+    /// canary here, the perturbation in `the_hash_covers_the_whole_state`) had
+    /// both already been spent on it.
     pub(crate) walkers: Vec<Walker>,
     pub(crate) economy: Economy,
     pub(crate) rng: RngSet,
@@ -471,6 +477,15 @@ impl World {
 
     pub const fn economy_mut(&mut self) -> &mut Economy {
         &mut self.economy
+    }
+
+    /// Puts a walker into the state, to check that the walkers enter the hash.
+    ///
+    /// A `push_walker` and not a `walkers_mut`: nothing in M0 or M1 steps a
+    /// walker — `step_walkers` is an empty function until M3 — so the only
+    /// thing a test needs is for one to exist. Narrower hook, same guarantee.
+    pub fn push_walker(&mut self, at: TilePos) {
+        self.walkers.push(Walker { at });
     }
 
     /// Consumes one value from a domain's stream, to check that the RNG's
