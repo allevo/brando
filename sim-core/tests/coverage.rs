@@ -236,6 +236,47 @@ fn the_capacity_runs_out_in_residents() {
     assert_eq!(residents, SMALL_WELL_CAPACITY, "the capacity is full");
 }
 
+/// And what that same rule does when a house weighs nothing.
+///
+/// A12 counts capacity in residents; A13's `hard` profile builds every house
+/// with zero of them. Where the two meet, `pick_within_capacity`'s
+/// `left.checked_sub(residents)` can never fail, so a provider serves however
+/// many empty houses are in range — here a well declared for four residents
+/// takes seven, and it would take any number.
+///
+/// Defensible on its own terms: an empty house genuinely consumes nothing. But
+/// coverage feeds satisfaction, so on the profile meant to be the hard one a
+/// single small well carries a whole district to the top of the ladder for
+/// free. It is a decision and not a bug, it is open as
+/// [A18](../../plan/open-decisions.md), and this test is here to pin what the
+/// game does today so the decision has something concrete to overturn: when
+/// A18 is closed in any direction but "accept it", this goes red, and that is
+/// the point of it.
+///
+/// It is also the only test in the suite that runs on `hard` other than the
+/// one in `commands.rs` that checks the knob itself.
+#[test]
+fn on_hard_an_empty_house_consumes_no_capacity() {
+    let mut w = world_at(32, 32, HARD);
+    roads(&mut w, &[(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]);
+    build(&mut w, SMALL_WELL, 4, 6);
+    for x in 1..=7 {
+        build(&mut w, HOUSE, x, 4);
+    }
+    assert_eq!(w.population(), 0, "on `hard` a house is born empty");
+
+    let small_well = w
+        .buildings()
+        .next()
+        .map(|(id, _)| id)
+        .expect("the small well");
+    assert_eq!(
+        w.coverage().houses_served_by(small_well).len(),
+        7,
+        "capacity {SMALL_WELL_CAPACITY} residents, and seven houses of nobody all get in"
+    );
+}
+
 /// Two providers covering the same house: in M0 the house is either served or
 /// not, and the first one in the providers' iteration order wins.
 #[test]

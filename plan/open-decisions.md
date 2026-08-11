@@ -7,10 +7,12 @@ From A7 onwards the file carries on past M0: these are decisions taken after it 
 same form. Whoever is looking for "why does the code do it this way and not that way" finds the
 answer here.
 
-> **Genuinely open, right now, there is only one:**
+> **Genuinely open, right now, there are two:**
 > [A17 — the per-tick recomputation cost](#a17--the-per-tick-recomputation-cost--open-to-close-before-m2),
-> to be closed before M2. It is the debt [A12](#a12--the-services-chase-the-population) opens on
-> purpose.
+> to be closed before M2 — it is the debt [A12](#a12--the-services-chase-the-population) opens on
+> purpose — and
+> [A18 — an empty house consumes no capacity](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15),
+> to be closed before phase 15.
 
 ## The state at the end of M0
 
@@ -58,6 +60,25 @@ end of M0, and that is no accident: it is the debt A12 opens.
 
 A12–A16 are still **predictions**. When M1 closes (phase 18) they have to be rewritten with how they
 really went — which for A2, A5 and A11 has been the most useful information in the document.
+
+## Decisions from the bug hunt after phase 13
+
+| # | Outcome | Note |
+|---|---|---|
+| A18 | **Open**, to close **before phase 15** | an empty house consumes no provider capacity, so on `hard` one well serves unboundedly many |
+
+It came out of a review of the whole tree on 2026-08-11 (see
+[the report](bug-hunt-2026-08-11.md)), which turned up six things. Five were bugs and were fixed
+in the same batch; this one is not a bug, it is a question nobody had been asked, and it is the
+second entry in this file to be genuinely open at the same time as another.
+
+The pattern worth noticing is that it sits **between** two decisions rather than inside either:
+[A12](#a12--the-services-chase-the-population) chose to count capacity in residents and
+[A13](#a13--game-difficulty-is-an-axis-of-the-state) chose a profile that starts houses at zero of
+them. Each is right on its own; the degenerate case is what neither was looking at. It is the third
+time in this document that the interesting thing has been an interaction and not a choice — A2 and
+A16 were both the dependency graph dictating a boundary — and it is the reason the register is worth
+keeping.
 
 ---
 
@@ -641,3 +662,73 @@ Whoever works on this decision has to keep **both** green, and it is worth askin
 be better to rebuild a single oracle first — for instance by comparing the coverage against
 `compute_from_scratch` at the point in the tick where it has just been computed, instead of at the end
 of the tick. That would be the first job to do, before touching any performance.
+
+---
+
+## A18 — An empty house consumes no capacity — **OPEN**, to close before phase 15
+
+`pick_within_capacity` (`sim-core/src/coverage.rs`) walks the candidates in priority order and
+subtracts each one's residents from what is left:
+
+```rust
+left = left.checked_sub(residents)?;      // residents == 0 always succeeds
+```
+
+On [A13](#a13--game-difficulty-is-an-axis-of-the-state)'s `hard` profile every house is born with
+`starting_residents_per_house: 0`, so the subtraction can never fail and **every house in range is
+picked, whatever the capacity** — including by a provider whose capacity is itself zero. The
+fixture's `small_well` declares four residents and serves seven empty houses in
+`on_hard_an_empty_house_consumes_no_capacity`; seven is not a limit, it is how many the test builds.
+
+### Why it is a decision and not a bug
+
+Because it follows from [A12](#a12--the-services-chase-the-population) doing exactly what it says.
+Capacity is counted in residents, an empty house has none, and it therefore weighs nothing. Read
+that way the behaviour is not a slip, it is the rule.
+
+What makes it a question anyway is that coverage does not only feed the food arithmetic — it feeds
+**satisfaction**, and satisfaction feeds the ladder. So on the profile that exists to make the game
+harder, one small well takes an entire district to the top rung for free, which is the opposite of
+what the profile is for. `hard` is meant to be the setting where the services have to be earned;
+today it is the setting where they are cheapest.
+
+It sits between two decisions rather than inside either. A12 chose the unit; A13 chose a starting
+value of zero for it. Neither was looking at the point where they meet, and that is the whole of
+this entry.
+
+### The candidate answers
+
+1. **Charge a minimum of one per house** — `left.checked_sub(residents.max(1))`. An empty house
+   still costs a place, so capacity stays meaningful at every population. Cheapest to write, and it
+   moves no recording today (the recorded scenarios run `easy`, where houses are born with four).
+   Its weakness is that it makes the unit no longer purely residents, which is a small lie in a
+   number the tables describe honestly.
+2. **Cap the candidate count as well as the residents** — a second bound, in houses, alongside the
+   one in residents. Honest about being two constraints, and it needs a second column in the table
+   and therefore a balancing pass.
+3. **Accept it and say so** — write the behaviour into `pick_within_capacity`'s doc comment as
+   intended, and let `hard` be a profile that starts generous and gets harder as it fills. It is
+   defensible, and it is the answer that costs nothing; it should be chosen deliberately rather than
+   by not choosing.
+
+### What is needed to close it
+
+**Phase 15's numbers.** Today the unbounded assignment is free, because nobody living in those
+houses eats or drinks. When migration lands, every one of them becomes a real claim on a provider
+sized for four, and the question stops being about satisfaction alone. Settle it before phase 15
+moves the recordings rather than after: the same change is one line now and a regeneration to
+attribute later.
+
+**And something to measure it with, which does not exist.** Nothing in the property suite exercises
+`hard` at all — every proptest builds its world with the bare `world()`, i.e. `easy`. Worse,
+`population_is_consistent` (`sim-core/tests/invariants.rs`) hardcodes
+`house_count * RESIDENTS_PER_HOUSE`, which *is* the `easy` constant, so the suite could not be
+pointed at `hard` even if someone wanted to: the invariant would fail on the profile rather than on
+a bug. Generalising it to read the profile off the `DataSet` is the prerequisite, and it belongs to
+phase 14, where the population starts moving for reasons other than the difficulty.
+
+*Watch out for one thing when it is closed.* Whichever answer wins, the fix lands in the same
+function that `CapacityBeyondOutput` depends on for *a house covered by food always eats*. Charging
+a minimum of one makes a provider serve **fewer** houses, never more, so the food invariant can only
+get safer — but the reasoning has to be redone rather than assumed, because it is the second time
+that function has turned out to carry a rule nobody had written down.

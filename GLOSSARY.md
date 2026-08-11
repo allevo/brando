@@ -80,4 +80,4 @@ history and breaks the recorded replays.
 | `FORMAT_VERSION` | `1` | The shape of a save file. It goes up when the shape changes, not when a name does. |
 | `CHECKPOINT_EVERY` | `30` | How far apart the committed checkpoints are. |
 | Benchmark labels `A.`–`G.` | — | `plan/09-invariants-closeout.md` and `plan/18` record timings against those letters. |
-| Decision codes `A1`–`A17`, phase numbers `00`–`18` | — | Referenced from about forty places. |
+| Decision codes `A1`–`A18`, phase numbers `00`–`18` | — | Referenced from about forty places. |
