@@ -110,7 +110,17 @@ pub(crate) fn production(world: &mut World) {
             .checked_mul_int(residents)
             .unwrap_or(Milli::ZERO);
         if !take_from_stock(world, provider, needed) {
-            world.food.covered_but_unfed += 1;
+            // Nothing ever decrements this. It counts house-ticks — events
+            // already past — and a tick that goes well does not undo one that
+            // did not: that is the whole point, a single assertion at the end
+            // of a run covers every tick of it. "How many houses are hungry
+            // right now" is a different question, and `served`'s food bit
+            // already answers it.
+            //
+            // Saturating and not wrapping: the value has to stay zero, so any
+            // increment at all is a bug already — and wrapping back round to
+            // zero would make `covered_houses_are_fed` pass by overflow.
+            world.food.covered_but_unfed = world.food.covered_but_unfed.saturating_add(1);
         }
     }
 }
