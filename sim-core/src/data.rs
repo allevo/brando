@@ -143,6 +143,10 @@ impl DifficultyId {
     pub const fn get(self) -> u8 {
         self.0
     }
+
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
 /// A difficulty profile: the knobs chosen at the start of a game.
@@ -200,7 +204,7 @@ impl DataSet {
     }
 
     pub fn def(&self, kind: BuildingKindId) -> Option<&BuildingDef> {
-        self.buildings.get(usize::from(kind.get()))
+        self.buildings.get(kind.as_usize())
     }
 
     /// Resolves the textual id used in the tables and in the scenarios.
@@ -210,7 +214,7 @@ impl DataSet {
     }
 
     pub fn difficulty(&self, d: DifficultyId) -> Option<&DifficultyDef> {
-        self.difficulties.get(usize::from(d.get()))
+        self.difficulties.get(d.as_usize())
     }
 
     /// Resolves the textual id used in the tables and in the replay headers.

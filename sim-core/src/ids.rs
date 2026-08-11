@@ -51,6 +51,10 @@ impl BuildingKindId {
     pub const fn get(self) -> u16 {
         self.0
     }
+
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
 /// A position on the grid. `x` and `y` are `u8` because the maximum side is
