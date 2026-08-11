@@ -5,13 +5,14 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::raw::{RawBuildingTable, RawDataSet, RawRules, RawTerrainTable};
+use crate::raw::{RawBuildingTable, RawDataSet, RawDifficultyTable, RawRules, RawTerrainTable};
 use crate::validate::{ValidationReport, validate};
 use sim_core::data::DataSet;
 
 const FILE_RULES: &str = "rules.ron";
 const FILE_TERRAIN: &str = "terrain.ron";
 const FILE_BUILDINGS: &str = "buildings.ron";
+const FILE_DIFFICULTY: &str = "difficulty.ron";
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
@@ -33,7 +34,7 @@ pub enum LoadError {
     Validation(#[from] ValidationReport),
 }
 
-/// Loads the three tables from a directory.
+/// Loads the four tables from a directory.
 pub fn load_from_dir(dir: &Path) -> Result<DataSet, LoadError> {
     let read = |name: &str| -> Result<String, LoadError> {
         let path = dir.join(name);
@@ -42,7 +43,8 @@ pub fn load_from_dir(dir: &Path) -> Result<DataSet, LoadError> {
     let rules = read(FILE_RULES)?;
     let terrain = read(FILE_TERRAIN)?;
     let buildings = read(FILE_BUILDINGS)?;
-    from_ron_str(&rules, &terrain, &buildings)
+    let difficulty = read(FILE_DIFFICULTY)?;
+    from_ron_str(&rules, &terrain, &buildings, &difficulty)
 }
 
 /// Like [`load_from_dir`], but starting from content already read.
@@ -50,11 +52,17 @@ pub fn load_from_dir(dir: &Path) -> Result<DataSet, LoadError> {
 /// It serves the tests (which put together valid and broken tables without
 /// duplicating files on disk) and whoever will want to embed the tables in the
 /// binary.
-pub fn from_ron_str(rules: &str, terrain: &str, buildings: &str) -> Result<DataSet, LoadError> {
+pub fn from_ron_str(
+    rules: &str,
+    terrain: &str,
+    buildings: &str,
+    difficulty: &str,
+) -> Result<DataSet, LoadError> {
     let raw = RawDataSet {
         rules: parse::<RawRules>(FILE_RULES, rules)?,
         terrain: parse::<RawTerrainTable>(FILE_TERRAIN, terrain)?,
         buildings: parse::<RawBuildingTable>(FILE_BUILDINGS, buildings)?,
+        difficulty: parse::<RawDifficultyTable>(FILE_DIFFICULTY, difficulty)?,
     };
     Ok(validate(&raw)?)
 }

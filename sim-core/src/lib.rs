@@ -23,7 +23,10 @@ pub mod world;
 
 pub use command::{Command, CommandError};
 pub use coverage::Coverage;
-pub use data::{BuildingDef, DataSet, Rules, ServiceDef, TerrainDef, UnsustainableCapacity};
+pub use data::{
+    BuildingDef, DataSet, DifficultyBeyondCapacity, DifficultyDef, DifficultyId, Rules, ServiceDef,
+    TerrainDef, UnsustainableCapacity,
+};
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileOccupant};
 pub use ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};

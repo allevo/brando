@@ -58,10 +58,22 @@ pub struct RawServiceDef {
     pub capacity_per_level: Vec<u16>,
 }
 
-/// The three tables just deserialised, before any check.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawDifficultyTable {
+    pub profiles: Vec<RawDifficultyDef>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawDifficultyDef {
+    pub id: String,
+    pub starting_residents_per_house: u16,
+}
+
+/// The four tables just deserialised, before any check.
 #[derive(Debug, Clone)]
 pub struct RawDataSet {
     pub rules: RawRules,
     pub terrain: RawTerrainTable,
     pub buildings: RawBuildingTable,
+    pub difficulty: RawDifficultyTable,
 }

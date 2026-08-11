@@ -62,8 +62,19 @@ fn stocks_in_range(w: &World) -> Result<(), String> {
 }
 
 /// How much food one house eats in one tick, read from the `DataSet`.
+///
+/// The residents come from the **difficulty profile**, not from
+/// `residents_per_house_level`: since phase 11 that is what a house is really
+/// born with, and the level's value is only its ceiling. On the profile these
+/// tests play on the two coincide — reading the right one is what stops that
+/// from being a coincidence the day they stop coinciding.
 fn food_per_house(w: &World) -> Milli {
-    let residents = i32::from(w.data().rules.residents_per_house_level[0]);
+    let residents = i32::from(
+        w.data()
+            .difficulty(w.difficulty())
+            .expect("the world's profile is in the dataset")
+            .starting_residents_per_house,
+    );
     w.data()
         .rules
         .food_per_resident

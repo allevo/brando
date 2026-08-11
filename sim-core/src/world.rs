@@ -10,7 +10,7 @@ use std::sync::Arc;
 use slotmap::SlotMap;
 
 use crate::coverage::Coverage;
-use crate::data::DataSet;
+use crate::data::{DataSet, DifficultyId};
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
 use crate::network::RoadNetwork;
@@ -152,12 +152,20 @@ pub struct World {
     /// internal function; their hash feeds the state hash, so a balance change
     /// makes the replay fail immediately and for the right reason.
     pub(crate) data: Arc<DataSet>,
+    /// Chosen at the start of a game, never changeable afterwards: it changes
+    /// the simulation, so it is **state** — it goes into the hash and it
+    /// travels in the replay's header (A13).
+    pub(crate) difficulty: DifficultyId,
 }
 
 impl World {
     /// The initial world: an empty grid, the treasury from the `rules`, the RNG
     /// from the seed.
-    pub fn new(grid: Grid, data: Arc<DataSet>, seed: u64) -> Self {
+    ///
+    /// The difficulty is a parameter and not a default on purpose: it changes
+    /// the simulation, and a default is the mechanism by which one caller out
+    /// of four would silently keep playing on another profile (A13).
+    pub fn new(grid: Grid, data: Arc<DataSet>, seed: u64, difficulty: DifficultyId) -> Self {
         let treasury = data.rules.starting_treasury;
         let tiles = grid.len();
         Self {
@@ -175,11 +183,16 @@ impl World {
             buildings_by_origin: BTreeMap::new(),
             houses_by_origin: BTreeMap::new(),
             data,
+            difficulty,
         }
     }
 
     pub const fn tick(&self) -> u32 {
         self.tick
+    }
+
+    pub const fn difficulty(&self) -> DifficultyId {
+        self.difficulty
     }
 
     pub const fn grid(&self) -> &Grid {
@@ -433,5 +446,50 @@ impl World {
     pub fn consume_rng(&mut self, domain: crate::rng::RngDomain) {
         use rand::RngCore as _;
         self.rng.get(domain).next_u64();
+    }
+
+    /// Forces the difficulty of an already started game.
+    ///
+    /// The game itself never does this — the profile is chosen at the start and
+    /// stays put (A13). It exists for two tests: the perturbation that checks
+    /// the difficulty enters the state hash, and the one that compares two
+    /// games at different difficulties *net of the byte itself*, which is the
+    /// only way to say "the knob acted here and nowhere else" once the byte is
+    /// hashed from tick 0.
+    pub const fn set_difficulty(&mut self, difficulty: DifficultyId) {
+        self.difficulty = difficulty;
+    }
+
+    /// A **compile-time** canary for the state hash (A3).
+    ///
+    /// It does nothing at runtime. It exists because the exhaustive
+    /// `let World { .. }` stops compiling the moment a field is added to the
+    /// state: the reminder arrives while you are writing the field, not when a
+    /// test fails — and it arrives even if nobody has added the matching
+    /// perturbation to `the_hash_covers_the_whole_state`, which today is the
+    /// only way that test notices anything.
+    ///
+    /// If you are reading this because it does not compile: add the field here,
+    /// then decide whether it belongs in `hash_world` (state) or not
+    /// (derived/diagnostic), and either way write which of the two in the
+    /// field's doc comment.
+    pub const fn field_canary(&self) {
+        let Self {
+            tick: _,
+            grid: _,
+            buildings: _,
+            houses: _,
+            walkers: _,
+            economy: _,
+            rng: _,
+            dirty: _,
+            roads: _,
+            coverage: _,
+            food: _,
+            buildings_by_origin: _,
+            houses_by_origin: _,
+            data: _,
+            difficulty: _,
+        } = self;
     }
 }

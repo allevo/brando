@@ -117,8 +117,13 @@ fn a_different_dataset_fails_with_datasetmismatch() {
         1,
     );
     let altered = Arc::new(
-        sim_data::from_ron_str(&read("rules.ron"), &read("terrain.ron"), &buildings)
-            .expect("the altered table is still valid"),
+        sim_data::from_ron_str(
+            &read("rules.ron"),
+            &read("terrain.ron"),
+            &buildings,
+            &read("difficulty.ron"),
+        )
+        .expect("the altered table is still valid"),
     );
 
     let rec = recording("minimal");
@@ -142,6 +147,135 @@ fn an_unknown_format_version_is_an_error() {
     ));
 }
 
+/// Version 1 is the M0 header, which has no difficulty: reading it as if it
+/// were a version 2 would start a game on a profile nobody chose.
+#[test]
+fn the_previous_format_version_is_refused() {
+    let data = data();
+    let mut rec = recording("minimal");
+    rec.header.format_version = 1;
+    assert!(matches!(
+        sim_replay::replay(&rec, data, 1),
+        Err(ReplayError::UnsupportedFormat { found: 1, .. })
+    ));
+}
+
+// --- 5. difficulty (phase 11) -----------------------------------------------
+
+/// The phase's goal, in three parts.
+///
+/// The difficulty byte enters the state hash at tick 0, so two games on
+/// different profiles differ **from the start** — that is the first part, and it
+/// is what makes a recording attributable to the profile it was played on.
+///
+/// The other two are the ones that say the knob acts *where it should and
+/// nowhere else*, and they can only be asked net of the byte itself: with both
+/// worlds forced onto the same profile, the states have to be identical before
+/// the first house is built and different after. Without the normalisation the
+/// question cannot even be put, because the byte alone would answer it.
+#[test]
+fn the_difficulty_acts_on_new_houses_and_nowhere_else() {
+    let data = data();
+    let easy = recording("minimal");
+    assert_eq!(easy.header.difficulty, "easy", "the committed profile");
+    let mut hard = easy.clone();
+    hard.header.difficulty = "hard".into();
+
+    let easy_id = data.difficulty_by_id("easy").expect("the easy profile");
+
+    // The scenario builds its houses at tick 2, so `until = 2` is the last
+    // state in which no house exists yet.
+    const BEFORE_THE_HOUSES: u32 = 2;
+    const AFTER_THE_HOUSES: u32 = 3;
+
+    // 1. The byte travels in the hash: different from tick 0, before anything
+    //    at all has happened.
+    let a = sim_replay::replay(&easy, Arc::clone(&data), 0).expect("replay");
+    let b = sim_replay::replay(&hard, Arc::clone(&data), 0).expect("replay");
+    assert_ne!(
+        hash_hex(&hash_world(&a)),
+        hash_hex(&hash_world(&b)),
+        "the difficulty must enter the state hash from tick 0"
+    );
+
+    // 2. Net of the byte, nothing else has changed before the first house.
+    let a = sim_replay::replay(&easy, Arc::clone(&data), BEFORE_THE_HOUSES).expect("replay");
+    let mut b = sim_replay::replay(&hard, Arc::clone(&data), BEFORE_THE_HOUSES).expect("replay");
+    assert_eq!(b.house_count(), 0, "no house has been built yet");
+    b.set_difficulty(easy_id);
+    assert_eq!(
+        hash_hex(&hash_world(&a)),
+        hash_hex(&hash_world(&b)),
+        "the difficulty acts somewhere other than on a newly-built house"
+    );
+
+    // 3. And from the first house on, it does change the state.
+    let a = sim_replay::replay(&easy, Arc::clone(&data), AFTER_THE_HOUSES).expect("replay");
+    let mut b = sim_replay::replay(&hard, Arc::clone(&data), AFTER_THE_HOUSES).expect("replay");
+    assert!(b.house_count() > 0, "the houses are there");
+    assert_eq!(b.population(), 0, "at hard a house is born empty");
+    assert!(a.population() > 0, "at easy it is not");
+    b.set_difficulty(easy_id);
+    assert_ne!(
+        hash_hex(&hash_world(&a)),
+        hash_hex(&hash_world(&b)),
+        "the difficulty does not change the state where it should"
+    );
+}
+
+/// `easy` is M0's behaviour: a house born at its full level-1 capacity.
+///
+/// It pins down that `starting_residents_per_house` is the profile's **only**
+/// effect — if it grew a second one by accident, the population after a game
+/// year would stop being exactly the houses times their capacity.
+#[test]
+fn easy_fills_a_house_the_way_m0_did() {
+    let data = data();
+    let max = data.rules.max_residents(1).expect("houses have a level 1");
+
+    for name in SCENARIOS {
+        let rec = recording(name);
+        let w = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
+
+        assert!(w.house_count() > 0, "scenario {name} builds no houses");
+        assert_eq!(
+            w.population(),
+            w.house_count() as u32 * u32::from(max),
+            "scenario {name}: at easy every house is full"
+        );
+        for (_, h) in w.houses() {
+            assert_eq!(h.residents, max, "scenario {name}");
+        }
+    }
+}
+
+/// The header survives a round trip as the **textual** id, and a profile that
+/// does not exist is a structured error — not a panic, and above all not a
+/// silent fallback onto some other game.
+#[test]
+fn the_header_carries_the_profile_by_name() {
+    let data = data();
+    let rec = recording("minimal");
+
+    let text = rec.to_ron().expect("serialisable");
+    assert!(
+        text.contains(r#"difficulty: "easy""#),
+        "the recording has to stay readable: {text:.400}"
+    );
+    let back: Recording = ron::from_str(&text).expect("readable");
+    assert_eq!(back.header, rec.header);
+
+    let mut unknown = rec.clone();
+    unknown.header.difficulty = "impossible".into();
+    match sim_replay::replay(&unknown, data, 1) {
+        Err(ReplayError::UnknownDifficulty { found, known }) => {
+            assert_eq!(found, "impossible");
+            assert!(known.contains("easy"), "the known ones are listed: {known}");
+        }
+        other => panic!("expected UnknownDifficulty, found {other:?}"),
+    }
+}
+
 // --- 6. the hash covers the whole state -------------------------------------
 
 /// A mitigation of A3's known risk: the hash is written by hand, so a new field
@@ -156,6 +290,13 @@ fn the_hash_covers_the_whole_state() {
     let rec = recording("minimal");
     let base = sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");
     let h0 = hash_world(&base);
+
+    // The compile-time half of the same guard: this call does nothing at
+    // runtime, but `World::field_canary` stops compiling the moment a field is
+    // added to the state — which is the reminder that a perturbation for it
+    // belongs in the list below. Without it, this test stays green on a field
+    // the hash has gone blind on.
+    base.field_canary();
 
     /// A perturbation of a single field of the state.
     type Perturbation = (&'static str, fn(&mut World));
@@ -188,6 +329,13 @@ fn the_hash_covers_the_whole_state() {
         }),
         ("the treasury", |w| {
             w.economy_mut().treasury = w.economy().treasury.saturating_add(Coins::new(1));
+        }),
+        ("the difficulty", |w| {
+            let other = w
+                .data()
+                .difficulty_by_id("hard")
+                .expect("the hard profile exists");
+            w.set_difficulty(other);
         }),
     ];
 
@@ -261,6 +409,10 @@ fn the_recordings_match_the_dataset_and_are_readable() {
         let rec = recording(name);
         assert_eq!(rec.header.dataset_hash, data.hash_hex(), "scenario {name}");
         assert_eq!(rec.header.format_version, sim_replay::FORMAT_VERSION);
+        assert!(
+            data.difficulty_by_id(&rec.header.difficulty).is_some(),
+            "scenario {name}: the header names a profile that does not exist"
+        );
         assert!(!rec.commands.is_empty(), "scenario {name} has no commands");
 
         let mut previous = 0;

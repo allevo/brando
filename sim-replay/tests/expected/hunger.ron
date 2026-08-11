@@ -1,13 +1,14 @@
 Recording(
   header: Header(
-    format_version: 1,
+    format_version: 2,
     seed: 42,
+    difficulty: "easy",
     grid: GridSpec(
       width: 32,
       height: 32,
       terrain: Plain,
     ),
-    dataset_hash: "c1b5e1121ae436ce9a5602e2fbcff412c2ca9ae3a460e8d66a3b8106a7b1be6f",
+    dataset_hash: "ab8711b750cbb5a046b8703c5132be379fdcab53d60d635061c91ad64d6157dd",
   ),
   commands: [
     (0, PlaceRoad(

@@ -14,10 +14,18 @@ pub fn expected_ticks(data: &DataSet) -> u32 {
 }
 
 pub fn record(sc: &Scenario, data: &DataSet) -> Recording {
+    // The textual id and not the index: reordering the table must not silently
+    // change the meaning of a recording already written (A13).
+    let difficulty = data
+        .difficulty(sc.difficulty)
+        .map(|d| d.id.clone())
+        .unwrap_or_else(|| panic!("the scenario's profile is not in the dataset"));
+
     Recording {
         header: Header {
             format_version: sim_replay::FORMAT_VERSION,
             seed: sc.seed,
+            difficulty,
             grid: GridSpec {
                 width: sc.side,
                 height: sc.side,

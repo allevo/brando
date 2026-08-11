@@ -7,7 +7,9 @@ use sim_core::{Command, Terrain};
 
 /// Version of the format. It goes up when the shape of the file changes, not
 /// when the balancing does: that is what `dataset_hash` is for.
-pub const FORMAT_VERSION: u16 = 1;
+///
+/// 2 since phase 11: the header carries the difficulty profile.
+pub const FORMAT_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridSpec {
@@ -20,6 +22,13 @@ pub struct GridSpec {
 pub struct Header {
     pub format_version: u16,
     pub seed: u64,
+    /// The difficulty profile's **textual** id, not its index (A13).
+    ///
+    /// A recording saying `difficulty: 1` cannot be read, and reordering the
+    /// table would silently change the meaning of every save file already
+    /// written. The cost is one lookup on opening; the return is that the file
+    /// stays what a recording has to be, which is readable.
+    pub difficulty: String,
     pub grid: GridSpec,
     /// blake3 of the `DataSet`, in hexadecimal so it stays readable in the file.
     ///

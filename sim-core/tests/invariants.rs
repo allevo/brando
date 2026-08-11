@@ -418,6 +418,20 @@ fn the_fixture_keeps_capacity_and_output_consistent() {
     );
 }
 
+/// The same argument as above, for the difficulty profiles: a house born beyond
+/// `max_residents(1)` is a state the rest of the game cannot represent, and the
+/// fixture must not be allowed to reach it by a route production is closed off
+/// from.
+#[test]
+fn the_fixture_keeps_difficulty_within_house_capacity() {
+    let d = dataset();
+    assert_eq!(
+        d.difficulty_beyond_house_capacity(),
+        vec![],
+        "a fixture profile builds houses beyond their own capacity"
+    );
+}
+
 /// A command off the map is always rejected, never a panic and never a silent
 /// success.
 #[test]

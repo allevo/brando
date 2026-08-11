@@ -20,6 +20,14 @@ pub enum ReplayError {
     #[error("unsupported format version: {found}, this build reads {expected}")]
     UnsupportedFormat { found: u16, expected: u16 },
 
+    /// The header's profile does not exist in the table.
+    ///
+    /// A distinct error from [`ReplayError::DatasetMismatch`] because the cause
+    /// is different: there the balancing has changed, here a profile has been
+    /// removed or renamed.
+    #[error("unknown difficulty profile: {found:?} (known: {known})")]
+    UnknownDifficulty { found: String, known: String },
+
     #[error("invalid grid in the header: {0}")]
     InvalidGrid(#[from] sim_core::GridError),
 }
@@ -47,9 +55,19 @@ pub fn initial_world(rec: &Recording, data: Arc<DataSet>) -> Result<World, Repla
             found,
         });
     }
+    // The header names the profile, so a save always replays on the difficulty
+    // it was played on. There is no fallback: a default here is how a recording
+    // would silently change game halfway through the project (A13).
+    let difficulty = data
+        .difficulty_by_id(&rec.header.difficulty)
+        .ok_or_else(|| ReplayError::UnknownDifficulty {
+            found: rec.header.difficulty.clone(),
+            known: data.difficulty_ids(),
+        })?;
+
     let g = &rec.header.grid;
     let grid = Grid::new(g.width, g.height, g.terrain)?;
-    Ok(World::new(grid, data, rec.header.seed))
+    Ok(World::new(grid, data, rec.header.seed, difficulty))
 }
 
 /// Replays up to tick `until` (exclusive: after the call `world.tick()` equals

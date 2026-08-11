@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use crate::grid::Terrain;
 
-use crate::data::{BuildingDef, Rules, TerrainDef};
+use crate::data::{BuildingDef, DifficultyDef, Rules, TerrainDef};
 
 /// Domain prefix: keeps this hash apart from any other blake3 in the project.
 /// Changing it regenerates every recording.
@@ -23,39 +23,65 @@ pub(crate) fn dataset_hash(
     rules: &Rules,
     terrain: &BTreeMap<Terrain, TerrainDef>,
     buildings: &[BuildingDef],
+    difficulties: &[DifficultyDef],
 ) -> [u8; 32] {
     let mut h = blake3::Hasher::new();
     h.update(DOMAIN);
 
     // --- rules ---
-    h.update(&rules.ticks_per_month.to_le_bytes());
-    h.update(&rules.months_per_year.to_le_bytes());
-    h.update(&rules.starting_treasury.get().to_le_bytes());
-    h.update(&(rules.residents_per_house_level.len() as u64).to_le_bytes());
-    for a in &rules.residents_per_house_level {
+    // Destructured, not accessed field by field: the exhaustive pattern stops
+    // compiling the moment a field is added to the table, which is the cheapest
+    // possible reminder that A3's cost has to be paid here by hand.
+    let Rules {
+        ticks_per_month,
+        months_per_year,
+        starting_treasury,
+        residents_per_house_level,
+        food_per_resident,
+    } = rules;
+    h.update(&ticks_per_month.to_le_bytes());
+    h.update(&months_per_year.to_le_bytes());
+    h.update(&starting_treasury.get().to_le_bytes());
+    h.update(&(residents_per_house_level.len() as u64).to_le_bytes());
+    for a in residents_per_house_level {
         h.update(&a.to_le_bytes());
     }
-    h.update(&rules.food_per_resident.to_millis().to_le_bytes());
+    h.update(&food_per_resident.to_millis().to_le_bytes());
 
     // --- terrain, in Terrain order (the BTreeMap guarantees it) ---
     h.update(&(terrain.len() as u64).to_le_bytes());
     for (t, d) in terrain {
+        let TerrainDef {
+            buildable,
+            walkable,
+            road_cost,
+        } = d;
         h.update(&[*t as u8]);
-        h.update(&[u8::from(d.buildable), u8::from(d.walkable)]);
-        h.update(&d.road_cost.get().to_le_bytes());
+        h.update(&[u8::from(*buildable), u8::from(*walkable)]);
+        h.update(&road_cost.get().to_le_bytes());
     }
 
     // --- buildings, in BuildingKindId order ---
     h.update(&(buildings.len() as u64).to_le_bytes());
     for b in buildings {
+        let BuildingDef {
+            id,
+            size,
+            cost,
+            levels,
+            service,
+            required_services,
+            output_per_tick,
+            max_stock,
+        } = b;
         // The length before the content: without it, "ab"+"c" and "a"+"bc"
         // would give the same hash.
-        h.update(&(b.id.len() as u64).to_le_bytes());
-        h.update(b.id.as_bytes());
-        h.update(&[b.size.0, b.size.1, b.levels]);
-        h.update(&b.cost.get().to_le_bytes());
+        h.update(&(id.len() as u64).to_le_bytes());
+        h.update(id.as_bytes());
+        h.update(&[size.0, size.1, *levels]);
+        h.update(&cost.get().to_le_bytes());
 
-        match &b.service {
+        match service {
             None => {
                 h.update(&[0u8]);
             }
@@ -67,13 +93,25 @@ pub(crate) fn dataset_hash(
             }
         }
 
-        h.update(&(b.required_services.len() as u64).to_le_bytes());
-        for s in &b.required_services {
+        h.update(&(required_services.len() as u64).to_le_bytes());
+        for s in required_services {
             h.update(&[s.index() as u8]);
         }
 
-        hash_opt_milli(&mut h, b.output_per_tick);
-        hash_opt_milli(&mut h, b.max_stock);
+        hash_opt_milli(&mut h, *output_per_tick);
+        hash_opt_milli(&mut h, *max_stock);
+    }
+
+    // --- difficulty profiles, in DifficultyId order ---
+    h.update(&(difficulties.len() as u64).to_le_bytes());
+    for d in difficulties {
+        let DifficultyDef {
+            id,
+            starting_residents_per_house,
+        } = d;
+        h.update(&(id.len() as u64).to_le_bytes());
+        h.update(id.as_bytes());
+        h.update(&starting_residents_per_house.to_le_bytes());
     }
 
     *h.finalize().as_bytes()

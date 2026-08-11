@@ -7,16 +7,29 @@
 
 use std::sync::Arc;
 
-use sim_core::{Command, DataSet, Grid, Terrain, TilePos, World};
+use sim_core::{Command, DataSet, DifficultyId, Grid, Terrain, TilePos, World};
 
 pub struct Scenario {
     pub name: &'static str,
     pub description: &'static str,
     pub seed: u64,
     pub side: u16,
+    /// The profile the scenario is played on. It is state, so it travels in the
+    /// recording's header and goes into the hash (A13).
+    pub difficulty: DifficultyId,
     /// The commands to apply, each with the tick it belongs to.
     pub commands: Vec<(u32, Command)>,
 }
+
+/// The profile the committed recordings are recorded on.
+///
+/// `easy` on purpose: it puts the same residents in a new house as M0 did, so
+/// phase 11's regeneration is attributable to the header and the difficulty
+/// byte alone, and nothing in the simulation moves with it. A recording on a
+/// different profile arrives when a profile has knobs that really change the
+/// simulation (phase 14): the full scenario × profile matrix would triple the
+/// files and add no coverage, because the determinism is the same.
+pub const RECORDED_DIFFICULTY: &str = "easy";
 
 pub fn by_name(name: &str, data: &DataSet) -> Option<Scenario> {
     match name {
@@ -31,6 +44,11 @@ pub const NAMES: [&str; 2] = ["minimal", "hunger"];
 fn kind(data: &DataSet, id: &str) -> sim_core::BuildingKindId {
     data.kind_by_id(id)
         .unwrap_or_else(|| panic!("the dataset must contain '{id}'"))
+}
+
+fn difficulty(data: &DataSet, id: &str) -> DifficultyId {
+    data.difficulty_by_id(id)
+        .unwrap_or_else(|| panic!("the dataset must contain the '{id}' profile"))
 }
 
 /// A road, a well, a farm and four houses: all of them served, food to spare.
@@ -73,6 +91,7 @@ fn minimal(data: &DataSet) -> Scenario {
         description: "four houses served by one well and one farm",
         seed: 42,
         side: 32,
+        difficulty: difficulty(data, RECORDED_DIFFICULTY),
         commands,
     }
 }
@@ -109,7 +128,7 @@ impl Scenario {
     pub fn world(&self, data: Arc<DataSet>) -> World {
         let grid = Grid::new(self.side, self.side, Terrain::Plain)
             .unwrap_or_else(|e| panic!("the scenario's grid is invalid: {e}"));
-        World::new(grid, data, self.seed)
+        World::new(grid, data, self.seed, self.difficulty)
     }
 
     /// The commands to apply at a given tick, in the order they were added:

@@ -1,0 +1,20 @@
+// Difficulty profiles (A13). Chosen at the start of a game and never changed
+// afterwards: it changes the simulation, so it travels in the replay's header
+// and goes into the state hash.
+//
+// Born with a single knob: phases 13, 14 and 16 add theirs here without
+// touching the header or World::new's signature again.
+(
+    profiles: [
+        // The residents of a newly-built house.
+        //
+        // At "easy" it is the whole capacity of a level-1 house, which is M0's
+        // behaviour. At "hard" it is zero: the house only fills up by
+        // migration (phase 15), and the city has to be earned. Validation
+        // refuses anything beyond rules.residents_per_house_level[0] — a house
+        // born beyond its own capacity is a state the game cannot represent.
+        (id: "easy",   starting_residents_per_house: 4),
+        (id: "normal", starting_residents_per_house: 2),
+        (id: "hard",   starting_residents_per_house: 0),
+    ],
+)

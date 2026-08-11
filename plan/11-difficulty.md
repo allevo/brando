@@ -234,9 +234,23 @@ will be the scenario proposing a profile, not defining a new one.
 
 ## Tests
 
-1. **The goal**: the same seed, the same commands, `easy` and `hard` ⇒ different hashes on the first
-   tick where a house gets built, and **the same before that**. The second half counts as much as
-   the first: it says the difficulty acts where it should and nowhere else.
+1. **The goal**: the same seed, the same commands, `easy` and `hard`, in three parts.
+
+   As written when this phase was planned, the test asked for different hashes on the first tick
+   where a house gets built and **the same before that** — and that cannot hold, because the
+   difficulty byte enters `hash_world` at tick 0 (see "The two hashes" above) and test 6 requires it
+   to. The two halves of the goal are still the right two questions; asking them takes one more
+   piece, `World::set_difficulty` behind `test-util`, which test 6's perturbation needs anyway:
+
+   - un-normalised, the hashes differ **from tick 0**: the profile travels in the state hash, which
+     is what makes a recording attributable to the game it was played on;
+   - with both worlds forced onto the same profile, the hashes are **equal** before the first house
+     is built;
+   - and **different** after.
+
+   The second and third count as much as the first: net of the byte itself they say the difficulty
+   acts where it should and nowhere else. Without the normalisation the question cannot even be put,
+   because the byte alone would answer it.
 2. **`easy` reproduces M0**: with `starting_residents_per_house == max_residents(1)`, the population
    after a game is the same as before the phase. It pins down that the knob is the only effect.
 3. **The header round-trips**: a `Recording` saved and read back keeps the textual id; a header with
@@ -260,12 +274,20 @@ cargo xtask run --difficulty hard --ticks 360
 ```
 
 The `.hashes` diff has to be **read**, not just committed: it has to diverge from the first
-checkpoint, because the difficulty byte goes into the hash from tick 0. If it diverged later, the
+checkpoint, because both the things this phase puts into the hash — the difficulty byte and the
+dataset hash, which moves with the fourth table — act from tick 0. If it diverged later, the
 difficulty is not in the hash where you think it is.
+
+That says *when*, though, not *what*, and with two causes acting at tick 0 it cannot on its own rule
+out a third. What rules it out is comparing the observable state with M0's: `cargo xtask run` over a
+game year on both scenarios, from a worktree at the previous commit and from this one, has to print
+the **same table**. If it does, nothing in the simulation moved and the hashes moved for exactly the
+two reasons intended.
 
 Then the manual check that closes the phase: **add any field at all to `World` and check that the
 project does not compile** until you add it to the canary. Remove it and commit. It is the same
 ritual as phase 02 with the variant at the top of `RngDomain`, and for the same reason: the safety
 net has to be seen to trip once, or you do not know it is there.
 
-**Done when:** test 1 passes in both its halves, and the canary has been seen to break the build.
+**Done when:** test 1 passes in all three of its parts, and the canary has been seen to break the
+build.
