@@ -139,10 +139,28 @@ fn preset(
 
     // A. An empty tick with nothing dirty: this is what you pay in the ticks
     //    where the player does not build, i.e. the vast majority.
-    let a = measure(reps * 5, |_| {
+    //
+    //    The **count of recomputations** across it is printed alongside,
+    //    because the number on its own cannot be diagnosed: an `A` costing
+    //    milliseconds with zero recomputations is a completely different fault
+    //    from one costing the same with a recomputation on every tick. It is
+    //    also how `J` — the fraction of ticks in which the population moved —
+    //    is read off directly instead of estimated (A17).
+    let ticks_a = reps * 5;
+    let recomputes_before = w.coverage().recomputes();
+    let a = measure(ticks_a, |_| {
         step(&mut w, &[]);
     });
-    row("A. empty tick, nothing dirty", &a, None);
+    let recomputed = w.coverage().recomputes() - recomputes_before;
+    row(
+        "A. empty tick, nothing dirty",
+        &a,
+        Some(format!(
+            "{recomputed} recomputes in {} ticks (J = {}%)",
+            a.ticks,
+            recomputed * 100 / a.ticks.max(1)
+        )),
+    );
 
     // B. One rejected command: the full validation path, no invalidation and so
     //    no recomputation.
@@ -627,6 +645,10 @@ fn rebuilt(real: &DataSet, edit: impl FnOnce(&mut sim_core::Rules)) -> DataSet {
 struct Measurement {
     median: u128,
     worst: u128,
+    /// How many times the measured closure ran, warm-ups included. It is what
+    /// a count taken across the whole measure — the recomputations — has to be
+    /// divided by.
+    ticks: u32,
 }
 
 fn measure(reps: u32, mut f: impl FnMut(u32)) -> Measurement {
@@ -645,6 +667,7 @@ fn measure(reps: u32, mut f: impl FnMut(u32)) -> Measurement {
         // typical cost.
         median: samples.get(samples.len() / 2).copied().unwrap_or(0),
         worst: samples.last().copied().unwrap_or(0),
+        ticks: reps + 2,
     }
 }
 

@@ -652,6 +652,40 @@ M1.
 - `J` — the fraction of ticks in which the population moved, over a whole game. It is the real
   multiplier: A12's cost is `J × G`, not `G`. In a full city `J` is low.
 
+### The measurement, taken in phase 14
+
+`cargo xtask bench --reps 100`, with and without `--zero-demographics`, on one machine in one
+sitting. At the reference scale (200×200, 15,000 residents):
+
+| | | |
+|---|---|---|
+| `H` — empty tick, demographics off | **324 µs** | |
+| `A` — empty tick, real rates | **3.600 ms** | |
+| `G` — `compute_from_scratch` alone | **3.251 ms** | 2,667 ns per provider |
+| `J` — ticks in which the population moved | **100%** | 502 recomputations in 502 ticks |
+| `I` — step 6 alone, derived as `(A − H) − J × G` | **~25 µs** | |
+
+**Two of the three expectations above were wrong, and that is the useful part.**
+
+**`J` is not low. It is one.** The sentence "in a full city `J` is low" was the hope that A12's cost
+would be amortised over the ticks where nobody moves. At the reference scale the population moves on
+*every* tick — 502 out of 502, and 97% at the mid-game scale — because a city of 15,000 residents
+has enough houses that at least one birth or death matures every single tick. A12's cost is
+therefore `G`, not `J × G`, and no countermeasure that relies on `J` being small is worth building.
+The multiplier was the discount this decision was quietly counting on, and it does not exist.
+
+**`H` moved: 324 µs against the ~280 µs the same machine measures at the end of phase 13.** Step 6
+now scans every house three times even with the rates at zero — twice to split the residents between
+the served and the unserved, once more for the average satisfaction — and that scan is a fixed cost
+the recomputation has nothing to do with. It is small next to `G` and it is real, and by the rule
+written above it is *a different thing to optimise*: it lives in `demographics.rs`, not in step 3.
+
+**What `I` says.** ~25 µs, against `G`'s 3.25 ms. The demographic work itself is not the problem by
+two orders of magnitude: **essentially the whole of A12's price is the coverage recomputation it
+triggers**, which is what the countermeasures below already assume. The derivation is arithmetic over
+four measured terms, not a guess — but with `J` at 1 the subtraction is `A − H − G`, a difference of
+large numbers, so ~25 µs should be read as "small" and not as a figure to three digits.
+
 **The candidate countermeasures, in order of payoff-to-risk.**
 
 1. **Targeted invalidation instead of global.** Today any change calls `mark_all_providers_dirty`. If
