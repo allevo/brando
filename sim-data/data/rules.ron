@@ -8,13 +8,13 @@
 
     starting_treasury: 1000,
 
-    // The house ladder (phase 13). One entry per level, level 1 first, and the
+    // The house levels (phase 13). One entry per level, level 1 first, and the
     // building's `levels` in buildings.ron has to say the same number.
     //
     // Three relations are checked, not commented (sim-core
     // `DataSet::inconsistencies`): max_residents grows, decay_threshold sits
-    // strictly below level_up_threshold on the same rung — that band is the
-    // hysteresis — and no threshold goes past satisfaction.max.
+    // strictly below level_up_threshold on the same level — that band is the
+    // gap — and no threshold goes past satisfaction.max.
     //
     // Level 1's two thresholds are read by nobody: nothing rises into level 1
     // and there is no level 0 to fall to. They are written as 0 so the table
@@ -22,7 +22,7 @@
     house_levels: [
         (
             // A hut: it wants water and nothing else. It is what makes the
-            // first rung reachable in a city that has not got a farm yet, and
+            // first level reachable in a city that has not got a farm yet, and
             // what makes the per-level requirements do real work instead of
             // repeating the same list three times.
             max_residents: 4,
@@ -33,7 +33,7 @@
         ),
         (
             // From here on the house eats. At step_up 4 a served house passes
-            // 50 in 13 ticks, so the rung is earned inside the first month and
+            // 50 in 13 ticks, so the level is earned inside the first month and
             // taken at the review that closes it.
             max_residents: 8,
             required_services: ["water", "food"],
@@ -42,7 +42,7 @@
             taxable_per_resident: 0,
         ),
         (
-            // The top rung asks for near-perfect service: 90 is reached at tick
+            // The top level asks for near-perfect service: 90 is reached at tick
             // 23, so it is the second review that grants it. Losing it takes a
             // fall to 60, four ticks of missing water at step_down 8.
             max_residents: 12,
@@ -65,9 +65,9 @@
         // getting it back is an investment.
         step_down: 8,
         // Where the bands the renderer draws begin: 25 is the lower bound of
-        // Unhappy, 50 of Happy, 75 of Thriving, and below 25 the house is
-        // Desperate. Ascending and above zero, so a house at zero is always
-        // Desperate.
+        // Unhappy, 50 of Happy, 75 of Great, and below 25 the house is
+        // Awful. Ascending and above zero, so a house at zero is always
+        // Awful.
         //
         // A tuple and not a list, like `size` in buildings.ron: the arity is
         // fixed by the number of bands, so one threshold too many is a

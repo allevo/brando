@@ -11,7 +11,7 @@
         // At "easy" it is the whole capacity of a level-1 house, which is M0's
         // behaviour. At "hard" it is zero: the house only fills up by
         // migration (phase 15), and the city has to be earned. Validation
-        // refuses anything beyond the first rung of rules.house_levels — a
+        // refuses anything beyond the first level of rules.house_levels — a
         // house born beyond its own capacity is a state the game cannot
         // represent.
         (id: "easy",   starting_residents_per_house: 4),

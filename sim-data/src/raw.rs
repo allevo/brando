@@ -18,7 +18,7 @@ pub struct RawRules {
     pub satisfaction: RawSatisfaction,
 }
 
-/// One rung of the house ladder (phase 13).
+/// One entry of the house levels table (phase 13).
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawHouseLevelDef {
     pub max_residents: u16,

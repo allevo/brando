@@ -116,7 +116,7 @@ fn a_building_cannot_stick_out_past_the_edge() {
     );
 
     assert_eq!(r.rejected.len(), 1);
-    assert!(matches!(r.rejected[0].1, CommandError::OutOfBounds(_)));
+    assert!(matches!(r.rejected[0].1, CommandError::OutsideMap(_)));
     assert_eq!(w.grid(), before.grid());
     assert_eq!(w.economy(), before.economy());
 }
@@ -145,7 +145,7 @@ fn an_empty_treasury_reports_the_right_numbers() {
     );
     assert_eq!(
         r.rejected[0].1,
-        CommandError::InsufficientFunds {
+        CommandError::NotEnoughMoney {
             needed: Coins::new(WELL_COST),
             available: Coins::ZERO,
         }
@@ -228,7 +228,7 @@ fn a_road_costs_money_sets_the_flag_and_dirties_the_network() {
 }
 
 #[test]
-fn nothing_gets_built_on_unsuitable_terrain() {
+fn nothing_gets_built_on_the_wrong_terrain() {
     let mut w = world();
     // A lake in the middle of the map.
     assert!(w.set_terrain(pos(6, 6), Terrain::Water));
@@ -249,7 +249,7 @@ fn nothing_gets_built_on_unsuitable_terrain() {
         assert!(
             matches!(
                 e,
-                CommandError::UnsuitableTerrain {
+                CommandError::WrongTerrain {
                     terrain: Terrain::Water,
                     ..
                 }

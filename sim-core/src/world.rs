@@ -25,7 +25,7 @@ use crate::units::{Coins, Milli};
 pub struct Building {
     pub kind: BuildingKindId,
     pub origin: TilePos,
-    /// Its rung of `range_per_level`/`capacity_per_level`. In M0 and M1 it
+    /// Its level of `range_per_level`/`capacity_per_level`. In M0 and M1 it
     /// always stays [`Level::FIRST`].
     pub level: Level,
     /// Local stock, only for producers (phase 07).
@@ -39,7 +39,7 @@ pub struct Building {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct House {
     pub origin: TilePos,
-    /// Its rung of `rules.house_levels`.
+    /// Its level of `rules.house_levels`.
     pub level: Level,
     pub residents: u16,
     /// Which services reach it this tick.
@@ -154,9 +154,9 @@ pub struct World {
     /// State, and **in** the hash — unlike the four derived structures below.
     /// Empty until M3, and hashed all the same: the length prefix alone is what
     /// makes the first walker to exist move a recording. It was left out until
-    /// the phase-13 review, and the two guards against exactly that (the field
-    /// canary here, the perturbation in `the_hash_covers_the_whole_state`) had
-    /// both already been spent on it.
+    /// the phase-13 review, and the two guards against exactly that
+    /// ([`World::every_field`] here, the per-field change in
+    /// `the_hash_covers_the_whole_state`) had both already been spent on it.
     pub(crate) walkers: Vec<Walker>,
     pub(crate) economy: Economy,
     pub(crate) rng: RngSet,
@@ -488,39 +488,39 @@ impl World {
         self.walkers.push(Walker { at });
     }
 
-    /// Consumes one value from a domain's stream, to check that the RNG's
+    /// Consumes one value from a kind's stream, to check that the RNG's
     /// position enters the hash.
-    pub fn consume_rng(&mut self, domain: crate::rng::RngDomain) {
+    pub fn consume_rng(&mut self, kind: crate::rng::RngKind) {
         use rand::RngCore as _;
-        self.rng.get(domain).next_u64();
+        self.rng.get(kind).next_u64();
     }
 
     /// Forces the difficulty of an already started game.
     ///
     /// The game itself never does this — the profile is chosen at the start and
-    /// stays put (A13). It exists for two tests: the perturbation that checks
-    /// the difficulty enters the state hash, and the one that compares two
-    /// games at different difficulties *net of the byte itself*, which is the
-    /// only way to say "the knob acted here and nowhere else" once the byte is
-    /// hashed from tick 0.
+    /// stays put (A13). It exists for two tests: the one that changes this
+    /// single field to check the difficulty enters the state hash, and the one
+    /// that compares two games at different difficulties *net of the byte
+    /// itself*, which is the only way to say "the knob acted here and nowhere
+    /// else" once the byte is hashed from tick 0.
     pub const fn set_difficulty(&mut self, difficulty: DifficultyId) {
         self.difficulty = difficulty;
     }
 
-    /// A **compile-time** canary for the state hash (A3).
+    /// A **compile-time** reminder for the state hash (A3).
     ///
     /// It does nothing at runtime. It exists because the exhaustive
     /// `let World { .. }` stops compiling the moment a field is added to the
     /// state: the reminder arrives while you are writing the field, not when a
-    /// test fails — and it arrives even if nobody has added the matching
-    /// perturbation to `the_hash_covers_the_whole_state`, which today is the
-    /// only way that test notices anything.
+    /// test fails — and it arrives even if nobody has added the matching change
+    /// to `the_hash_covers_the_whole_state`, which today is the only way that
+    /// test notices anything.
     ///
     /// If you are reading this because it does not compile: add the field here,
     /// then decide whether it belongs in `hash_world` (state) or not
     /// (derived/diagnostic), and either way write which of the two in the
     /// field's doc comment.
-    pub const fn field_canary(&self) {
+    pub const fn every_field(&self) {
         let Self {
             tick: _,
             grid: _,

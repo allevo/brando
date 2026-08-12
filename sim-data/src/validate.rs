@@ -174,9 +174,9 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
 /// core knows the relation, this crate knows what the file it came from is
 /// shaped like.
 fn path_of(i: &Inconsistency) -> String {
-    /// The path of a rung. It is the **index** the path names, not the level:
+    /// The path of a level. It is the **index** the path names, not the level:
     /// what the reader has to go and edit is an entry of a RON list.
-    fn rung(level: Level, field: &str) -> String {
+    fn level_path(level: Level, field: &str) -> String {
         format!("rules.house_levels[{}].{field}", level.as_usize())
     }
 
@@ -185,10 +185,16 @@ fn path_of(i: &Inconsistency) -> String {
         Inconsistency::LevelCountMismatch { .. }
         | Inconsistency::InconsistentRequirements { .. } => "rules.house_levels".to_string(),
         Inconsistency::CapacityNotIncreasing { level, .. }
-        | Inconsistency::CapacityBeyondEveryProvider { level, .. } => rung(level, "max_residents"),
-        Inconsistency::NoHysteresis { level, .. } => rung(level, "decay_threshold"),
-        Inconsistency::UnreachableThreshold { level, .. } => rung(level, "level_up_threshold"),
-        Inconsistency::ServiceWithoutProvider { level, .. } => rung(level, "required_services"),
+        | Inconsistency::CapacityBeyondEveryProvider { level, .. } => {
+            level_path(level, "max_residents")
+        }
+        Inconsistency::NoGap { level, .. } => level_path(level, "decay_threshold"),
+        Inconsistency::UnreachableThreshold { level, .. } => {
+            level_path(level, "level_up_threshold")
+        }
+        Inconsistency::ServiceWithoutProvider { level, .. } => {
+            level_path(level, "required_services")
+        }
         Inconsistency::CapacityBeyondOutput { building, .. } => {
             format!("buildings[{building}].service.capacity_per_level")
         }
@@ -250,10 +256,10 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
     }
 }
 
-/// The house ladder (phase 13), checked field by field.
+/// The house levels (phase 13), checked field by field.
 ///
 /// **Shape only.** Everything relational — the capacity that has to grow, the
-/// hysteresis band, a threshold beyond the ceiling, a service nobody provides —
+/// gap, a threshold beyond the ceiling, a service nobody provides —
 /// is [`Inconsistency`], because those are the checks that also have to protect
 /// `sim-core`'s fixture.
 ///
@@ -338,7 +344,7 @@ fn validate_satisfaction(s: &RawSatisfaction, rep: &mut ValidationReport) -> Sat
 
     // Strictly ascending and starting above zero. The first half keeps the
     // bands from overlapping; the second is what makes a satisfaction of zero
-    // always `Mood::Desperate`, which the renderer's contract for a newly-built
+    // always `Mood::Awful`, which the renderer's contract for a newly-built
     // house depends on.
     let mut previous = 0u8;
     for (i, &t) in s.mood_thresholds.iter().enumerate() {

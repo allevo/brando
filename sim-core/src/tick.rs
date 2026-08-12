@@ -68,8 +68,8 @@ fn apply_commands(world: &mut World, cmds: &[Command], r: &mut StepReport) {
 }
 
 fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutOfBounds(at))?;
-    let tile = world.grid.get(idx).ok_or(CommandError::OutOfBounds(at))?;
+    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
+    let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
 
     if tile.flags.has_road() {
         return Err(CommandError::TileOccupied {
@@ -86,7 +86,7 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
 
     let def = terrain_def(world, tile.terrain, at)?;
     if !def.walkable {
-        return Err(CommandError::UnsuitableTerrain {
+        return Err(CommandError::WrongTerrain {
             at,
             terrain: tile.terrain,
         });
@@ -131,10 +131,7 @@ fn place_building(
     // leave the state inconsistent.
     let tiles = tiles_covered(world, origin, size)?;
     for (idx, pos) in &tiles {
-        let tile = world
-            .grid
-            .get(*idx)
-            .ok_or(CommandError::OutOfBounds(*pos))?;
+        let tile = world.grid.get(*idx).ok_or(CommandError::OutsideMap(*pos))?;
         if tile.flags.has_road() {
             return Err(CommandError::TileOccupied {
                 at: *pos,
@@ -149,7 +146,7 @@ fn place_building(
         }
         let tdef = terrain_def(world, tile.terrain, *pos)?;
         if !tdef.buildable {
-            return Err(CommandError::UnsuitableTerrain {
+            return Err(CommandError::WrongTerrain {
                 at: *pos,
                 terrain: tile.terrain,
             });
@@ -197,7 +194,7 @@ fn place_building(
 }
 
 fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutOfBounds(at))?;
+    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
 
     if let Some(occ) = world.occupant(idx) {
         match occ {
@@ -207,7 +204,7 @@ fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), Co
         return Ok(());
     }
 
-    let tile = world.grid.get(idx).ok_or(CommandError::OutOfBounds(at))?;
+    let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
     if tile.flags.has_road() {
         if let Some(t) = world.grid.get_mut(idx) {
             t.flags.set_road(false);
@@ -327,7 +324,7 @@ fn houses_and_migration(world: &mut World, r: &mut StepReport) {
 /// Step 7 — treasury and taxes, M1.
 fn finance(_world: &mut World) {}
 
-/// Step 8 — random events, M1. First use of `RngDomain::Events`.
+/// Step 8 — random events, M1. First use of `RngKind::Events`.
 fn random_events(_world: &mut World) {}
 
 /// Step 9 — scenario objectives, M1 (needs `sim-scenario`).
@@ -345,7 +342,7 @@ fn emit_events(world: &mut World, before: &[HouseState], r: &mut StepReport) {
     for (house, h) in world.houses() {
         // A house born this tick has no "before": it starts uncovered and at
         // zero satisfaction, so if it is served the event is there, and its
-        // mood is the `Desperate` the renderer already assumes.
+        // mood is the `Awful` the renderer already assumes.
         let previous = before
             .binary_search_by_key(&house, |s| s.id)
             .map_or(HouseState::newborn(house), |i| before[i]);
@@ -388,7 +385,7 @@ impl HouseState {
         Self {
             id,
             served: ServiceFlags::empty(),
-            mood: Mood::Desperate,
+            mood: Mood::Awful,
         }
     }
 }
@@ -424,7 +421,7 @@ fn terrain_def(
     world
         .data
         .terrain(terrain)
-        .ok_or(CommandError::UnsuitableTerrain { at, terrain })
+        .ok_or(CommandError::WrongTerrain { at, terrain })
 }
 
 /// Takes the cost out of the treasury. A structured error, never a negative
@@ -433,12 +430,12 @@ fn charge(world: &mut World, cost: Coins) -> Result<(), CommandError> {
     let available = world.economy.treasury;
     let left = available
         .checked_sub(cost)
-        .ok_or(CommandError::InsufficientFunds {
+        .ok_or(CommandError::NotEnoughMoney {
             needed: cost,
             available,
         })?;
     if left.is_negative() {
-        return Err(CommandError::InsufficientFunds {
+        return Err(CommandError::NotEnoughMoney {
             needed: cost,
             available,
         });
@@ -461,13 +458,13 @@ fn tiles_covered(
             let x = origin
                 .x
                 .checked_add(dx)
-                .ok_or(CommandError::OutOfBounds(origin))?;
+                .ok_or(CommandError::OutsideMap(origin))?;
             let y = origin
                 .y
                 .checked_add(dy)
-                .ok_or(CommandError::OutOfBounds(origin))?;
+                .ok_or(CommandError::OutsideMap(origin))?;
             let pos = TilePos::new(x, y);
-            let idx = world.grid.idx(pos).ok_or(CommandError::OutOfBounds(pos))?;
+            let idx = world.grid.idx(pos).ok_or(CommandError::OutsideMap(pos))?;
             out.push((idx, pos));
         }
     }

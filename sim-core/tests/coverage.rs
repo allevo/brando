@@ -246,7 +246,7 @@ fn the_capacity_runs_out_in_residents() {
 ///
 /// Defensible on its own terms: an empty house genuinely consumes nothing. But
 /// coverage feeds satisfaction, so on the profile meant to be the hard one a
-/// single small well carries a whole district to the top of the ladder for
+/// single small well carries a whole district to the top level for
 /// free. It is a decision and not a bug, it is open as
 /// [A18](../../plan/open-decisions.md), and this test is here to pin what the
 /// game does today so the decision has something concrete to overturn: when
@@ -258,7 +258,10 @@ fn the_capacity_runs_out_in_residents() {
 #[test]
 fn on_hard_an_empty_house_consumes_no_capacity() {
     let mut w = world_at(32, 32, HARD);
-    roads(&mut w, &[(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]);
+    roads(
+        &mut w,
+        &[(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)],
+    );
     build(&mut w, SMALL_WELL, 4, 6);
     for x in 1..=7 {
         build(&mut w, HOUSE, x, 4);

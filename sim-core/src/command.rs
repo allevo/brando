@@ -30,16 +30,16 @@ pub enum Command {
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum CommandError {
     #[error("position outside the map: {0:?}")]
-    OutOfBounds(TilePos),
+    OutsideMap(TilePos),
 
     #[error("tile {at:?} is already taken by {occupant}")]
     TileOccupied { at: TilePos, occupant: OccupantKind },
 
-    #[error("unsuitable terrain at {at:?}: {terrain:?}")]
-    UnsuitableTerrain { at: TilePos, terrain: Terrain },
+    #[error("wrong terrain at {at:?}: {terrain:?}")]
+    WrongTerrain { at: TilePos, terrain: Terrain },
 
-    #[error("not enough funds: {needed} needed, {available} available")]
-    InsufficientFunds { needed: Coins, available: Coins },
+    #[error("not enough money: {needed} needed, {available} available")]
+    NotEnoughMoney { needed: Coins, available: Coins },
 
     #[error("unknown kind of building: {0:?}")]
     UnknownBuildingKind(BuildingKindId),

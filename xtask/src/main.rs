@@ -212,7 +212,7 @@ fn level_distribution(w: &World) -> String {
 ///
 /// The worst and not the mean of the two: it is the quantity the mood is
 /// computed from, so the column and what the renderer would draw say the same
-/// thing. A house with water and no food is desperate, not half happy — unless
+/// thing. A house with water and no food is awful, not half happy — unless
 /// its level does not ask for food, which since phase 13 is the case at level 1
 /// and is why the list is read per house instead of once.
 fn average_satisfaction(w: &World) -> u32 {

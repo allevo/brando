@@ -7,16 +7,16 @@
             id: "house",
             size: (1, 1),
             cost: 10,
-            // As many as rules.house_levels has rungs, and the house's area
+            // As many as rules.house_levels has levels, and the house's area
             // stays 1x1 at every one of them: houses that merge by taking over
             // their neighbours' tiles are a whole mechanic (Zeus has it) and
             // they are M3.
             levels: 3,
             service: None,
-            // The **union** of what the three rungs of rules.house_levels ask
+            // The **union** of what the three levels of rules.house_levels ask
             // for, and it has to stay that: `is_house()` classifies a building
             // as a house by this list being non-empty, so a house whose
-            // requirements moved entirely into the ladder would stop being read
+            // requirements moved entirely into the levels would stop being read
             // as one. Checked, not commented:
             // `Inconsistency::InconsistentRequirements`.
             required_services: ["water", "food"],

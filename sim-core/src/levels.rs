@@ -2,11 +2,11 @@
 //!
 //! Phase 12's satisfaction exists in order to be read by someone, and this is
 //! the first system that reads it. A house that has been served long enough
-//! rises a rung; one that has lost a service it depends on comes back down.
+//! rises a level; one that has lost a service it depends on comes back down.
 //!
 //! **Why the review is monthly and not every tick.** Not for the cost — with
 //! A12 levelling up does not touch the coverage, so it is cheap. It is because
-//! hysteresis on its own only protects against oscillation if the thresholds
+//! a gap on its own only protects against oscillation if the thresholds
 //! are far apart, whereas an infrequent cadence makes it **structural**: thirty
 //! ticks pass between two decisions, and a house cannot go up and down more
 //! than twelve times a year by construction. Satisfaction keeps accumulating
@@ -47,7 +47,7 @@ pub struct PopulationTotals {
     /// **It cannot move yet, and that is provable rather than hopeful.**
     /// Residents only ever arrive at construction, capped at
     /// `max_residents(1)`, and [`Inconsistency::CapacityNotIncreasing`] keeps
-    /// the ladder from ever shrinking, so the capacity a house falls back to is
+    /// the levels from ever shrinking, so the capacity a house falls back to is
     /// never below the number it was born with. Phase 14 is what makes this
     /// counter live; the code and its test are here so the term is pinned down
     /// before anything depends on it.
@@ -63,7 +63,7 @@ pub struct PopulationTotals {
 /// passes, decay and then levelling up; a single pass is the same thing with
 /// the guarantee made structural instead of inherited from the data. With two
 /// passes, "a house that has just come down must not go back up in the same
-/// review" holds only *because* the hysteresis band is validated — true today,
+/// review" holds only *because* the gap is validated — true today,
 /// and exactly the kind of dependency that goes quiet when a table changes.
 ///
 /// **Decay is evaluated first.** A house on its way down must not be able to
@@ -95,9 +95,9 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
         } else {
             continue;
         };
-        // `decays` and `rises` each guarantee the rung exists — level 1 never
+        // `decays` and `rises` each guarantee the level exists — level 1 never
         // decays, nothing rises past the top — so `None` cannot come out of
-        // here. Skipping is the answer that leaves the ladder intact the day it
+        // here. Skipping is the answer that leaves the table intact the day it
         // does, which is more than the saturating arithmetic this replaced
         // could say: that one moved the house to a level it had just been told
         // was not there.
@@ -118,7 +118,7 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
             // be off the table — and a fallback capacity of zero would empty
             // the house in one review. That is a population wipe, not the
             // convergence the descent is for: leave the residents alone until
-            // the house reaches a rung that exists, then apply its capacity.
+            // the house reaches a level that exists, then apply its capacity.
             if let Some(capacity) = rules.max_residents(to)
                 && h.residents > capacity
             {
@@ -148,7 +148,7 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
 ///
 /// A house standing at a level the table no longer contains comes down. It
 /// cannot happen through play — the dataset hash travels in the replay header,
-/// so a shortened ladder is a different game — and coming down is the
+/// so a shortened table is a different game — and coming down is the
 /// conservative answer: it converges on a level that exists instead of freezing
 /// there.
 fn decays(house: &House, rules: &Rules) -> bool {
@@ -174,7 +174,7 @@ fn decays(house: &House, rules: &Rules) -> bool {
 /// special case here: a level nobody has to earn is a table mistake, and it
 /// would be silently unreachable if this function pretended otherwise.
 fn rises(house: &House, rules: &Rules, top: Option<Level>) -> bool {
-    // No top is an empty ladder, which validation refuses: there is nowhere to
+    // No top is an empty table, which validation refuses: there is nowhere to
     // rise to, and nowhere the house could be standing either.
     if top.is_none_or(|top| house.level >= top) {
         return false;
@@ -196,10 +196,10 @@ mod tests {
     use crate::service::{ServiceFlags, ServiceKind};
     use crate::units::{Coins, Milli};
 
-    /// Three rungs, all wanting water: enough to exercise the ladder without
+    /// Three levels, all wanting water: enough to exercise the levels without
     /// bringing the per-level requirements into it, which is tested elsewhere.
-    fn ladder() -> Rules {
-        let rung = |max_residents, level_up_threshold, decay_threshold| HouseLevelDef {
+    fn rules() -> Rules {
+        let def = |max_residents, level_up_threshold, decay_threshold| HouseLevelDef {
             max_residents,
             required_services: vec![ServiceKind::Water],
             level_up_threshold,
@@ -210,7 +210,7 @@ mod tests {
             ticks_per_month: 30,
             months_per_year: 12,
             starting_treasury: Coins::ZERO,
-            house_levels: vec![rung(4, 0, 0), rung(8, 50, 25), rung(12, 90, 60)],
+            house_levels: vec![def(4, 0, 0), def(8, 50, 25), def(12, 90, 60)],
             food_per_resident: Milli::ZERO,
             satisfaction: SatisfactionRules {
                 max: 100,
@@ -221,7 +221,7 @@ mod tests {
         }
     }
 
-    /// A level from its number, so the tests below can go on talking in rungs.
+    /// A level from its number, so the tests below can go on talking in levels.
     fn lvl(number: u8) -> Level {
         Level::new(number).expect("levels count from 1")
     }
@@ -239,11 +239,11 @@ mod tests {
     }
 
     /// The band between the two thresholds is where nothing happens, whichever
-    /// side the house came from. It is the shape of the hysteresis, read off
-    /// the two predicates rather than off a running simulation.
+    /// side the house came from. It is the shape of the gap, read off the two
+    /// predicates rather than off a running simulation.
     #[test]
     fn inside_the_band_nothing_moves() {
-        let r = ladder();
+        let r = rules();
         let top = r.top_house_level();
         for water in 25..50 {
             let at_two = house(2, water);
@@ -257,7 +257,7 @@ mod tests {
     /// thresholds are inclusive at the bottom, like the mood bands.
     #[test]
     fn the_thresholds_are_inclusive_at_the_bottom() {
-        let r = ladder();
+        let r = rules();
         let top = r.top_house_level();
         assert!(rises(&house(1, 50), &r, top), "50 is level 2's threshold");
         assert!(!rises(&house(1, 49), &r, top));
@@ -267,8 +267,8 @@ mod tests {
 
     /// Level 1 has nowhere to fall, the top level has nowhere to rise.
     #[test]
-    fn the_ends_of_the_ladder_hold() {
-        let r = ladder();
+    fn the_ends_of_the_table_hold() {
+        let r = rules();
         let top = r.top_house_level();
         assert!(!decays(&house(1, 0), &r), "there is no level 0");
         assert!(!rises(&house(3, 100), &r, top), "there is no level 4");

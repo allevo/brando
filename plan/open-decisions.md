@@ -80,6 +80,17 @@ time in this document that the interesting thing has been an interaction and not
 A16 were both the dependency graph dictating a boundary — and it is the reason the register is worth
 keeping.
 
+## Decisions from the vocabulary review
+
+| # | Outcome | Note |
+|---|---|---|
+| A19 | **Taken** (2026-08-12) | which hard words earn their place: the domain's own words stay, synonym choices go |
+
+It came out of reading the whole tree against `GLOSSARY.md`'s opening promise — that no word sends
+you to a dictionary — for the first time since M0. The rule it produced now lives in `CLAUDE.md`'s
+code conventions; the reasoning is below, and it is the only entry in this file whose recommendation
+was **overturned in full**.
+
 ---
 
 ## A1 — Money is not `Milli`
@@ -734,3 +745,85 @@ function that `CapacityBeyondOutput` depends on for *a house covered by food alw
 a minimum of one makes a provider serve **fewer** houses, never more, so the food invariant can only
 get safer — but the reasoning has to be redone rather than assumed, because it is the second time
 that function has turned out to carry a rule nobody had written down.
+
+---
+
+## A19 — Plain words, and which hard words earn their place
+
+**Recommendation:** rename the load-bearing nouns that sit above an elementary reading level. An
+inventory of all four crates found about forty such words, and the four heaviest were `satisfaction`
+(149 uses), `coverage` (144), `capacity` (127) and `terrain` (126). The recommendation was to
+translate them — `comfort`, `reach`, `serves`/`max_residents`, `ground` — on the grounds that a word
+a ten-year-old cannot read is a word that fails the glossary's own promise.
+
+**How it really went: all four were kept, and that is what produced the rule.**
+
+The recommendation was wrong, and it was wrong in an interesting way. It treated "hard to read" as
+one property, when it is two. `terrain` is hard *once*: you meet it, you learn it, and it is then the
+word every other city builder and every map format also uses, so learning it pays you back outside
+this repository too. `InsufficientFunds` is hard *every time*, and teaches you nothing, because
+`NotEnoughMoney` was available and says exactly the same thing.
+
+So the rule is not about difficulty, it is about **whether the word is doing work**:
+
+> A hard word earns its place when it is the domain's own word, and then it is defined in
+> `GLOSSARY.md`. A hard word that is merely a synonym choice does not.
+
+What that decided, in one pass:
+
+- **Kept**, because they are the domain's: `satisfaction`, `coverage`, `capacity`, `terrain`,
+  `provider`, `residents`, `treasury`, `occupant`, `Demolish`, `stock`, `range`, `entrance`,
+  `decay`, `review`, `threshold`, `sustainable`, `Milli`, `Inconsistency`, `ComponentId`,
+  `propagate_coverage`, `invalidate_coverage`, `evicted`, `HouseEvolved`/`HouseDegraded`.
+- **Retired**, because a plainer word said the same thing: `hysteresis` → `gap`; `rung`/`ladder` →
+  `level` and `rules.house_levels`; `canary` → `every_field`; `perturbation` → *change*;
+  `InsufficientFunds` → `NotEnoughMoney`; `UnsuitableTerrain` → `WrongTerrain`; `OutOfBounds` →
+  `OutsideMap`; `Mood::Desperate`/`Thriving` → `Awful`/`Great`; `RngDomain` → `RngKind`;
+  the `DOMAIN` hash-prefix constants → `PREFIX`.
+
+`rung`/`ladder` is the case worth keeping. The metaphor was not translated, it was **deleted**: the
+table it named is already called `house_levels` and the type is already `Level`, so "ladder" was a
+third name for a thing that had two. The glossary got shorter rather than differently worded, which is
+the outcome to prefer whenever it is available.
+
+### Two limits, chosen deliberately
+
+**The RON keys did not move**, and neither did the Rust structs that mirror them — `Rules`,
+`HouseLevelDef`, `ServiceDef`, `DifficultyDef`, all of `sim-data/src/raw.rs`, with no
+`#[serde(rename)]` anywhere. So `Economy::treasury` and `Rules::starting_treasury` still agree, but a
+future rename on one side has to be spelled the same on the other or the seam opens. The alternative
+considered was renaming the keys too — hash-safe, since `data_hash.rs` feeds values and id strings and
+never key names — and it was declined to keep the files and the code reading alike.
+
+**Prose was left out**, except where a retired word survived in it. `monotone`, `cadence`,
+`equidistant`, `materialised`, `orthogonal`, `naivety`, `pedantry` are all still in the doc comments,
+and the messages still say "the output sustains" and "unreachable by construction". That is the
+larger half of the problem — the words a reader actually *meets* are mostly in prose, not in
+identifiers — and it is deliberately a separate pass on the same rule.
+
+### Why it cost nothing to do
+
+Names are never hashed. `sim-core/src/data_hash.rs` feeds field *values* and id *strings*;
+`sim-replay/src/hash.rs` destructures every struct but hashes only contents. Neither touches a field
+or a type name, so the whole pass came out with `regen-expected --check` green, both recordings
+byte-identical, and both benchmark state hashes unmoved — which is the proof, not a hope. Any naming
+pass after this one can be checked the same way, and if a hash moves, the rename was not a rename.
+
+### The audit found three glossary rows that were false
+
+Worth recording separately, because none of them was about vocabulary:
+
+1. **`mood`** claimed "the number itself never leaves the core". `House::satisfaction` is `pub`,
+   re-exported, and `xtask` averages it into the `sat.` column.
+2. **`capacity`** defined only the provider's sense; the code uses the word for a house's resident
+   ceiling just as often, and the row now admits both.
+3. **`FORMAT_VERSION`** was listed as frozen at `1`. It has been `2` since phase 11.
+
+Plus two frozen values that were load-bearing and unlisted — the declaration order of `RngKind`
+(hashed positionally, exactly the `Terrain` hazard) and the difficulty ids — and two words defined for
+phases that are not written yet, `jitter` and `attractiveness`, which are now marked as such instead
+of reading like stale entries.
+
+The general lesson, and it is A5's again in a third place: **a document that is checked by nobody
+drifts.** The glossary had no test. It still has none, but it now has a rule that says what belongs in
+it, which is the cheapest available substitute.

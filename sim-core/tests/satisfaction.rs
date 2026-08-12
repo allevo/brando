@@ -253,10 +253,10 @@ mod satisfaction {
             "the one the level does not require does not"
         );
 
-        // And the mood follows the required services only: this house is thriving
+        // And the mood follows the required services only: this house is doing great
         // on water alone.
         let m = mood(&w, house);
-        assert_eq!(m, Mood::Thriving);
+        assert_eq!(m, Mood::Great);
     }
 
     // --- 6. the event fires on the band, not on the value -----------------------
@@ -272,9 +272,9 @@ mod satisfaction {
         let (mut w, house) = a_served_house();
         let rules = w.data().rules.satisfaction.clone();
 
-        // A newborn house emits nothing: it is Desperate, which is what the
+        // A newborn house emits nothing: it is Awful, which is what the
         // renderer assumes from HousePlaced.
-        assert_eq!(mood(&w, house), Mood::Desperate);
+        assert_eq!(mood(&w, house), Mood::Awful);
 
         let mut moods = Vec::new();
         let mut ticks_without_event = 0usize;
@@ -311,7 +311,7 @@ mod satisfaction {
 
         assert_eq!(
             moods,
-            vec![Mood::Unhappy, Mood::Happy, Mood::Thriving],
+            vec![Mood::Unhappy, Mood::Happy, Mood::Great],
             "the bands are crossed in order, one event each"
         );
         assert!(
@@ -340,7 +340,7 @@ mod satisfaction {
         for _ in 0..climb {
             tick(&mut w, &[]);
         }
-        assert_eq!(mood(&w, house), Mood::Thriving);
+        assert_eq!(mood(&w, house), Mood::Great);
 
         let r = tick(&mut w, &[Command::Demolish { at: pos(2, 3) }]);
         let step_down = w.data().rules.satisfaction.step_down;
@@ -349,7 +349,7 @@ mod satisfaction {
         // top band, so nothing has been emitted yet.
         assert_eq!(
             Mood::of(max - step_down, &w.data().rules.satisfaction),
-            Mood::Thriving
+            Mood::Great
         );
         assert!(
             !r.events
@@ -369,7 +369,7 @@ mod satisfaction {
         }
         assert_eq!(
             seen,
-            vec![Mood::Happy, Mood::Unhappy, Mood::Desperate],
+            vec![Mood::Happy, Mood::Unhappy, Mood::Awful],
             "the bands come back down in order"
         );
         assert_eq!(

@@ -59,7 +59,7 @@ impl BuildingKindId {
     }
 }
 
-/// One rung of a per-level table: `rules.house_levels` for the house ladder,
+/// One level of a per-level table: `rules.house_levels` for the house levels,
 /// `range_per_level` and `capacity_per_level` for a provider's.
 ///
 /// **It stores the index and shows the number.** A level counts from 1 in the
@@ -69,14 +69,14 @@ impl BuildingKindId {
 /// (`checked_sub`, `saturating_sub`, `index + 1`). [`Level::as_usize`] is total
 /// precisely because the subtraction happens here, once.
 ///
-/// One type for both ladders, and not a `HouseLevel` beside a `BuildingLevel`:
+/// One type for both tables, and not a `HouseLevel` beside a `BuildingLevel`:
 /// they are the same shape, the checks in [`DataSet::inconsistencies`] report on
-/// both, and a provider's ladder stays one rung long for the whole of M1 (D6 —
+/// both, and a provider's levels stays one level long for the whole of M1 (D6 —
 /// the second type is invented until something needs to tell them apart).
 ///
 /// Not `Serialize`, like [`DifficultyId`]: what travels in a save file is
 /// `seed + Vec<Command>` (D4), never a level. Not `Default` either — the four
-/// places that mean the bottom rung say [`Level::FIRST`].
+/// places that mean the bottom level say [`Level::FIRST`].
 ///
 /// [`DataSet::inconsistencies`]: crate::data::DataSet::inconsistencies
 /// [`DifficultyId`]: crate::data::DifficultyId
@@ -84,15 +84,15 @@ impl BuildingKindId {
 pub struct Level(u8);
 
 impl Level {
-    /// The bottom rung. Every house and every building is born here.
+    /// The bottom level. Every house and every building is born here.
     pub const FIRST: Self = Self(0);
 
     /// The last index a `Level` may hold, so that [`Level::get`] cannot
-    /// overflow. A table of 255 rungs is not a case this game has: the bound is
+    /// overflow. A table of 255 levels is not a case this game has: the bound is
     /// what a total function owes, not a limit anybody will meet.
     const LAST_INDEX: u8 = u8::MAX - 1;
 
-    /// The rung with this number, counting from 1. `None` for zero: there is no
+    /// The level with this number, counting from 1. `None` for zero: there is no
     /// level 0, and this is the one place that has to say so.
     pub const fn new(number: u8) -> Option<Self> {
         match number.checked_sub(1) {
@@ -101,7 +101,7 @@ impl Level {
         }
     }
 
-    /// The rung at this position in a per-level table (index 0 = level 1).
+    /// The level at this position in a per-level table (index 0 = level 1).
     pub const fn from_index(index: usize) -> Self {
         if index > Self::LAST_INDEX as usize {
             Self(Self::LAST_INDEX)
@@ -118,14 +118,14 @@ impl Level {
     /// Its position in a per-level table.
     ///
     /// `pub`, where `TileIdx::as_usize` and `BuildingKindId::as_usize` are
-    /// `pub(crate)`: `sim-data` builds the RON path of a rung
+    /// `pub(crate)`: `sim-data` builds the RON path of a level
     /// (`rules.house_levels[i]`) out of it, and it is the index, not the number,
     /// that names the entry somebody has to go and fix.
     pub const fn as_usize(self) -> usize {
         self.0 as usize
     }
 
-    /// The rung above, `None` at the ceiling of the type.
+    /// The level above, `None` at the ceiling of the type.
     pub const fn next(self) -> Option<Self> {
         if self.0 < Self::LAST_INDEX {
             Some(Self(self.0 + 1))
@@ -134,7 +134,7 @@ impl Level {
         }
     }
 
-    /// The rung below, `None` at [`Level::FIRST`] — there is no level 0.
+    /// The level below, `None` at [`Level::FIRST`] — there is no level 0.
     pub const fn previous(self) -> Option<Self> {
         match self.0.checked_sub(1) {
             Some(index) => Some(Self(index)),
@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn the_ladder_has_two_ends() {
+    fn the_levels_have_two_ends() {
         assert_eq!(Level::new(0), None, "there is no level 0");
         assert_eq!(Level::FIRST.previous(), None);
         assert_eq!(Level::FIRST.next(), Level::new(2));

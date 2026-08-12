@@ -61,7 +61,7 @@ Non-negotiable rules:
 
 - **Never** iterate a `HashMap`/`HashSet`. Use `BTreeMap`, `IndexMap` or indexed `Vec`s.
 - **Never** `rand::thread_rng()`. The RNG lives in the state and is seeded (`rand_pcg::Pcg64`).
-- RNGs **separated per domain** (events, migration, production). That way adding a feature does not
+- RNGs **separated per kind** (events, migration, production). That way adding a feature does not
   knock the existing sequences out of phase and does not invalidate every recorded replay.
 - **No floats in the state.** Fractional quantities use the `Milli(i32)` newtype (thousandths) with
   checked operations. Floats are allowed only in the renderer.
@@ -121,7 +121,7 @@ pub struct World {
     houses: SlotMap<HouseId, House>,
     walkers: Vec<Walker>,                // real logistics ones only (D3)
     economy: Economy,
-    rng: RngSet,                         // RNGs separated per domain
+    rng: RngSet,                         // RNGs separated per kind
     dirty: DirtyFlags,
 }
 ```
@@ -204,7 +204,7 @@ enum Intent {
 ```
 
 The bot returns `Result<Vec<Command>, IntentFailure>`, where the failure is **descriptive**
-(`NoFlatSpaceNear`, `InsufficientFunds { needed, available }`, `RoadNetworkDisconnected`).
+(`NoFlatSpaceNear`, `NotEnoughMoney { needed, available }`, `RoadNetworkDisconnected`).
 That message goes back to the LLM as feedback and closes the loop.
 
 The determinism log records the primitive `Command`s; the `Intent`s are kept as metadata for
@@ -241,6 +241,17 @@ The renderer never calls methods that mutate the core. The only write channel is
 - `#![forbid(unsafe_code)]` in every `sim-*` crate.
 - Comments in English, like the rest of the repository. Doc comments on the public traits and on
   every non-obvious invariant.
+- **Naming — plain words, and which hard words earn their place ([A19](plan/open-decisions.md)).**
+  A hard word earns its place when it is the domain's own word, and then it is defined in
+  [GLOSSARY.md](GLOSSARY.md): you learn it once and it pays you back. `capacity`, `provider`,
+  `satisfaction`, `coverage`, `terrain` are of that kind and are staying. A hard word that is merely
+  a synonym choice does not earn anything: nobody learns from `InsufficientFunds` what
+  `NotEnoughMoney` tells them for free, and `hysteresis` was retired in favour of `gap`.
+  The bar is an elementary reading level, in English, for a reader who is not a native speaker.
+  **If a word is not plainly elementary and not already in `GLOSSARY.md`, ask before inventing it.**
+  This binds the names sketched here but not yet written — `NoFlatSpaceNear`,
+  `RoadNetworkDisconnected` and the `Intent` variants are illustrations of the *shape* of a
+  descriptive failure, not approved spellings.
 
 ---
 
@@ -271,7 +282,7 @@ What M0 covers, one line per crate:
 
 - `sim-core` — a `World` with a grid of at most 256×256, roads with connected components, service
   coverage over walked distance, food production and consumption, a ten-step tick (four full, six
-  empty pending M1/M3), primitive commands with structured errors, one RNG per domain. `Tile` fits in
+  empty pending M1/M3), primitive commands with structured errors, one RNG per kind. `Tile` fits in
   4 bytes.
 - `sim-data` — three RON tables validated with a complete error report and a hash of the dataset.
 - `sim-replay` — saving as `seed + Vec<Command>`, the state hash, two recorded replays with a

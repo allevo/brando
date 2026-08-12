@@ -1,8 +1,8 @@
-//! Deterministic RNG, one stream per domain (D4).
+//! Deterministic RNG, one stream per kind (D4).
 //!
 //! The hard requirement is not seeding the RNG: it is that the day a new
-//! domain is added, the recorded replays of the existing scenarios stay green.
-//! That is why each stream's seed derives from the domain's **name** and not
+//! kind is added, the recorded replays of the existing scenarios stay green.
+//! That is why each stream's seed derives from the kind's **name** and not
 //! from its position in the enum.
 
 use rand::{RngCore, SeedableRng};
@@ -15,24 +15,20 @@ use serde::{Deserialize, Serialize};
 /// does, the derivation is positional and that is a bug, not a recording to
 /// regenerate.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
-pub enum RngDomain {
+pub enum RngKind {
     Events,
     Migration,
     Production,
 }
 
-impl RngDomain {
+impl RngKind {
     /// Every variant, in declaration order. The order matters only for the
     /// state hash (phase 08), not for deriving the seeds.
-    pub const ALL: [RngDomain; 3] = [
-        RngDomain::Events,
-        RngDomain::Migration,
-        RngDomain::Production,
-    ];
+    pub const ALL: [RngKind; 3] = [RngKind::Events, RngKind::Migration, RngKind::Production];
 
     pub const COUNT: usize = Self::ALL.len();
 
-    /// The domain's stable salt.
+    /// The kind's stable salt.
     ///
     /// Do not rename a variant without regenerating the recordings: the name is
     /// part of the determinism contract, not a cosmetic detail.
@@ -44,10 +40,10 @@ impl RngDomain {
         }
     }
 
-    /// The slot this domain takes up in [`RngSet`].
+    /// The slot this kind takes up in [`RngSet`].
     ///
-    /// Assigned per variant and not by position in [`RngDomain::ALL`]: that is
-    /// what lets a domain be added at the top of the enum without moving the
+    /// Assigned per variant and not by position in [`RngKind::ALL`]: that is
+    /// what lets a kind be added at the top of the enum without moving the
     /// existing streams.
     const fn index(self) -> usize {
         match self {
@@ -57,7 +53,7 @@ impl RngDomain {
         }
     }
 
-    /// The inverse of [`RngDomain::index`]. `index_is_a_round_trip` checks the
+    /// The inverse of [`RngKind::index`]. `index_is_a_round_trip` checks the
     /// two really are inverses.
     const fn from_index(i: usize) -> Option<Self> {
         match i {
@@ -135,18 +131,18 @@ impl RngCore for Stream {
     }
 }
 
-/// The set of streams, one per domain.
+/// The set of streams, one per kind.
 ///
 /// The fields are deliberately private: if two systems could draw from the same
 /// stream in the same tick, the draw order would become an implicit contract.
-/// [`RngSet::get`] lends out one domain at a time.
+/// [`RngSet::get`] lends out one kind at a time.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct RngSet {
-    streams: [Stream; RngDomain::COUNT],
+    streams: [Stream; RngKind::COUNT],
 }
 
 impl RngSet {
-    /// Derives one stream per domain from the game's seed.
+    /// Derives one stream per kind from the game's seed.
     ///
     /// `blake3(seed_le || salt)` in XOF mode fills all 32 seed bytes of
     /// `Pcg64`: `seed_from_u64` would throw away entropy and make a collision
@@ -159,27 +155,27 @@ impl RngSet {
         let streams = std::array::from_fn(|i| {
             // Provable invariant: `from_index` is the inverse of `index` over
             // 0..COUNT, guarded by `index_is_a_round_trip`.
-            let d = RngDomain::from_index(i).expect("a slot < COUNT always has a domain");
+            let d = RngKind::from_index(i).expect("a slot < COUNT always has a kind");
             Stream::from_seed_bytes(derive_seed(seed, d))
         });
         Self { streams }
     }
 
-    /// Lends out a domain's stream for writing.
-    pub fn get(&mut self, domain: RngDomain) -> &mut Stream {
-        &mut self.streams[domain.index()]
+    /// Lends out a kind's stream for writing.
+    pub fn get(&mut self, kind: RngKind) -> &mut Stream {
+        &mut self.streams[kind.index()]
     }
 
     /// The stream's position, for the state hash (phase 08).
-    pub fn draws(&self, domain: RngDomain) -> u64 {
-        self.streams[domain.index()].draws()
+    pub fn draws(&self, kind: RngKind) -> u64 {
+        self.streams[kind.index()].draws()
     }
 }
 
-fn derive_seed(seed: u64, domain: RngDomain) -> [u8; 32] {
+fn derive_seed(seed: u64, kind: RngKind) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&seed.to_le_bytes());
-    hasher.update(domain.salt().as_bytes());
+    hasher.update(kind.salt().as_bytes());
     let mut out = [0u8; 32];
     hasher.finalize_xof().fill(&mut out);
     out
@@ -189,26 +185,26 @@ fn derive_seed(seed: u64, domain: RngDomain) -> [u8; 32] {
 mod tests {
     use super::*;
 
-    fn sequence(seed: u64, domain: RngDomain, n: usize) -> Vec<u64> {
+    fn sequence(seed: u64, kind: RngKind, n: usize) -> Vec<u64> {
         let mut set = RngSet::from_seed(seed);
-        let s = set.get(domain);
+        let s = set.get(kind);
         (0..n).map(|_| s.next_u64()).collect()
     }
 
     /// The expected values are written out by hand: comparing two instances
     /// against each other would pass even with a broken derivation.
     ///
-    /// If this test breaks after **adding** a variant to `RngDomain`, the
+    /// If this test breaks after **adding** a variant to `RngKind`, the
     /// derivation is positional and not by name: that is a bug, not a
     /// recording to regenerate.
     ///
     /// If it breaks after **renaming** a variant or changing a salt, that is
-    /// expected: the domain name is part of the contract (the recorded replays
+    /// expected: the kind name is part of the contract (the recorded replays
     /// have to be regenerated too).
     #[test]
     fn sequences_are_reproducible_with_the_expected_values() {
         assert_eq!(
-            sequence(42, RngDomain::Events, 8),
+            sequence(42, RngKind::Events, 8),
             [
                 16_951_895_464_066_535_839,
                 10_528_375_347_967_641_558,
@@ -221,7 +217,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            sequence(42, RngDomain::Migration, 4),
+            sequence(42, RngKind::Migration, 4),
             [
                 6_744_713_315_132_201_080,
                 14_951_314_113_004_524_121,
@@ -230,7 +226,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            sequence(42, RngDomain::Production, 4),
+            sequence(42, RngKind::Production, 4),
             [
                 7_953_230_224_566_493_169,
                 13_149_629_979_718_932_555,
@@ -244,23 +240,23 @@ mod tests {
     /// That is the invariant that licenses the `expect` in `RngSet::from_seed`.
     #[test]
     fn index_is_a_round_trip() {
-        for d in RngDomain::ALL {
-            assert!(d.index() < RngDomain::COUNT, "{d:?} outside the slots");
-            assert_eq!(RngDomain::from_index(d.index()), Some(d));
+        for d in RngKind::ALL {
+            assert!(d.index() < RngKind::COUNT, "{d:?} outside the slots");
+            assert_eq!(RngKind::from_index(d.index()), Some(d));
         }
-        for i in 0..RngDomain::COUNT {
-            let d = RngDomain::from_index(i).expect("slot covered");
+        for i in 0..RngKind::COUNT {
+            let d = RngKind::from_index(i).expect("slot covered");
             assert_eq!(d.index(), i);
         }
-        assert_eq!(RngDomain::from_index(RngDomain::COUNT), None);
+        assert_eq!(RngKind::from_index(RngKind::COUNT), None);
     }
 
     /// Catches the copy-paste in which two domains share a salt.
     #[test]
     fn the_domains_are_independent() {
-        let e = sequence(42, RngDomain::Events, 8);
-        let m = sequence(42, RngDomain::Migration, 8);
-        let p = sequence(42, RngDomain::Production, 8);
+        let e = sequence(42, RngKind::Events, 8);
+        let m = sequence(42, RngKind::Migration, 8);
+        let p = sequence(42, RngKind::Production, 8);
         assert_ne!(e, m);
         assert_ne!(e, p);
         assert_ne!(m, p);
@@ -274,16 +270,16 @@ mod tests {
         let mut a1 = Vec::new();
         let mut b1 = Vec::new();
         for _ in 0..4 {
-            a1.push(interleaved.get(RngDomain::Events).next_u64());
-            b1.push(interleaved.get(RngDomain::Production).next_u64());
+            a1.push(interleaved.get(RngKind::Events).next_u64());
+            b1.push(interleaved.get(RngKind::Production).next_u64());
         }
 
         let mut grouped = RngSet::from_seed(7);
         let a2: Vec<_> = (0..4)
-            .map(|_| grouped.get(RngDomain::Events).next_u64())
+            .map(|_| grouped.get(RngKind::Events).next_u64())
             .collect();
         let b2: Vec<_> = (0..4)
-            .map(|_| grouped.get(RngDomain::Production).next_u64())
+            .map(|_| grouped.get(RngKind::Production).next_u64())
             .collect();
 
         assert_eq!(a1, a2);
@@ -293,8 +289,8 @@ mod tests {
 
     #[test]
     fn different_seeds_give_different_sequences() {
-        for d in RngDomain::ALL {
-            assert_ne!(sequence(42, d, 8), sequence(43, d, 8), "domain {d:?}");
+        for d in RngKind::ALL {
+            assert_ne!(sequence(42, d, 8), sequence(43, d, 8), "kind {d:?}");
         }
     }
 
@@ -303,14 +299,14 @@ mod tests {
     #[test]
     fn draws_are_counted_per_domain() {
         let mut set = RngSet::from_seed(1);
-        assert_eq!(set.draws(RngDomain::Events), 0);
+        assert_eq!(set.draws(RngKind::Events), 0);
         for _ in 0..5 {
-            set.get(RngDomain::Events).next_u64();
+            set.get(RngKind::Events).next_u64();
         }
-        set.get(RngDomain::Migration).next_u32();
-        assert_eq!(set.draws(RngDomain::Events), 5);
-        assert_eq!(set.draws(RngDomain::Migration), 1);
-        assert_eq!(set.draws(RngDomain::Production), 0);
+        set.get(RngKind::Migration).next_u32();
+        assert_eq!(set.draws(RngKind::Events), 5);
+        assert_eq!(set.draws(RngKind::Migration), 1);
+        assert_eq!(set.draws(RngKind::Production), 0);
     }
 
     /// The state is equal iff the seed and the draw count are: that is the
@@ -321,11 +317,11 @@ mod tests {
         let mut a = RngSet::from_seed(9);
         let mut b = RngSet::from_seed(9);
         for _ in 0..3 {
-            a.get(RngDomain::Events).next_u64();
+            a.get(RngKind::Events).next_u64();
         }
         assert_ne!(a, b);
         for _ in 0..3 {
-            b.get(RngDomain::Events).next_u64();
+            b.get(RngKind::Events).next_u64();
         }
         assert_eq!(a, b);
     }
@@ -342,26 +338,29 @@ mod tests {
     fn fill_bytes_counts_a_draw_per_step() {
         let mut short = RngSet::from_seed(7);
         let mut long = RngSet::from_seed(7);
-        short.get(RngDomain::Events).fill_bytes(&mut [0u8; 8]);
-        long.get(RngDomain::Events).fill_bytes(&mut [0u8; 64]);
+        short.get(RngKind::Events).fill_bytes(&mut [0u8; 8]);
+        long.get(RngKind::Events).fill_bytes(&mut [0u8; 64]);
 
-        assert_eq!(short.draws(RngDomain::Events), 1);
-        assert_eq!(long.draws(RngDomain::Events), 8);
-        assert_ne!(short, long, "eight steps apart, and the count has to say so");
+        assert_eq!(short.draws(RngKind::Events), 1);
+        assert_eq!(long.draws(RngKind::Events), 8);
+        assert_ne!(
+            short, long,
+            "eight steps apart, and the count has to say so"
+        );
 
         // The count is not merely different, it is *right*: filling 64 bytes
         // leaves the generator exactly where eight `next_u64` would.
         let mut stepped = RngSet::from_seed(7);
         for _ in 0..8 {
-            stepped.get(RngDomain::Events).next_u64();
+            stepped.get(RngKind::Events).next_u64();
         }
         assert_eq!(stepped, long);
 
         // The tail costs a step of its own, whatever its length.
         for (bytes, expected) in [(0usize, 0u64), (1, 1), (5, 1), (9, 2), (17, 3)] {
             let mut s = RngSet::from_seed(7);
-            s.get(RngDomain::Events).fill_bytes(&mut vec![0u8; bytes]);
-            assert_eq!(s.draws(RngDomain::Events), expected, "{bytes} bytes");
+            s.get(RngKind::Events).fill_bytes(&mut vec![0u8; bytes]);
+            assert_eq!(s.draws(RngKind::Events), expected, "{bytes} bytes");
         }
     }
 }

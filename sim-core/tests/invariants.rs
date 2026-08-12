@@ -168,7 +168,7 @@ fn covered_houses_are_fed(w: &World) -> Result<(), String> {
 
 /// No house holds more residents than its level allows (phase 13).
 ///
-/// It is the invariant the whole ladder rests on: `residents <=
+/// It is the invariant the whole table rests on: `residents <=
 /// max_residents(level)` is assumed by the coverage, by the food arithmetic and
 /// by phase 14's demographics. Two things could break it — a house born beyond
 /// its level-1 capacity, and decay that shrinks a house without sending anyone
@@ -516,7 +516,7 @@ fn random_command(rng: &mut SplitMix64) -> Command {
 fn the_fixture_has_no_inconsistencies() {
     for (what, d) in [
         ("dataset", dataset()),
-        ("the service ladder", dataset_with_a_service_ladder()),
+        ("the service levels", dataset_with_service_levels()),
         (
             "a house that wants water only",
             dataset_where_a_house_requires(&[sim_core::ServiceKind::Water]),
@@ -566,6 +566,6 @@ fn off_the_map_is_always_rejected() {
     let r = tick(&mut w, &outside);
     assert_eq!(r.rejected.len(), outside.len());
     for (_, e) in &r.rejected {
-        assert!(matches!(e, CommandError::OutOfBounds(_)), "{e:?}");
+        assert!(matches!(e, CommandError::OutsideMap(_)), "{e:?}");
     }
 }

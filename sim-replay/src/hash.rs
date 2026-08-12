@@ -11,11 +11,11 @@
 //! recordings stop protecting it: it is the known risk of A3, mitigated by the
 //! `the_hash_covers_the_whole_state` test.
 
-use sim_core::{Building, Economy, House, RngDomain, ServiceKind, Walker, World};
+use sim_core::{Building, Economy, House, RngKind, ServiceKind, Walker, World};
 
-/// Domain prefix: keeps this hash apart from the dataset's.
+/// Hash prefix: keeps this hash apart from the dataset's.
 /// Changing it regenerates every recording.
-const DOMAIN: &[u8] = b"brando/world/v1";
+const PREFIX: &[u8] = b"brando/world/v1";
 
 /// The state hash, in an order fixed **here** and nowhere else.
 ///
@@ -42,7 +42,7 @@ const DOMAIN: &[u8] = b"brando/world/v1";
 /// would not move a single bit.
 pub fn hash_world(w: &World) -> [u8; 32] {
     let mut h = blake3::Hasher::new();
-    h.update(DOMAIN);
+    h.update(PREFIX);
 
     h.update(&w.tick().to_le_bytes());
     h.update(&w.data().hash);
@@ -73,7 +73,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     //
     // Destructured and not accessed field by field, here and below: the
     // exhaustive pattern stops compiling the moment a field is added, which is
-    // the same compile-time canary `World::field_canary` gives the state as a
+    // the same compile-time reminder `World::every_field` gives the state as a
     // whole — free wherever the fields are already `pub`.
     h.update(&(w.building_count() as u64).to_le_bytes());
     for (_, b) in w.buildings() {
@@ -124,7 +124,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     // which it has consumed 6, even if everything else matches: without this, a
     // divergence would show up many ticks later, where it is almost impossible
     // to attribute.
-    for d in RngDomain::ALL {
+    for d in RngKind::ALL {
         h.update(&w.rng().draws(d).to_le_bytes());
     }
 
