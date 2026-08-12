@@ -25,6 +25,63 @@ pub struct Rules {
     pub house_levels: Vec<HouseLevelDef>,
     pub food_per_resident: Milli,
     pub satisfaction: SatisfactionRules,
+    pub demographics: DemographicsRules,
+}
+
+/// The rates that drive births and deaths (phase 14).
+///
+/// **Per month and per thousand residents**, because that is the form you read
+/// and reason in. The conversion to ticks divides by `ticks_per_month` and
+/// loses nothing: what does not mature this tick stays in
+/// [`Demographics::remainder`].
+///
+/// [`Demographics::remainder`]: crate::demographics::Demographics
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DemographicsRules {
+    /// Births per thousand **eligible** residents per month, at the city's
+    /// maximum satisfaction. Counted against the eligible and not against the
+    /// population: that is what makes the plateau structural.
+    pub births_per_thousand_per_month: u16,
+    /// Deaths per thousand residents per month, in a house whose own level has
+    /// every service it asks for.
+    pub deaths_per_thousand_per_month: u16,
+    /// The rate for the residents of a house going without — below
+    /// `unserved_threshold` on any service **its own level** requires. Not
+    /// "hungry": a hut that asks for water only is not going without when there
+    /// is no farm.
+    pub deaths_per_thousand_per_month_when_unserved: u16,
+    /// The satisfaction below which a house counts as going without.
+    pub unserved_threshold: u8,
+    /// The satisfaction a house needs before it can have children.
+    pub birth_threshold: u8,
+    /// The jitter on a rate, in thousandths, symmetric: `200` is ±20%.
+    ///
+    /// It can move into the difficulty profile the day a harder game should
+    /// also be a more volatile one; it is here because there is no reason yet.
+    pub jitter_per_thousand: u16,
+}
+
+impl DemographicsRules {
+    /// Whether the demographics are **switched off**: every rate at zero.
+    ///
+    /// A legal configuration and not a degenerate one, which is why it is a
+    /// method and not an accident. Two things need it. `coverage_equivalence`
+    /// has to run on a city whose population cannot move, or it compares the
+    /// stored coverage against a from-scratch one computed after step 6 has
+    /// already moved somebody and diverges for a reason that is not a bug.
+    /// And `bench --zero-demographics` measures `H`, the tick with the
+    /// demographics off, which is the term A17 needs in order to tell the cost
+    /// of the recomputation apart from the cost of step 6 itself.
+    ///
+    /// All three rates or none: a table with births at zero and deaths at six
+    /// is a city that dies out, and that is the mistake
+    /// [`Inconsistency::UnsustainableDemographics`] exists to catch. Only the
+    /// unanimous case is "off".
+    pub const fn is_off(&self) -> bool {
+        self.births_per_thousand_per_month == 0
+            && self.deaths_per_thousand_per_month == 0
+            && self.deaths_per_thousand_per_month_when_unserved == 0
+    }
 }
 
 /// One entry of the house levels table (phase 13): what it holds, what it
@@ -417,7 +474,50 @@ impl DataSet {
         self.check_the_levels_can_be_served(&mut out);
         self.check_food_capacity(&mut out);
         self.check_difficulty(&mut out);
+        self.check_demographics(&mut out);
         out
+    }
+
+    /// The demographic rates have to describe a game that can be won.
+    ///
+    /// Two relations, and both are checks rather than comments for A5's reason
+    /// — a number that has to stand in a relation with another one is a check.
+    ///
+    /// **Births above deaths at the top.** If a city at maximum satisfaction,
+    /// fully served, still shrinks, then no growth scenario is winnable and
+    /// nothing in the game would say so: the population would simply drift
+    /// down and the player would read it as their own fault. It is the kind of
+    /// balancing mistake that surfaces only when M2's bot fails to complete
+    /// scenario 1, months later.
+    ///
+    /// **The two thresholds have to be reachable.** A birth threshold above
+    /// `satisfaction.max` means no city ever has a child, in silence — the same
+    /// fault as [`Inconsistency::UnreachableThreshold`] and caught for the same
+    /// reason.
+    fn check_demographics(&self, out: &mut Vec<Inconsistency>) {
+        let d = &self.rules.demographics;
+        // Switched off is a configuration, not a city that shrinks: with every
+        // rate at zero nothing is born and nobody dies, so "a perfect city
+        // still empties out" has nothing to say about it.
+        if !d.is_off() && d.births_per_thousand_per_month <= d.deaths_per_thousand_per_month {
+            out.push(Inconsistency::UnsustainableDemographics {
+                births: d.births_per_thousand_per_month,
+                deaths: d.deaths_per_thousand_per_month,
+            });
+        }
+        let max = self.rules.satisfaction.max;
+        for (what, threshold) in [
+            ("birth_threshold", d.birth_threshold),
+            ("unserved_threshold", d.unserved_threshold),
+        ] {
+            if threshold > max {
+                out.push(Inconsistency::UnreachableDemographicThreshold {
+                    what,
+                    threshold,
+                    max,
+                });
+            }
+        }
     }
 
     /// The house building and `rules.house_levels` describe the same house.
@@ -717,6 +817,24 @@ pub enum Inconsistency {
         starting: u16,
         /// Residents a house can hold at level 1.
         max_residents: u16,
+    },
+
+    #[error(
+        "{births} births against {deaths} deaths per thousand per month: a city \
+         at maximum satisfaction shrinks, so no growth scenario is winnable and \
+         nothing in the game would say so"
+    )]
+    UnsustainableDemographics { births: u16, deaths: u16 },
+
+    #[error(
+        "demographics.{what} is {threshold}, beyond the satisfaction ceiling of \
+         {max}: it is a condition no city can ever meet"
+    )]
+    UnreachableDemographicThreshold {
+        /// The field's name in the table, so the report points at it.
+        what: &'static str,
+        threshold: u8,
+        max: u8,
     },
 }
 

@@ -63,6 +63,7 @@ pub fn bench(args: &[String]) -> Result<(), String> {
     let reps = super::number(args, "--reps")?.unwrap_or(40).max(1);
     let side = super::number(args, "--side")?;
     let residents = super::number(args, "--residents")?;
+    let zero = args.iter().any(|a| a == "--zero-demographics");
 
     let real = sim_data::load_default().map_err(|e| format!("tables: {e}"))?;
     println!(
@@ -73,13 +74,19 @@ pub fn bench(args: &[String]) -> Result<(), String> {
         "{} repetitions per measure — compare two runs on the same machine",
         reps
     );
+    if zero {
+        println!(
+            "demographics switched off: A is H, the tick that pays for step 6 \
+             but not for the recomputation it triggers"
+        );
+    }
 
     // With just one of --side and --residents you measure that profile and
     // nothing else; with neither, the two reference profiles are measured.
     match (side, residents) {
         (None, None) => {
             for (name, s, r) in PRESETS {
-                preset(&real, name, s, r, reps)?;
+                preset(&real, name, s, r, reps, zero)?;
             }
         }
         (s, r) => preset(
@@ -88,15 +95,27 @@ pub fn bench(args: &[String]) -> Result<(), String> {
             s.unwrap_or(200).try_into().unwrap_or(u16::MAX),
             r.unwrap_or(15_000),
             reps,
+            zero,
         )?,
     }
     Ok(())
 }
 
-fn preset(real: &DataSet, name: &str, side: u16, residents: u32, reps: u32) -> Result<(), String> {
+fn preset(
+    real: &DataSet,
+    name: &str,
+    side: u16,
+    residents: u32,
+    reps: u32,
+    zero: bool,
+) -> Result<(), String> {
     println!("\n=== {name}: {side}x{side}, {residents} residents ===");
 
-    let data = Arc::new(with_unlimited_treasury(real));
+    let data = Arc::new(if zero {
+        without_demographics(real)
+    } else {
+        with_unlimited_treasury(real)
+    });
     let difficulty = data
         .difficulty_by_id(BENCH_DIFFICULTY)
         .ok_or_else(|| format!("the dataset has no '{BENCH_DIFFICULTY}' profile"))?;
@@ -570,8 +589,31 @@ fn apply(w: &mut World, cmds: &[Command]) -> Result<(), String> {
 /// measure, so the city always gets built in full. Everything else stays as
 /// `sim-data` has it.
 fn with_unlimited_treasury(real: &DataSet) -> DataSet {
+    rebuilt(real, |rules| {
+        rules.starting_treasury = Coins::new(i32::MAX / 2);
+    })
+}
+
+/// The same dataset with the demographics **switched off**.
+///
+/// What `--zero-demographics` measures on, and it is the term A17 needs: `A`
+/// with the rates at zero is `H`, the tick that pays for step 6 but not for the
+/// coverage recomputation step 6 triggers. Without `H` the cost of A12 cannot
+/// be told apart from the cost of the demographics themselves, and "optimise
+/// the recomputation" would be a guess — which is exactly the mistake A11 is
+/// the story of.
+fn without_demographics(real: &DataSet) -> DataSet {
+    rebuilt(real, |rules| {
+        rules.starting_treasury = Coins::new(i32::MAX / 2);
+        rules.demographics.births_per_thousand_per_month = 0;
+        rules.demographics.deaths_per_thousand_per_month = 0;
+        rules.demographics.deaths_per_thousand_per_month_when_unserved = 0;
+    })
+}
+
+fn rebuilt(real: &DataSet, edit: impl FnOnce(&mut sim_core::Rules)) -> DataSet {
     let mut rules = real.rules.clone();
-    rules.starting_treasury = Coins::new(i32::MAX / 2);
+    edit(&mut rules);
     DataSet::new(
         rules,
         real.terrain.clone(),

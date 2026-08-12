@@ -19,12 +19,22 @@ pub enum RngKind {
     Events,
     Migration,
     Production,
+    /// Births and deaths (phase 14) — the first kind any system actually draws
+    /// from. Migration keeps its own so that phase 15 does not knock this one's
+    /// sequence out of phase: that separation is the whole reason `RngKind`
+    /// exists, and in four phases of M0 it had never come up.
+    Demographics,
 }
 
 impl RngKind {
     /// Every variant, in declaration order. The order matters only for the
     /// state hash (phase 08), not for deriving the seeds.
-    pub const ALL: [RngKind; 3] = [RngKind::Events, RngKind::Migration, RngKind::Production];
+    pub const ALL: [RngKind; 4] = [
+        RngKind::Events,
+        RngKind::Migration,
+        RngKind::Production,
+        RngKind::Demographics,
+    ];
 
     pub const COUNT: usize = Self::ALL.len();
 
@@ -37,6 +47,7 @@ impl RngKind {
             Self::Events => "brando/rng/v1/events",
             Self::Migration => "brando/rng/v1/migration",
             Self::Production => "brando/rng/v1/production",
+            Self::Demographics => "brando/rng/v1/demographics",
         }
     }
 
@@ -50,6 +61,10 @@ impl RngKind {
             Self::Events => 0,
             Self::Migration => 1,
             Self::Production => 2,
+            // The new slot goes at the **end**: that is what keeps the three
+            // streams above exactly where they were, which
+            // `sequences_are_reproducible_with_the_expected_values` checks.
+            Self::Demographics => 3,
         }
     }
 
@@ -60,6 +75,7 @@ impl RngKind {
             0 => Some(Self::Events),
             1 => Some(Self::Migration),
             2 => Some(Self::Production),
+            3 => Some(Self::Demographics),
             _ => None,
         }
     }

@@ -45,7 +45,9 @@ fn usage() {
     eprintln!("  run --scenario <name> --ticks <n> [--dump-every <n>] [--difficulty <id>]");
     eprintln!("  record --scenario <name> --out <file.ron>");
     eprintln!("  regen-expected [--check]");
-    eprintln!("  bench [--side <n>] [--residents <n>] [--reps <n>]   (use --release)");
+    eprintln!(
+        "  bench [--side <n>] [--residents <n>] [--reps <n>] [--zero-demographics]   (use --release)"
+    );
     eprintln!();
     eprintln!("scenarios: {}", scenario::NAMES.join(", "));
 }

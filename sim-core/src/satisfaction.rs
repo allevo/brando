@@ -184,6 +184,14 @@ mod tests {
             ],
             food_per_resident: Milli::ZERO,
             satisfaction: rules(),
+            demographics: crate::data::DemographicsRules {
+                births_per_thousand_per_month: 1,
+                deaths_per_thousand_per_month: 0,
+                deaths_per_thousand_per_month_when_unserved: 1,
+                unserved_threshold: 25,
+                birth_threshold: 60,
+                jitter_per_thousand: 0,
+            },
         }
     }
 

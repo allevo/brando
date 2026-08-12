@@ -9,7 +9,7 @@
 //! |---|---|
 //! | No overlap, in both directions tile <-> building | here, `no_overlap_ever` |
 //! | Every occupied tile resolves to a live id in the slotmap | here, `no_overlap_ever` |
-//! | Population never negative and consistent with the houses that exist | here, `population_stays_consistent` |
+//! | Population conserved: every resident arrived by a counted flow and left by one | here, `population_is_conserved` |
 //! | Treasury consistent: starting amount minus the sum of accepted costs | here, `the_treasury_adds_up` |
 //! | Food conserved: produced = consumed + lost + stock | here, `food_is_conserved` |
 //! | A house covered by food always eats | here, `covered_means_fed` |
@@ -120,18 +120,46 @@ fn no_overlap(w: &World) -> Result<(), String> {
     Ok(())
 }
 
-/// Population never negative and consistent with the houses that exist (D5).
+/// Population conserved: the residents alive are exactly those who arrived
+/// minus those who left, counting every flow (D5).
 ///
-/// Since phase 13 it also pins A12 down from the other side: a house that goes
-/// up a level gains **permission** to hold more residents, never residents.
-/// If levelling up brought people in, the equality would break here first.
-fn population_is_consistent(w: &World) -> Result<(), String> {
-    let expected = w.house_count() as u32 * u32::from(RESIDENTS_PER_HOUSE);
-    if w.population() != expected {
+/// **The phase's accounting goal**, and the analogue of food conservation. Like
+/// that one it is an exact equality, and like that one its job is to find the
+/// flow somebody forgot to count — starting with the two this equation was
+/// itself missing when phase 14 was planned: a house is born with residents
+/// already in it (A13) and is demolished with residents still in it, and
+/// neither is a birth or a death.
+///
+/// **It replaces `population_stays_consistent`**, which asserted
+/// `population == house_count × RESIDENTS_PER_HOUSE`. That stopped being true
+/// the moment houses could grow, and the reformulation the plan first proposed
+/// — `population == Σ residents` — would have been `x == x`, since
+/// `World::population()` *is* that sum. It is the same trap phase 12 fell into
+/// when unifying the two `served` bits turned `covered_means_fed` into a
+/// comparison of a field with itself: twice in three phases is enough to make
+/// it a thing to look for rather than an accident. The half of the old test
+/// worth keeping — `residents <= max_residents(level)` — is
+/// `residents_stay_within_the_house_capacity`, and has been since phase 13.
+///
+/// It is also **profile-agnostic by construction**: it reads the flows and
+/// never `house_count × 4`, which is what A18 asks phase 14 for. From here the
+/// property suite can be pointed at `hard`.
+fn population_is_conserved(w: &World) -> Result<(), String> {
+    let alive = i64::from(w.population());
+    let balance = w.population_totals().balance();
+    if alive != balance {
+        let t = w.population_totals();
         return Err(format!(
-            "population {} but {} houses of {RESIDENTS_PER_HOUSE}",
-            w.population(),
-            w.house_count()
+            "{alive} residents alive against a balance of {balance}: \
+             settled {} + born {} + immigrated {} - died {} - emigrated {} \
+             - evicted {} - lost_to_demolition {}",
+            t.settled_on_construction,
+            t.born,
+            t.immigrated,
+            t.died,
+            t.emigrated,
+            t.evicted,
+            t.lost_to_demolition,
         ));
     }
     Ok(())
@@ -266,11 +294,11 @@ proptest! {
     /// Every occupied tile resolves to a live id in the slotmap, and the
     /// population stays consistent with the houses.
     #[test]
-    fn population_stays_consistent(p in a_game()) {
+    fn population_is_conserved_after_any_game(p in a_game()) {
         let mut w = world();
         for cmds in &p {
             tick(&mut w, cmds);
-            if let Err(e) = population_is_consistent(&w) {
+            if let Err(e) = population_is_conserved(&w) {
                 return Err(TestCaseError::fail(e));
             }
         }
@@ -471,7 +499,7 @@ fn no_panic_on_ten_thousand_commands() {
             "negative treasury at tick {t}"
         );
         no_overlap(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
-        population_is_consistent(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
+        population_is_conserved(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
         satisfaction_in_range(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
         residents_within_capacity(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
     }

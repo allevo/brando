@@ -33,4 +33,14 @@
         mood_thresholds: (25, 25, 75),
     ),
     food_per_resident: 20,
+    // Valid, and here only because the table would not deserialise without it:
+    // the faults this fixture is about are all in `satisfaction` above.
+    demographics: (
+        births_per_thousand_per_month: 12,
+        deaths_per_thousand_per_month: 6,
+        deaths_per_thousand_per_month_when_unserved: 60,
+        unserved_threshold: 25,
+        birth_threshold: 60,
+        jitter_per_thousand: 200,
+    ),
 )

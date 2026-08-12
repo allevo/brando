@@ -14,7 +14,8 @@ use std::collections::BTreeMap;
 use crate::grid::Terrain;
 
 use crate::data::{
-    BuildingDef, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules, TerrainDef,
+    BuildingDef, DemographicsRules, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules,
+    TerrainDef,
 };
 
 /// Hash prefix: keeps this hash apart from any other blake3 in the project.
@@ -41,6 +42,7 @@ pub(crate) fn dataset_hash(
         house_levels,
         food_per_resident,
         satisfaction,
+        demographics,
     } = rules;
     h.update(&ticks_per_month.to_le_bytes());
     h.update(&months_per_year.to_le_bytes());
@@ -72,6 +74,20 @@ pub(crate) fn dataset_hash(
     } = satisfaction;
     h.update(&[*max, *step_up, *step_down]);
     h.update(mood_thresholds);
+
+    let DemographicsRules {
+        births_per_thousand_per_month,
+        deaths_per_thousand_per_month,
+        deaths_per_thousand_per_month_when_unserved,
+        unserved_threshold,
+        birth_threshold,
+        jitter_per_thousand,
+    } = demographics;
+    h.update(&births_per_thousand_per_month.to_le_bytes());
+    h.update(&deaths_per_thousand_per_month.to_le_bytes());
+    h.update(&deaths_per_thousand_per_month_when_unserved.to_le_bytes());
+    h.update(&[*unserved_threshold, *birth_threshold]);
+    h.update(&jitter_per_thousand.to_le_bytes());
 
     // --- terrain, in Terrain order (the BTreeMap guarantees it) ---
     h.update(&(terrain.len() as u64).to_le_bytes());

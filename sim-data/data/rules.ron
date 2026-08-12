@@ -85,4 +85,56 @@
     // hunger through **lack of coverage**. A covered house, by contrast, always
     // eats.
     food_per_resident: 20,
+
+    // The demographics (phase 14). Rates are **per month and per thousand
+    // residents**, because that is the form you read and reason in; the
+    // conversion to ticks loses nothing, because what does not mature this tick
+    // stays in the accumulator.
+    //
+    // Two relations are checked and not commented (sim-core
+    // `DataSet::inconsistencies`): births have to beat deaths at maximum
+    // satisfaction, or a perfect city shrinks and no growth scenario is
+    // winnable; and neither threshold may sit above satisfaction.max, or it is
+    // a condition no city can ever meet.
+    demographics: (
+        // At the city's maximum satisfaction, and counted against the
+        // **eligible** residents — those in a house with room and a
+        // satisfaction above birth_threshold. Counting against the whole
+        // population instead would make the plateau an accident of the numbers;
+        // this way a city whose houses are all full has nobody eligible, the
+        // rate is zero, and the population stops for a reason you can point at.
+        births_per_thousand_per_month: 12,
+
+        // Counted against every resident, at this rate for a house that has
+        // every service its own level asks for.
+        deaths_per_thousand_per_month: 6,
+
+        // And at this one for the residents of a house going without. Ten times
+        // the base rate is what makes a city that loses its farm really empty
+        // out instead of merely stopping growing.
+        deaths_per_thousand_per_month_when_unserved: 60,
+
+        // "Going without" is read off the worst service **the house's own
+        // level** requires — not off food. Since phase 13 level 1 is a hut that
+        // asks for water only, on purpose, so that the first rung is reachable
+        // before there is a farm; reading hunger off the food accumulator
+        // regardless of level would kill every hut in a farmless city at ten
+        // times the base rate, and the opening of every game would be a slow
+        // bleed by construction.
+        unserved_threshold: 25,
+
+        // A house needs this much before it can have children. Above the level-2
+        // decay threshold and below its level-up one: a house that is doing well
+        // enough to keep its rung is not automatically doing well enough to
+        // grow.
+        birth_threshold: 60,
+
+        // +/- 20% on a rate, drawn once per flow per tick. Symmetric, which
+        // `the_jitter_does_not_move_the_mean` checks: an asymmetric jitter would
+        // shift the whole balancing without showing up anywhere.
+        //
+        // It can move into the difficulty profile the day a harder game should
+        // also be a more volatile one.
+        jitter_per_thousand: 200,
+    ),
 )

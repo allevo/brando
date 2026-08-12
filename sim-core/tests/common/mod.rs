@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sim_core::data::{
-    BuildingDef, DataSet, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules, ServiceDef,
-    TerrainDef,
+    BuildingDef, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef, Rules,
+    SatisfactionRules, ServiceDef, TerrainDef,
 };
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Level, Milli, ServiceKind, Terrain,
@@ -83,6 +83,20 @@ pub const SATISFACTION_STEP_DOWN: u8 = 10;
 /// horizon, never a fixed tick.
 pub const TICKS_PER_MONTH: u32 = 30;
 
+// --- the demographics (phase 14) -------------------------------------------
+//
+// The fixture's own numbers, keeping production's relations: births above
+// deaths, going without much worse than being served, both thresholds
+// reachable. They are deliberately **large** compared with production's — a
+// test that had to run five game years to see one birth would be a test nobody
+// runs.
+pub const BIRTHS_PER_THOUSAND: u16 = 300;
+pub const DEATHS_PER_THOUSAND: u16 = 30;
+pub const DEATHS_PER_THOUSAND_UNSERVED: u16 = 600;
+pub const UNSERVED_THRESHOLD: u8 = 25;
+pub const BIRTH_THRESHOLD: u8 = 60;
+pub const JITTER_PER_THOUSAND: u16 = 200;
+
 /// The profile the tests play on unless they say otherwise: a house is born
 /// full, which is M0's behaviour and keeps every test written before phase 11
 /// saying what it said.
@@ -137,6 +151,20 @@ pub fn dataset_with_levels_requiring(levels: &[&[ServiceKind]]) -> Arc<DataSet> 
 /// `the_fixture_has_no_inconsistencies`: that test says the fixture is clean,
 /// this one gives the check something to catch. Without it, a hole in
 /// `check_food_capacity` leaves both green — which is how the hole survived.
+/// The fixture with the demographics **switched off**: no births, no deaths.
+///
+/// What `coverage_equivalence` runs on. See [`Rates`] for why that matters and
+/// what breaks if somebody puts the real rates back.
+pub fn dataset_without_demographics() -> Arc<DataSet> {
+    const BOTH: &[ServiceKind] = &[ServiceKind::Water, ServiceKind::Food];
+    dataset_built_with(&[BOTH; HOUSE_LEVELS], FarmOutput::AsProduction, Rates::Off)
+}
+
+/// A world on the fixture with the demographics switched off.
+pub fn world_without_demographics() -> World {
+    world_with(dataset_without_demographics(), 32, 32, EASY)
+}
+
 pub fn dataset_with_a_farm_that_grows_nothing() -> Arc<DataSet> {
     const BOTH: &[ServiceKind] = &[ServiceKind::Water, ServiceKind::Food];
     dataset_built(&[BOTH; HOUSE_LEVELS], FarmOutput::None)
@@ -148,7 +176,54 @@ enum FarmOutput {
     None,
 }
 
+/// Whether the fixture's city can grow and shrink.
+///
+/// `Off` is what `coverage_equivalence` runs on, and the reason is worth
+/// stating where somebody tempted to "fix" it will read it: that test compares
+/// the stored coverage against a from-scratch one **at the end of the tick**,
+/// and with the demographics running the two always diverge — not because of a
+/// bug, but because step 6 moved somebody after step 3 assigned. Put the real
+/// rates back and the project's most valuable oracle stops checking anything
+/// without ever going red.
+#[derive(Clone, Copy)]
+pub enum Rates {
+    AsProduction,
+    Off,
+}
+
+/// The fixture's demographic rates. Like every other number here they are the
+/// fixture's own, but they keep production's relations: births above deaths,
+/// going without much worse than being served, both thresholds reachable.
+fn demographics_rules(rates: Rates) -> DemographicsRules {
+    match rates {
+        Rates::AsProduction => DemographicsRules {
+            births_per_thousand_per_month: BIRTHS_PER_THOUSAND,
+            deaths_per_thousand_per_month: DEATHS_PER_THOUSAND,
+            deaths_per_thousand_per_month_when_unserved: DEATHS_PER_THOUSAND_UNSERVED,
+            unserved_threshold: UNSERVED_THRESHOLD,
+            birth_threshold: BIRTH_THRESHOLD,
+            jitter_per_thousand: JITTER_PER_THOUSAND,
+        },
+        Rates::Off => DemographicsRules {
+            births_per_thousand_per_month: 0,
+            deaths_per_thousand_per_month: 0,
+            deaths_per_thousand_per_month_when_unserved: 0,
+            unserved_threshold: UNSERVED_THRESHOLD,
+            birth_threshold: BIRTH_THRESHOLD,
+            jitter_per_thousand: JITTER_PER_THOUSAND,
+        },
+    }
+}
+
 fn dataset_built(levels: &[&[ServiceKind]], farm_output: FarmOutput) -> Arc<DataSet> {
+    dataset_built_with(levels, farm_output, Rates::AsProduction)
+}
+
+fn dataset_built_with(
+    levels: &[&[ServiceKind]],
+    farm_output: FarmOutput,
+    rates: Rates,
+) -> Arc<DataSet> {
     let house_levels: Vec<HouseLevelDef> = levels
         .iter()
         .enumerate()
@@ -171,6 +246,7 @@ fn dataset_built(levels: &[&[ServiceKind]], farm_output: FarmOutput) -> Arc<Data
         starting_treasury: Coins::new(STARTING_TREASURY),
         house_levels,
         food_per_resident: Milli::from_millis(20),
+        demographics: demographics_rules(rates),
         satisfaction: SatisfactionRules {
             max: SATISFACTION_MAX,
             step_up: SATISFACTION_STEP_UP,
@@ -310,9 +386,35 @@ pub fn world_at(w: u16, h: u16, profile: &str) -> World {
 
 /// Like [`world_at`], on a dataset of your own.
 pub fn world_with(data: Arc<DataSet>, w: u16, h: u16, profile: &str) -> World {
+    world_seeded_with(data, w, h, profile, SEED)
+}
+
+/// The seed every fixture world uses unless a test asks for another.
+pub const SEED: u64 = 42;
+
+/// Like [`world`], on a seed of your choosing.
+///
+/// It exists for phase 14: until something drew from the RNG, one seed was as
+/// good as another and nothing needed to vary it.
+pub fn world_seeded(seed: u64) -> World {
+    world_seeded_with(dataset(), 32, 32, EASY, seed)
+}
+
+/// Like [`world_without_demographics`], on a seed of your choosing.
+pub fn world_seeded_without_demographics(seed: u64) -> World {
+    world_seeded_with(dataset_without_demographics(), 32, 32, EASY, seed)
+}
+
+pub fn world_seeded_with(
+    data: Arc<DataSet>,
+    w: u16,
+    h: u16,
+    profile: &str,
+    seed: u64,
+) -> World {
     let grid = Grid::new(w, h, Terrain::Plain).expect("valid dimensions");
     let difficulty = difficulty(&data, profile);
-    World::new(grid, data, 42, difficulty)
+    World::new(grid, data, seed, difficulty)
 }
 
 /// Applies the commands in a single tick and returns the report.

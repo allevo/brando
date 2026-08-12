@@ -24,6 +24,28 @@ use crate::world::{Building, House, Occupant, World};
 pub struct StepReport {
     pub rejected: Vec<(usize, CommandError)>,
     pub events: Vec<Event>,
+    /// The tick's aggregates.
+    ///
+    /// **Not** delta events: it is the snapshot the renderer draws its bars
+    /// from and the evaluator (M2) reads its metrics from. As events these
+    /// would be one per house per tick, which is the polling the core/renderer
+    /// boundary forbids.
+    pub summary: Summary,
+}
+
+/// What happened this tick, in aggregate.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Summary {
+    pub population: u32,
+    /// Every place in every house, taken or not: `population` against this is
+    /// how full the city is, and it is what phase 15's immigration gates on.
+    pub places: u32,
+    pub born: u16,
+    pub died: u16,
+    /// Weighted by residents, so a big house counts for more than a hut.
+    pub average_satisfaction: u8,
+    // phase 15: immigrated, emigrated, attractiveness
+    // phase 16: income
 }
 
 impl StepReport {
@@ -38,6 +60,10 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     // A snapshot of the houses at the start of the tick: it is the reference
     // step 10 emits its deltas against.
     let before = house_snapshot(world);
+    // The flows as they stood before this tick: the summary reports the tick's
+    // own births and deaths as the difference, so there is one accounting path
+    // and not two that could disagree.
+    let flows_before = (world.population.born, world.population.died);
     apply_commands(world, cmds, &mut r); // 1
     rebuild_roads(world); // 2
     propagate_coverage(world); // 3
@@ -48,8 +74,32 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
     emit_events(world, &before, &mut r); // 10
+    r.summary = summarise(world, flows_before);
     world.tick = world.tick.saturating_add(1);
     r
+}
+
+/// The tick's aggregates, read off the world after every step has run.
+///
+/// `born` and `died` come from the running totals rather than being threaded
+/// out of step 6: the totals are already exact — population conservation
+/// depends on them — so taking the difference across the tick is one
+/// subtraction instead of a second accounting path that could disagree with the
+/// first.
+fn summarise(world: &World, flows_before: (u64, u64)) -> Summary {
+    let (born_before, died_before) = flows_before;
+    let (born, died) = (world.population.born, world.population.died);
+    Summary {
+        population: world.population(),
+        places: world
+            .houses
+            .iter()
+            .map(|(_, h)| u32::from(world.data.rules.max_residents(h.level).unwrap_or(0)))
+            .sum(),
+        born: u16::try_from(born - born_before).unwrap_or(u16::MAX),
+        died: u16::try_from(died - died_before).unwrap_or(u16::MAX),
+        average_satisfaction: crate::demographics::average_satisfaction(world),
+    }
 }
 
 // --- 1. commands -----------------------------------------------------------
@@ -171,6 +221,7 @@ fn place_building(
             // but its first levelling up costs the full time all the same.
             satisfaction: [0; ServiceKind::COUNT],
         });
+        world.population.settled_on_construction += u64::from(residents);
         world.houses_by_origin.insert(origin_idx, id);
         occupy(world, &tiles, origin_idx, true);
         // A new house needs covering: without this it would stay unserved until
@@ -261,6 +312,11 @@ fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     // A house's size is the one of its kind; in M0 houses are 1x1, but the size
     // is re-read from the table so as not to get stuck the day they no longer
     // are.
+    // The residents disappear with the house: without counting them,
+    // population conservation stops being an equality and the phase's most
+    // important test would report a bug that is not there. The same shape as
+    // `FoodTotals::lost_to_demolition`, and the same reason.
+    world.population.lost_to_demolition += u64::from(h.residents);
     let size = world.data.house_def().map_or((1, 1), |d| d.size);
     clear_tiles(world, h.origin, size);
     if let Some(idx) = world.grid.idx(h.origin) {
@@ -318,6 +374,29 @@ fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     crate::satisfaction::update(world); // 6.1
     if world.data.rules.is_month_boundary(world.tick) {
         crate::levels::review(world, r); // 6.2
+    }
+    // 6.3 deaths, then 6.5 births. Phase 15's emigration (6.4) and immigration
+    // (6.6) slot in **between** these and not at the end, and the invalidation
+    // below stays the last thing step 6 does then too. Written down here so
+    // that whoever adds them knows where they go.
+    let moved = crate::demographics::run(
+        world,
+        &mut crate::demographics::StepReportEvents {
+            events: &mut r.events,
+        },
+    );
+
+    // The coverage is counted on the residents present (A12): if anyone has
+    // moved, yesterday's assignment no longer holds and the next tick's step 3
+    // has to redo it. Without this line the houses that grew would consume more
+    // than the provider set aside, and *covered => eats* falls over.
+    //
+    // Conditional and not unconditional on purpose: in a full or an empty city
+    // nobody moves, no recomputation is needed, and the tick costs what it did
+    // before this phase. It is also what lets `coverage_equivalence` go on
+    // running in its original form on a zero-rate dataset.
+    if moved {
+        mark_all_providers_dirty(world);
     }
 }
 
