@@ -103,8 +103,16 @@ pub struct SatisfactionRules {
 impl Rules {
     /// Ticks in a game year. Scenario objectives are expressed in months and
     /// years, never in ticks (M1).
+    ///
+    /// Saturating for [`is_month_boundary`]'s reason: both operands come from a
+    /// table, and the core does not panic on data. Tables loaded through
+    /// `sim-data` cannot overflow it — `validate_rules` refuses them — but the
+    /// hand-built fixtures (`sim-core/tests/common/mod.rs`, `xtask`'s bench)
+    /// never go through that door.
+    ///
+    /// [`is_month_boundary`]: Self::is_month_boundary
     pub const fn ticks_per_year(&self) -> u32 {
-        self.ticks_per_month * self.months_per_year
+        self.ticks_per_month.saturating_mul(self.months_per_year)
     }
 
     /// The definition of a house level, `None` out of range.
@@ -535,7 +543,9 @@ impl DataSet {
     ///
     /// The arithmetic is for the worst case, an empty stock at the start of the
     /// tick: what the provider can hand out is the smaller of one tick's output
-    /// and what the granary can hold.
+    /// and what the granary can hold. A provider that declares **neither** is
+    /// part of the same rule and not an exception to it: it hands out nothing,
+    /// so every positive capacity it claims is beyond what it sustains.
     ///
     /// **It lives exactly as long as A5.** It is the right rule while the farm
     /// produces into its own stock; in M3 the goods will come from a warehouse
@@ -557,11 +567,17 @@ impl DataSet {
             if service.kind != ServiceKind::Food {
                 continue;
             }
-            let (Some(output), Some(max_stock)) = (def.output_per_tick, def.max_stock) else {
-                continue;
+            // Skipping the provider that declares no output, or no granary to
+            // hold it in, is what let a phantom farm through: the coverage
+            // never consults `output_per_tick`, so it wins its houses on
+            // distance alone and then feeds none of them, for ever — the first
+            // provider keeps a contested house, so not even a real farm built
+            // afterwards can take them over. It sustains nobody, and the loop
+            // below says so with `sustainable: 0`.
+            let available = match (def.output_per_tick, def.max_stock) {
+                (Some(output), Some(max_stock)) => output.to_millis().min(max_stock.to_millis()),
+                _ => 0,
             };
-
-            let available = output.to_millis().min(max_stock.to_millis());
             let sustainable = u16::try_from(available / per_resident).unwrap_or(u16::MAX);
             for (level, capacity) in service.capacities() {
                 if capacity > sustainable {

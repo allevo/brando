@@ -111,8 +111,17 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
             // fits leaves. It is the only point in this phase where `residents`
             // changes, and therefore the only one that has to invalidate the
             // coverage: capacity is counted on the residents present (A12).
-            let capacity = rules.max_residents(to).unwrap_or(0);
-            if h.residents > capacity {
+            //
+            // A destination the table does not contain evicts **nobody**, and
+            // that is the point of the `if let`. `decays()` deliberately sends
+            // a house at an unknown level down (see there), so `to` can itself
+            // be off the table — and a fallback capacity of zero would empty
+            // the house in one review. That is a population wipe, not the
+            // convergence the descent is for: leave the residents alone until
+            // the house reaches a rung that exists, then apply its capacity.
+            if let Some(capacity) = rules.max_residents(to)
+                && h.residents > capacity
+            {
                 population.evicted += u64::from(h.residents - capacity);
                 h.residents = capacity;
                 anyone_evicted = true;
