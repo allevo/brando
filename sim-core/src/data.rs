@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use crate::data_hash::dataset_hash;
 use crate::grid::Terrain;
-use crate::ids::BuildingKindId;
+use crate::ids::{BuildingKindId, Level};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
 use crate::units::{Coins, Milli};
@@ -107,14 +107,25 @@ impl Rules {
         self.ticks_per_month * self.months_per_year
     }
 
-    /// The definition of a house level (level 1 = index 0), `None` out of
-    /// range.
-    pub fn house_level(&self, level: u8) -> Option<&HouseLevelDef> {
-        self.house_levels.get(usize::from(level).checked_sub(1)?)
+    /// The definition of a house level, `None` out of range.
+    pub fn house_level(&self, level: Level) -> Option<&HouseLevelDef> {
+        self.house_levels.get(level.as_usize())
     }
 
-    /// The most residents a house can hold at the given level (level 1 = index
-    /// 0).
+    /// The ladder, rung by rung, each with its level.
+    ///
+    /// The only place that pairs a position in the table with the level it
+    /// stands for, which is why the cross-table checks and the tests that walk
+    /// the ladder all come through here instead of adding one to an index
+    /// apiece.
+    pub fn house_ladder(&self) -> impl Iterator<Item = (Level, &HouseLevelDef)> {
+        self.house_levels
+            .iter()
+            .enumerate()
+            .map(|(i, def)| (Level::from_index(i), def))
+    }
+
+    /// The most residents a house can hold at the given level.
     ///
     /// `None` out of range, like [`ServiceDef::range`] and
     /// [`ServiceDef::capacity`]: a level that does not exist in the table is a
@@ -124,7 +135,7 @@ impl Rules {
     /// restructured the flat `residents_per_house_level` into the per-level
     /// table: the **body** changed, not the callers. It is still the one place
     /// to change the day houses come in kinds.
-    pub fn max_residents(&self, level: u8) -> Option<u16> {
+    pub fn max_residents(&self, level: Level) -> Option<u16> {
         Some(self.house_level(level)?.max_residents)
     }
 
@@ -134,15 +145,18 @@ impl Rules {
     /// the decay check, and a level that does not exist has to demand nothing
     /// rather than panic. A level that really demands nothing is refused by
     /// validation.
-    pub fn required_at(&self, level: u8) -> &[ServiceKind] {
+    pub fn required_at(&self, level: Level) -> &[ServiceKind] {
         self.house_level(level)
             .map_or(&[], |l| l.required_services.as_slice())
     }
 
-    /// The highest level a house can reach. Zero if the table is empty, which
+    /// The highest level a house can reach. `None` if the table is empty, which
     /// validation refuses.
-    pub fn top_house_level(&self) -> u8 {
-        u8::try_from(self.house_levels.len()).unwrap_or(u8::MAX)
+    pub fn top_house_level(&self) -> Option<Level> {
+        self.house_levels
+            .len()
+            .checked_sub(1)
+            .map(Level::from_index)
     }
 
     /// Whether this tick is a month boundary — when the level review happens
@@ -182,18 +196,23 @@ pub struct ServiceDef {
 }
 
 impl ServiceDef {
-    /// The range at the given level (level 1 = index 0), `None` out of range.
-    pub fn range(&self, level: u8) -> Option<u16> {
-        self.range_per_level
-            .get(usize::from(level).checked_sub(1)?)
-            .copied()
+    /// The range at the given level, `None` out of range.
+    pub fn range(&self, level: Level) -> Option<u16> {
+        self.range_per_level.get(level.as_usize()).copied()
     }
 
     /// The capacity in residents at the given level, `None` out of range.
-    pub fn capacity(&self, level: u8) -> Option<u16> {
+    pub fn capacity(&self, level: Level) -> Option<u16> {
+        self.capacity_per_level.get(level.as_usize()).copied()
+    }
+
+    /// The capacities, rung by rung, each with its level. The provider's
+    /// counterpart of [`Rules::house_ladder`].
+    pub fn capacities(&self) -> impl Iterator<Item = (Level, u16)> {
         self.capacity_per_level
-            .get(usize::from(level).checked_sub(1)?)
-            .copied()
+            .iter()
+            .enumerate()
+            .map(|(i, &capacity)| (Level::from_index(i), capacity))
     }
 }
 
@@ -435,8 +454,7 @@ impl DataSet {
     fn check_the_ladder(&self, out: &mut Vec<Inconsistency>) {
         let max = self.rules.satisfaction.max;
         let mut previous: Option<u16> = None;
-        for (i, def) in self.rules.house_levels.iter().enumerate() {
-            let level = level_of(i);
+        for (level, def) in self.rules.house_ladder() {
             if let Some(previous) = previous
                 && def.max_residents <= previous
             {
@@ -451,7 +469,7 @@ impl DataSet {
             // Level 1's thresholds are unread — nobody rises into it and there
             // is no level 0 to fall to — so checking them would report on
             // numbers that decide nothing.
-            if level < 2 {
+            if level == Level::FIRST {
                 continue;
             }
             if def.decay_threshold >= def.level_up_threshold {
@@ -475,8 +493,7 @@ impl DataSet {
 
     /// Somebody provides what the levels ask for, and to a house that is full.
     fn check_the_levels_can_be_served(&self, out: &mut Vec<Inconsistency>) {
-        for (i, def) in self.rules.house_levels.iter().enumerate() {
-            let level = level_of(i);
+        for (level, def) in self.rules.house_ladder() {
             for &service in &def.required_services {
                 let best = self
                     .buildings
@@ -546,11 +563,11 @@ impl DataSet {
 
             let available = output.to_millis().min(max_stock.to_millis());
             let sustainable = u16::try_from(available / per_resident).unwrap_or(u16::MAX);
-            for (i, &capacity) in service.capacity_per_level.iter().enumerate() {
+            for (level, capacity) in service.capacities() {
                 if capacity > sustainable {
                     out.push(Inconsistency::CapacityBeyondOutput {
                         building,
-                        level: level_of(i),
+                        level,
                         capacity,
                         sustainable,
                     });
@@ -567,7 +584,7 @@ impl DataSet {
     fn check_difficulty(&self, out: &mut Vec<Inconsistency>) {
         // No level 1 in the table is `rules.house_levels` being empty, which
         // validation reports on its own: saying it twice would be noise.
-        let Some(max_residents) = self.rules.max_residents(1) else {
+        let Some(max_residents) = self.rules.max_residents(Level::FIRST) else {
             return;
         };
         for (difficulty, def) in self.difficulties.iter().enumerate() {
@@ -613,10 +630,12 @@ pub enum Inconsistency {
     #[error(
         "level {level} holds {max_residents} residents, no more than level {} \
          with {previous}: levelling up would shrink the house",
-        level.saturating_sub(1)
+        // Unreachable: with no rung below there is no `previous` capacity to be
+        // no more than, so the check cannot fire at the first level.
+        level.previous().unwrap_or(Level::FIRST)
     )]
     CapacityNotIncreasing {
-        level: u8,
+        level: Level,
         max_residents: u16,
         previous: u16,
     },
@@ -625,16 +644,24 @@ pub enum Inconsistency {
         "level {level} decays below {decay} and is reached at {level_up}: with \
          no hysteresis band the city oscillates at every review"
     )]
-    NoHysteresis { level: u8, decay: u8, level_up: u8 },
+    NoHysteresis {
+        level: Level,
+        decay: u8,
+        level_up: u8,
+    },
 
     #[error(
         "level {level} is reached at a satisfaction of {threshold}, beyond the \
          maximum of {max}: it is unreachable by construction"
     )]
-    UnreachableThreshold { level: u8, threshold: u8, max: u8 },
+    UnreachableThreshold {
+        level: Level,
+        threshold: u8,
+        max: u8,
+    },
 
     #[error("level {level} requires {}, which no building provides", service.as_id())]
-    ServiceWithoutProvider { level: u8, service: ServiceKind },
+    ServiceWithoutProvider { level: Level, service: ServiceKind },
 
     #[error(
         "level {level} holds {max_residents} residents and the largest provider \
@@ -642,7 +669,7 @@ pub enum Inconsistency {
         service.as_id()
     )]
     CapacityBeyondEveryProvider {
-        level: u8,
+        level: Level,
         service: ServiceKind,
         max_residents: u16,
         best: u16,
@@ -655,8 +682,9 @@ pub enum Inconsistency {
     CapacityBeyondOutput {
         /// Index into [`DataSet::buildings`].
         building: usize,
-        /// The level at which the capacity overshoots, counting from 1.
-        level: u8,
+        /// The level at which the capacity overshoots. The **provider's**
+        /// level, not a house rung: the two ladders share a type, not a table.
+        level: Level,
         /// Residents claimed in the table.
         capacity: u16,
         /// Residents the output really sustains.
@@ -676,11 +704,6 @@ pub enum Inconsistency {
         /// Residents a house can hold at level 1.
         max_residents: u16,
     },
-}
-
-/// A level number from an index into a per-level table (index 0 = level 1).
-fn level_of(index: usize) -> u8 {
-    u8::try_from(index + 1).unwrap_or(u8::MAX)
 }
 
 /// The services, in a canonical order and without repeats, so two lists can be

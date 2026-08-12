@@ -196,10 +196,7 @@ fn row(w: &World) {
 fn level_distribution(w: &World) -> String {
     let mut counts = vec![0u32; w.data().rules.house_levels.len()];
     for (_, h) in w.houses() {
-        let Some(i) = usize::from(h.level).checked_sub(1) else {
-            continue;
-        };
-        if let Some(c) = counts.get_mut(i) {
+        if let Some(c) = counts.get_mut(h.level.as_usize()) {
             *c += 1;
         }
     }

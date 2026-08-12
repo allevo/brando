@@ -9,7 +9,7 @@
 
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::event::Event;
-use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
 use crate::satisfaction::Mood;
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
@@ -166,7 +166,7 @@ fn place_building(
     if is_a_house {
         let id = world.houses.insert(House {
             origin,
-            level: 1,
+            level: Level::FIRST,
             residents,
             served: crate::service::ServiceFlags::empty(),
             // At zero, not at the maximum: step 3 covers it in this same tick,
@@ -184,7 +184,7 @@ fn place_building(
         let id = world.buildings.insert(Building {
             kind,
             origin,
-            level: 1,
+            level: Level::FIRST,
             stock: crate::units::Milli::ZERO,
         });
         world.buildings_by_origin.insert(origin_idx, id);

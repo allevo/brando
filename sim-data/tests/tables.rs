@@ -5,7 +5,12 @@
 use std::path::Path;
 
 use sim_core::data::Inconsistency;
-use sim_core::{Coins, Milli, ServiceKind, Terrain};
+use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
+
+/// A level from its number, so a test can go on saying "level 2".
+fn level(number: u8) -> Level {
+    Level::new(number).expect("levels count from 1")
+}
 use sim_data::{DataSet, LoadError, ValidationErrorKind};
 
 fn valid_rules() -> String {
@@ -96,14 +101,13 @@ fn the_production_tables_load() {
     let well = d.def(well).expect("the well's def");
     let s = well.service.as_ref().expect("the well provides a service");
     assert_eq!(s.kind, ServiceKind::Water);
-    assert_eq!(s.range(1), Some(12));
+    assert_eq!(s.range(Level::FIRST), Some(12));
     assert_eq!(
-        s.capacity(1),
-        d.rules.max_residents(1).map(|r| 8 * r),
+        s.capacity(Level::FIRST),
+        d.rules.max_residents(Level::FIRST).map(|r| 8 * r),
         "the capacity is in residents: eight houses at level 1"
     );
-    assert_eq!(s.range(2), None, "the well has only one level in M0");
-    assert_eq!(s.range(0), None, "levels start at 1");
+    assert_eq!(s.range(level(2)), None, "the well has only one level in M0");
 
     let farm = d.def(farm).expect("the farm's def");
     assert!(farm.is_producer());
@@ -124,13 +128,13 @@ fn the_farms_capacity_is_what_its_output_sustains() {
     let f = d.def(d.kind_by_id("farm").expect("the farm")).expect("def");
     let s = f.service.as_ref().expect("service");
 
-    let residents = i32::from(d.rules.max_residents(1).expect("level 1"));
+    let residents = i32::from(d.rules.max_residents(Level::FIRST).expect("level 1"));
     let per_house = d
         .rules
         .food_per_resident
         .checked_mul_int(residents)
         .expect("one house's consumption");
-    let capacity = i32::from(s.capacity(1).expect("capacity"));
+    let capacity = i32::from(s.capacity(Level::FIRST).expect("capacity"));
     let max_demand = d
         .rules
         .food_per_resident
@@ -174,7 +178,10 @@ fn the_difficulty_profiles_load() {
     assert_eq!(d.difficulty_by_id("impossible"), None);
     assert_ne!(easy, hard);
 
-    let max = d.rules.max_residents(1).expect("houses have a level 1");
+    let max = d
+        .rules
+        .max_residents(Level::FIRST)
+        .expect("houses have a level 1");
     assert_eq!(
         d.difficulty(easy)
             .expect("def")
@@ -189,9 +196,14 @@ fn the_difficulty_profiles_load() {
         0,
         "at hard the house only fills up by migration"
     );
-    assert_eq!(d.rules.max_residents(0), None, "levels start at 1");
+    assert_eq!(Level::new(0), None, "levels start at 1");
+    let past_the_top = d
+        .rules
+        .top_house_level()
+        .and_then(Level::next)
+        .expect("the ladder is not empty");
     assert_eq!(
-        d.rules.max_residents(d.rules.top_house_level() + 1),
+        d.rules.max_residents(past_the_top),
         None,
         "and stop at the top of the ladder"
     );
@@ -263,13 +275,14 @@ fn the_house_ladder_has_the_shape_the_balancing_means() {
     let d = sim_data::load_default().expect("valid tables");
     let s = &d.rules.satisfaction;
     let top = d.rules.top_house_level();
-    assert!(top > 1, "a ladder with one rung is not a ladder");
+    assert!(
+        top > Some(Level::FIRST),
+        "a ladder with one rung is not a ladder"
+    );
 
     let mut previous: Option<&sim_core::HouseLevelDef> = None;
-    for level in 1..=top {
-        let l = d.rules.house_level(level).expect("the level exists");
-
-        if level > 1 {
+    for (level, l) in d.rules.house_ladder() {
+        if level > Level::FIRST {
             let climb = u32::from(l.level_up_threshold).div_ceil(u32::from(s.step_up));
             assert!(
                 climb < d.rules.ticks_per_month,
@@ -296,8 +309,11 @@ fn the_house_ladder_has_the_shape_the_balancing_means() {
         previous = Some(l);
     }
 
-    let first = d.rules.house_level(1).expect("level 1");
-    let last = d.rules.house_level(top).expect("the top level");
+    let first = d.rules.house_level(Level::FIRST).expect("level 1");
+    let last = d
+        .rules
+        .house_level(top.expect("the ladder is not empty"))
+        .expect("the top level");
     assert!(
         last.required_services.len() > first.required_services.len(),
         "with the same demands at every rung the per-level requirements do \
@@ -377,7 +393,7 @@ fn capacity_beyond_the_output() {
                 "buildings[0].service.capacity_per_level".to_string(),
                 ValidationErrorKind::Inconsistent(Inconsistency::CapacityBeyondOutput {
                     building: 0,
-                    level: 1,
+                    level: Level::FIRST,
                     capacity: 24,
                     sustainable: 20
                 })
@@ -388,7 +404,7 @@ fn capacity_beyond_the_output() {
                 "buildings[1].service.capacity_per_level".to_string(),
                 ValidationErrorKind::Inconsistent(Inconsistency::CapacityBeyondOutput {
                     building: 1,
-                    level: 1,
+                    level: Level::FIRST,
                     capacity: 20,
                     sustainable: 5
                 })
@@ -544,7 +560,7 @@ fn a_ladder_that_does_not_go_up() {
         [(
             "rules.house_levels[1].max_residents".to_string(),
             ValidationErrorKind::Inconsistent(Inconsistency::CapacityNotIncreasing {
-                level: 2,
+                level: level(2),
                 max_residents: 4,
                 previous: 4,
             })
@@ -565,7 +581,7 @@ fn a_rung_with_no_hysteresis_band() {
         [(
             "rules.house_levels[1].decay_threshold".to_string(),
             ValidationErrorKind::Inconsistent(Inconsistency::NoHysteresis {
-                level: 2,
+                level: level(2),
                 decay: 50,
                 level_up: 50,
             })
@@ -587,7 +603,7 @@ fn a_rung_nobody_can_reach() {
         [(
             "rules.house_levels[2].level_up_threshold".to_string(),
             ValidationErrorKind::Inconsistent(Inconsistency::UnreachableThreshold {
-                level: 3,
+                level: level(3),
                 threshold: 120,
                 max: 100,
             })
@@ -605,11 +621,12 @@ fn a_service_no_building_provides() {
         r#"kind: "food","#,
     )));
     let expected: Vec<_> = (1..=3)
-        .map(|level| {
+        .map(level)
+        .map(|at| {
             (
-                format!("rules.house_levels[{}].required_services", level - 1),
+                format!("rules.house_levels[{}].required_services", at.as_usize()),
                 ValidationErrorKind::Inconsistent(Inconsistency::ServiceWithoutProvider {
-                    level,
+                    level: at,
                     service: ServiceKind::Water,
                 }),
             )
@@ -633,7 +650,7 @@ fn a_rung_no_provider_can_serve_in_full() {
         [(
             "rules.house_levels[2].max_residents".to_string(),
             ValidationErrorKind::Inconsistent(Inconsistency::CapacityBeyondEveryProvider {
-                level: 3,
+                level: level(3),
                 service: ServiceKind::Water,
                 max_residents: 12,
                 best: 8,

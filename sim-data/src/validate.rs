@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use sim_core::{Coins, Milli, ServiceKind, Terrain};
+use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
 
 use crate::raw::{RawBuildingDef, RawDataSet, RawSatisfaction};
 use sim_core::data::{
@@ -163,9 +163,10 @@ pub fn validate(raw: &RawDataSet) -> Result<DataSet, ValidationReport> {
 /// core knows the relation, this crate knows what the file it came from is
 /// shaped like.
 fn path_of(i: &Inconsistency) -> String {
-    /// The path of a rung, from a level counting from 1.
-    fn rung(level: u8, field: &str) -> String {
-        format!("rules.house_levels[{}].{field}", level.saturating_sub(1))
+    /// The path of a rung. It is the **index** the path names, not the level:
+    /// what the reader has to go and edit is an entry of a RON list.
+    fn rung(level: Level, field: &str) -> String {
+        format!("rules.house_levels[{}].{field}", level.as_usize())
     }
 
     match *i {

@@ -31,7 +31,7 @@ pub use data::{
 };
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileOccupant};
-pub use ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+pub use ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
 pub use levels::PopulationTotals;
 pub use network::{ComponentId, RoadNetwork, Visited};
 pub use production::FoodTotals;

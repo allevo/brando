@@ -279,7 +279,7 @@ fn a_house_is_a_house_not_a_building() {
     );
     assert_eq!(w.population(), u32::from(RESIDENTS_PER_HOUSE));
     let (_, h) = w.houses().next().expect("one house");
-    assert_eq!(h.level, 1);
+    assert_eq!(h.level, level(1));
     assert!(matches!(
         r.events[0],
         Event::HousePlaced { origin, .. } if origin == pos(1, 1)

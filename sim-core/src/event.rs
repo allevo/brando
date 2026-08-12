@@ -5,7 +5,7 @@
 //! is unacceptable. An event is emitted on a **change of state**, never every
 //! tick: the wrong choice here costs 40,000 events per tick.
 
-use crate::ids::{BuildingId, BuildingKindId, HouseId, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TilePos};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
 
@@ -63,8 +63,8 @@ pub enum Event {
     /// told the building has changed, not that the city has grown.
     HouseEvolved {
         house: HouseId,
-        from: u8,
-        to: u8,
+        from: Level,
+        to: Level,
     },
     /// A house has come down a level at the monthly review (phase 13).
     ///
@@ -77,7 +77,7 @@ pub enum Event {
     /// which phase 14 will report separately.
     HouseDegraded {
         house: HouseId,
-        from: u8,
-        to: u8,
+        from: Level,
+        to: Level,
     },
 }

@@ -44,7 +44,7 @@ pub enum Objective {
     Population { at_least: u32, within_months: Option<u32> },
     Treasury { at_least: Coins, within_months: Option<u32> },
     /// This many houses at the given level or above.
-    HouseLevel { level: u8, how_many: u32, within_months: Option<u32> },
+    HouseLevel { level: Level, how_many: u32, within_months: Option<u32> },
 }
 
 pub struct Objectives {

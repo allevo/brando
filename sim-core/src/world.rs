@@ -12,7 +12,7 @@ use slotmap::SlotMap;
 use crate::coverage::Coverage;
 use crate::data::{DataSet, DifficultyId};
 use crate::grid::Grid;
-use crate::ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
 use crate::levels::PopulationTotals;
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
@@ -25,8 +25,9 @@ use crate::units::{Coins, Milli};
 pub struct Building {
     pub kind: BuildingKindId,
     pub origin: TilePos,
-    /// Level, counting from 1. In M0 it always stays 1.
-    pub level: u8,
+    /// Its rung of `range_per_level`/`capacity_per_level`. In M0 and M1 it
+    /// always stays [`Level::FIRST`].
+    pub level: Level,
     /// Local stock, only for producers (phase 07).
     pub stock: Milli,
 }
@@ -38,7 +39,8 @@ pub struct Building {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct House {
     pub origin: TilePos,
-    pub level: u8,
+    /// Its rung of `rules.house_levels`.
+    pub level: Level,
     pub residents: u16,
     /// Which services reach it this tick.
     pub served: ServiceFlags,

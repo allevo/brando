@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 use crate::data::Rules;
 use crate::event::Event;
+use crate::ids::Level;
 use crate::tick::StepReport;
 use crate::world::{House, World};
 
@@ -87,11 +88,20 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
 
     for (house, h) in houses.iter_mut() {
         let from = h.level;
-        let to = if decays(h, rules) {
-            from.saturating_sub(1)
+        let step = if decays(h, rules) {
+            from.previous()
         } else if rises(h, rules, top) {
-            from.saturating_add(1)
+            from.next()
         } else {
+            continue;
+        };
+        // `decays` and `rises` each guarantee the rung exists — level 1 never
+        // decays, nothing rises past the top — so `None` cannot come out of
+        // here. Skipping is the answer that leaves the ladder intact the day it
+        // does, which is more than the saturating arithmetic this replaced
+        // could say: that one moved the house to a level it had just been told
+        // was not there.
+        let Some(to) = step else {
             continue;
         };
         h.level = to;
@@ -133,7 +143,7 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
 /// conservative answer: it converges on a level that exists instead of freezing
 /// there.
 fn decays(house: &House, rules: &Rules) -> bool {
-    if house.level <= 1 {
+    if house.level == Level::FIRST {
         return false;
     }
     let Some(def) = rules.house_level(house.level) else {
@@ -154,11 +164,13 @@ fn decays(house: &House, rules: &Rules) -> bool {
 /// (`rules.house_levels[i].required_services` may not be empty) rather than a
 /// special case here: a level nobody has to earn is a table mistake, and it
 /// would be silently unreachable if this function pretended otherwise.
-fn rises(house: &House, rules: &Rules, top: u8) -> bool {
-    if house.level >= top {
+fn rises(house: &House, rules: &Rules, top: Option<Level>) -> bool {
+    // No top is an empty ladder, which validation refuses: there is nowhere to
+    // rise to, and nowhere the house could be standing either.
+    if top.is_none_or(|top| house.level >= top) {
         return false;
     }
-    let Some(def) = rules.house_level(house.level.saturating_add(1)) else {
+    let Some(def) = house.level.next().and_then(|next| rules.house_level(next)) else {
         return false;
     };
     def.required_services
@@ -200,10 +212,15 @@ mod tests {
         }
     }
 
+    /// A level from its number, so the tests below can go on talking in rungs.
+    fn lvl(number: u8) -> Level {
+        Level::new(number).expect("levels count from 1")
+    }
+
     fn house(level: u8, water: u8) -> House {
         let mut h = House {
             origin: TilePos::new(0, 0),
-            level,
+            level: lvl(level),
             residents: 4,
             served: ServiceFlags::empty(),
             satisfaction: [0; ServiceKind::COUNT],

@@ -335,6 +335,31 @@ contain no served house at all, and monotone is trivially true of a city where n
 seeds a well, a farm and a house in a corner of the map the generator cannot reach, and asserts that
 corner house climbs all the way in a year — so every one of the 2,000 cases witnesses real movement.
 
+**7. The level shipped as a bare `u8`, and review sent it back.** Two comments on the PR, on
+`Rules::house_level(level: u8)` and on a private `fn level_of(index: usize) -> u8`, which are the two
+ends of one defect: a level counts from 1 and the table it names is indexed from 0, and that `±1` was
+written out by hand at seven sites in three crates, in three different spellings —
+`usize::from(l).checked_sub(1)?`, `l.saturating_sub(1)`, `index + 1`. It is phase 11's lesson
+recurring: the fix there was the same one, `usize::from(id.get())` folded into
+`BuildingKindId::as_usize()`.
+
+`Level` (in `sim-core/src/ids.rs`) stores the index and shows the number, so `as_usize` is total and
+`get` is what the tables, the messages and the state hash mean. **One type for both ladders**, the
+house's and a provider's, rather than a `HouseLevel` beside a `BuildingLevel`: they are the same
+shape, `inconsistencies()` reports on both — `CapacityBeyondOutput` carries a provider's level and
+sat in the same helper as the house rungs — and a second type would be the same thirty lines written
+twice for a ladder that stays one rung long for the whole of M1 (D6).
+
+The change is worth reading for what it removed rather than what it added. `review` had
+`from.saturating_sub(1)` and `from.saturating_add(1)`: saturating arithmetic on a number that has a
+bottom and a top, which on the boundary would have moved a house to a level it had just been told was
+not there. It is now `previous()`/`next()` returning `Option`, and the `None` branch skips — the
+guarantee that it cannot fire is still `decays`/`rises`, but the failure mode if it ever does is a
+house that stays put instead of one standing off the table. Likewise `CapacityNotIncreasing`'s
+message no longer subtracts one inside a format string. Nothing else moved: `regen-expected --check`
+said *recordings up to date* without regenerating, and the benchmark's two state hashes came out
+`b510504baaad2a32` and `25e3f485115e3598` before and after, which is what a pure type change owes.
+
 The balancing choice worth recording: **level 1 asks for water only**, levels 2 and 3 for water and
 food. Three identical rungs would have left the per-level requirements doing nothing the building's
 own list did not already do, and the mechanism would have gone untested in the production dataset. It

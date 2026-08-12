@@ -15,7 +15,7 @@ mod common;
 mod levels {
     use super::common::*;
     use proptest::prelude::*;
-    use sim_core::{BuildingKindId, Command, Event, HouseId, ServiceKind, World};
+    use sim_core::{BuildingKindId, Command, Event, HouseId, Level, ServiceKind, World};
     use std::collections::BTreeMap;
 
     // --- helpers ------------------------------------------------------------
@@ -61,11 +61,11 @@ mod levels {
             h.served.get(ServiceKind::Water) && h.served.get(ServiceKind::Food),
             "the fixture has to start from a house served by both"
         );
-        assert_eq!(h.level, 1, "a house is born at level 1");
+        assert_eq!(h.level, level(1), "a house is born at level 1");
         (w, house)
     }
 
-    fn level(w: &World, house: HouseId) -> u8 {
+    fn house_level(w: &World, house: HouseId) -> Level {
         w.house(house).expect("alive").level
     }
 
@@ -118,18 +118,18 @@ mod levels {
         ready.div_ceil(month) * month
     }
 
-    fn threshold_up(w: &World, level: u8) -> u8 {
+    fn threshold_up(w: &World, at: Level) -> u8 {
         w.data()
             .rules
-            .house_level(level)
+            .house_level(at)
             .expect("the level exists")
             .level_up_threshold
     }
 
-    fn threshold_decay(w: &World, level: u8) -> u8 {
+    fn threshold_decay(w: &World, at: Level) -> u8 {
         w.data()
             .rules
-            .house_level(level)
+            .house_level(at)
             .expect("the level exists")
             .decay_threshold
     }
@@ -141,7 +141,7 @@ mod levels {
     #[test]
     fn a_served_house_reaches_level_two_at_the_first_review_after_the_threshold() {
         let (mut w, house) = a_served_house();
-        let target = threshold_up(&w, 2);
+        let target = threshold_up(&w, level(2));
         let review = review_after(&w, ticks_up_to(&w, worst(&w, house), target));
 
         run_to(&mut w, review);
@@ -151,18 +151,22 @@ mod levels {
             worst(&w, house)
         );
         assert_eq!(
-            level(&w, house),
-            1,
+            house_level(&w, house),
+            level(1),
             "no review before tick {review} may have promoted it"
         );
 
         let r = tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 2, "the review at tick {review} promotes");
+        assert_eq!(
+            house_level(&w, house),
+            level(2),
+            "the review at tick {review} promotes"
+        );
         assert!(
             r.events.contains(&Event::HouseEvolved {
                 house,
-                from: 1,
-                to: 2
+                from: level(1),
+                to: level(2)
             }),
             "the promotion has to be announced: {:?}",
             r.events
@@ -176,7 +180,10 @@ mod levels {
         let (mut w, house) = a_served_house();
         let max = w.data().rules.satisfaction.max;
         let top = w.data().rules.top_house_level();
-        assert!(top >= 3, "the fixture needs three rungs to say anything");
+        assert!(
+            top >= Some(level(3)),
+            "the fixture needs three rungs to say anything"
+        );
 
         // Saturated well before the first review, so the only thing rationing
         // the climb is the cadence.
@@ -184,18 +191,22 @@ mod levels {
         run_to(&mut w, saturated);
         assert_eq!(worst(&w, house), max);
         assert!(
-            max >= threshold_up(&w, 3),
+            max >= threshold_up(&w, level(3)),
             "the fixture has to make level 3 reachable in one climb"
         );
 
         let month = w.data().rules.ticks_per_month;
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 2, "one rung, not two");
+        assert_eq!(house_level(&w, house), level(2), "one rung, not two");
         let eve = w.tick() + month - 1;
         run_to(&mut w, eve);
-        assert_eq!(level(&w, house), 2, "and nothing between the reviews");
+        assert_eq!(
+            house_level(&w, house),
+            level(2),
+            "and nothing between the reviews"
+        );
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 3);
+        assert_eq!(house_level(&w, house), level(3));
     }
 
     /// The level only ever changes on a month boundary. It is the property that
@@ -204,18 +215,18 @@ mod levels {
     fn the_level_only_changes_at_a_review() {
         let (mut w, house) = a_served_house();
         let month = w.data().rules.ticks_per_month;
-        let mut previous = level(&w, house);
+        let mut previous = house_level(&w, house);
 
         for _ in 0..month * 4 {
             let at = w.tick();
             tick(&mut w, &[]);
-            let now = level(&w, house);
+            let now = house_level(&w, house);
             if now != previous {
                 assert_eq!(at % month, 0, "the level moved at tick {at}, off a review");
                 previous = now;
             }
         }
-        assert!(previous > 1, "the run has to have moved something");
+        assert!(previous > level(1), "the run has to have moved something");
     }
 
     // --- 2. decay -----------------------------------------------------------
@@ -229,8 +240,8 @@ mod levels {
         run_to(&mut w, saturated);
         tick(&mut w, &[]);
         assert_eq!(
-            level(&w, house),
-            2,
+            house_level(&w, house),
+            level(2),
             "it has to be up before it can come down"
         );
 
@@ -243,21 +254,25 @@ mod levels {
                 .get(ServiceKind::Water)
         );
 
-        let floor = threshold_decay(&w, 2);
+        let floor = threshold_decay(&w, level(2));
         let water = satisfaction(&w, house, ServiceKind::Water);
         let review = review_after(&w, ticks_down_below(&w, water, floor));
 
         run_to(&mut w, review);
         assert!(satisfaction(&w, house, ServiceKind::Water) < floor);
-        assert_eq!(level(&w, house), 2, "no earlier review may have demoted it");
+        assert_eq!(
+            house_level(&w, house),
+            level(2),
+            "no earlier review may have demoted it"
+        );
 
         let r = tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 1);
+        assert_eq!(house_level(&w, house), level(1));
         assert!(
             r.events.contains(&Event::HouseDegraded {
                 house,
-                from: 2,
-                to: 1
+                from: level(2),
+                to: level(1)
             }),
             "a separate variant from HouseEvolved, so the renderer need not \
              compare numbers: {:?}",
@@ -268,7 +283,7 @@ mod levels {
         // that empties out is phase 14's business.
         let two_months = w.tick() + w.data().rules.ticks_per_month * 2;
         run_to(&mut w, two_months);
-        assert_eq!(level(&w, house), 1);
+        assert_eq!(house_level(&w, house), level(1));
     }
 
     // --- 3. no oscillation: the test that defines the phase ------------------
@@ -329,7 +344,8 @@ mod levels {
             let corner = a_served_corner(&mut w);
             tick(&mut w, &setup);
 
-            let mut seen: BTreeMap<HouseId, u8> = w.houses().map(|(id, h)| (id, h.level)).collect();
+            let mut seen: BTreeMap<HouseId, Level> =
+                w.houses().map(|(id, h)| (id, h.level)).collect();
             let year = w.data().rules.ticks_per_year();
             for _ in 0..year {
                 tick(&mut w, &[]);
@@ -347,7 +363,7 @@ mod levels {
             // And something really did move: monotone is trivially true of a
             // city that never changes.
             prop_assert_eq!(
-                level(&w, corner),
+                Some(house_level(&w, corner)),
                 w.data().rules.top_house_level(),
                 "the served corner has to have climbed all the way in a year"
             );
@@ -374,7 +390,11 @@ mod levels {
         let population = w.population();
 
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 2, "the review has to have acted");
+        assert_eq!(
+            house_level(&w, house),
+            level(2),
+            "the review has to have acted"
+        );
 
         assert_eq!(w.coverage().assignments(), &assignments);
         assert_eq!(
@@ -420,8 +440,8 @@ mod levels {
             "and the food one has never moved"
         );
         assert_eq!(
-            level(&w, house),
-            1,
+            house_level(&w, house),
+            level(1),
             "level 2 wants food, so twelve reviews change nothing"
         );
 
@@ -429,12 +449,12 @@ mod levels {
         // earned from zero: what the house was receiving anyway was credited,
         // what it was not receiving was not.
         build(&mut w, FARM, 5, 2);
-        let target = threshold_up(&w, 2);
+        let target = threshold_up(&w, level(2));
         let review = review_after(&w, ticks_up_to(&w, worst(&w, house), target));
         run_to(&mut w, review);
-        assert_eq!(level(&w, house), 1);
+        assert_eq!(house_level(&w, house), level(1));
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 2);
+        assert_eq!(house_level(&w, house), level(2));
     }
 
     // --- 6. eviction ---------------------------------------------------------
@@ -453,15 +473,15 @@ mod levels {
         let saturated = review_after(&w, ticks_up_to(&w, worst(&w, house), 100));
         run_to(&mut w, saturated);
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 2);
+        assert_eq!(house_level(&w, house), level(2));
 
-        let capacity = w.data().rules.max_residents(2).expect("level 2");
+        let capacity = w.data().rules.max_residents(level(2)).expect("level 2");
         w.house_mut(house).expect("alive").residents = capacity;
 
         // Take the water away: the fall is what the eviction hangs off.
         let r = tick(&mut w, &[Command::Demolish { at: pos(2, 3) }]);
         assert!(r.rejected.is_empty(), "{:?}", r.rejected);
-        let floor = threshold_decay(&w, 2);
+        let floor = threshold_decay(&w, level(2));
         let water = satisfaction(&w, house, ServiceKind::Water);
         let fallen = review_after(&w, ticks_down_below(&w, water, floor));
         run_to(&mut w, fallen);
@@ -476,8 +496,8 @@ mod levels {
 
         tick(&mut w, &[]);
 
-        let capacity = w.data().rules.max_residents(1).expect("level 1");
-        assert_eq!(level(&w, house), 1);
+        let capacity = w.data().rules.max_residents(level(1)).expect("level 1");
+        assert_eq!(house_level(&w, house), level(1));
         assert_eq!(
             w.house(house).expect("alive").residents,
             capacity,
@@ -499,7 +519,11 @@ mod levels {
         let recomputes = w.coverage().recomputes();
 
         tick(&mut w, &[]);
-        assert_eq!(level(&w, house), 1, "the eviction has to have happened");
+        assert_eq!(
+            house_level(&w, house),
+            level(1),
+            "the eviction has to have happened"
+        );
         assert_eq!(
             w.coverage().recomputes(),
             recomputes,

@@ -18,8 +18,14 @@ use sim_core::data::{
     TerrainDef,
 };
 use sim_core::{
-    BuildingKindId, Coins, Command, DifficultyId, Grid, Milli, ServiceKind, Terrain, TilePos, World,
+    BuildingKindId, Coins, Command, DifficultyId, Grid, Level, Milli, ServiceKind, Terrain,
+    TilePos, World,
 };
+
+/// A level from its number, so a test can go on saying "level 2".
+pub fn level(number: u8) -> Level {
+    Level::new(number).expect("levels count from 1")
+}
 
 pub const HOUSE: BuildingKindId = BuildingKindId::new(0);
 pub const WELL: BuildingKindId = BuildingKindId::new(1);

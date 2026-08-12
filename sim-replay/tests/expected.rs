@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use sim_core::{Coins, DataSet, TilePos, World};
+use sim_core::{Coins, DataSet, Level, TilePos, World};
 use sim_replay::{CHECKPOINT_EVERY, Recording, ReplayError, checkpoints, hash_hex, hash_world};
 
 const SCENARIOS: [&str; 2] = ["minimal", "hunger"];
@@ -231,7 +231,10 @@ fn the_difficulty_acts_on_new_houses_and_nowhere_else() {
 #[test]
 fn easy_fills_a_house_the_way_m0_did() {
     let data = data();
-    let max = data.rules.max_residents(1).expect("houses have a level 1");
+    let max = data
+        .rules
+        .max_residents(Level::FIRST)
+        .expect("houses have a level 1");
 
     for name in SCENARIOS {
         let rec = recording(name);
@@ -310,7 +313,8 @@ fn the_hash_covers_the_whole_state() {
         }),
         ("a building", |w| {
             let id = w.buildings().next().map(|(id, _)| id).expect("a building");
-            w.building_mut(id).expect("alive").level += 1;
+            let b = w.building_mut(id).expect("alive");
+            b.level = b.level.next().expect("a rung above");
         }),
         ("a building's stock", |w| {
             let id = w.buildings().next().map(|(id, _)| id).expect("a building");
@@ -326,7 +330,8 @@ fn the_hash_covers_the_whole_state() {
         // change to the levelling rules and not merely to the tables.
         ("a house's level", |w| {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
-            w.house_mut(id).expect("alive").level += 1;
+            let h = w.house_mut(id).expect("alive");
+            h.level = h.level.next().expect("a rung above");
         }),
         ("a house's services", |w| {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
