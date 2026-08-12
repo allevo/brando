@@ -1,5 +1,5 @@
 // A profile that builds houses beyond their own capacity. A level-1 house
-// holds 4 residents (the first rung of rules.house_levels), so a profile born
+// holds 4 residents (the first level of rules.house_levels), so a profile born
 // at 6 would produce a house the rest of the game cannot represent: since phase
 // 13, residents <= max_residents(level) is assumed everywhere.
 //

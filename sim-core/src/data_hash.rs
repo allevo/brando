@@ -17,9 +17,9 @@ use crate::data::{
     BuildingDef, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules, TerrainDef,
 };
 
-/// Domain prefix: keeps this hash apart from any other blake3 in the project.
+/// Hash prefix: keeps this hash apart from any other blake3 in the project.
 /// Changing it regenerates every recording.
-const DOMAIN: &[u8] = b"brando/dataset/v1";
+const PREFIX: &[u8] = b"brando/dataset/v1";
 
 pub(crate) fn dataset_hash(
     rules: &Rules,
@@ -28,7 +28,7 @@ pub(crate) fn dataset_hash(
     difficulties: &[DifficultyDef],
 ) -> [u8; 32] {
     let mut h = blake3::Hasher::new();
-    h.update(DOMAIN);
+    h.update(PREFIX);
 
     // --- rules ---
     // Destructured, not accessed field by field: the exhaustive pattern stops

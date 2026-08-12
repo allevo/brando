@@ -10,8 +10,8 @@
 //
 // The house and the well come **after** the two farms, so the indices in the
 // expected report do not move. They are here because since phase 13 the
-// cross-table checks also want a table to contain a house at all, as many rungs
-// as the house declares, and a provider for every service the rungs ask for: a
+// cross-table checks also want a table to contain a house at all, as many levels
+// as the house declares, and a provider for every service the levels ask for: a
 // buildings table of nothing but farms would produce four more errors and bury
 // the two this fixture exists for.
 (

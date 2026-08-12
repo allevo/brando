@@ -201,11 +201,11 @@ fn the_difficulty_profiles_load() {
         .rules
         .top_house_level()
         .and_then(Level::next)
-        .expect("the ladder is not empty");
+        .expect("the table is not empty");
     assert_eq!(
         d.rules.max_residents(past_the_top),
         None,
-        "and stop at the top of the ladder"
+        "and stop at the top level"
     );
 }
 
@@ -255,47 +255,47 @@ fn the_satisfaction_curve_has_the_shape_the_balancing_means() {
     }
     assert_eq!(
         sim_core::Mood::of(0, s),
-        sim_core::Mood::Desperate,
-        "a house at zero has to be Desperate: it is the mood the renderer \
+        sim_core::Mood::Awful,
+        "a house at zero has to be Awful: it is the mood the renderer \
          assumes for a newly-built one"
     );
-    assert_eq!(sim_core::Mood::of(s.max, s), sim_core::Mood::Thriving);
+    assert_eq!(sim_core::Mood::of(s.max, s), sim_core::Mood::Great);
 }
 
-/// The house ladder (phase 13): the shape the balancing means, expressed as
+/// The house levels (phase 13): the shape the balancing means, expressed as
 /// relations rather than as the numbers themselves.
 ///
 /// The relations that make a dataset *usable* are checked by
 /// `DataSet::inconsistencies` and asserted above. What is worth pinning down
 /// here is what the numbers were chosen **for**, which no validation can know:
-/// that the rungs are earned inside a game and not in an afternoon, and that
+/// that the levels are earned inside a game and not in an afternoon, and that
 /// they really do ask for different things.
 #[test]
-fn the_house_ladder_has_the_shape_the_balancing_means() {
+fn the_house_levels_have_the_shape_the_balancing_means() {
     let d = sim_data::load_default().expect("valid tables");
     let s = &d.rules.satisfaction;
     let top = d.rules.top_house_level();
     assert!(
         top > Some(Level::FIRST),
-        "a ladder with one rung is not a ladder"
+        "a table with a single level is no progression"
     );
 
     let mut previous: Option<&sim_core::HouseLevelDef> = None;
-    for (level, l) in d.rules.house_ladder() {
+    for (level, l) in d.rules.all_levels() {
         if level > Level::FIRST {
             let climb = u32::from(l.level_up_threshold).div_ceil(u32::from(s.step_up));
             assert!(
                 climb < d.rules.ticks_per_month,
                 "level {level} is earned in {climb} ticks, more than the month \
                  that separates two reviews: it would take two reviews to gain \
-                 one rung, and the reason would be invisible"
+                 one level, and the reason would be invisible"
             );
             let band = u32::from(l.level_up_threshold) - u32::from(l.decay_threshold);
             let fall = band.div_ceil(u32::from(s.step_down));
             assert!(
                 fall > 1,
                 "level {level}'s band is {band}, which a single tick without \
-                 the service crosses: the hysteresis exists on paper only"
+                 the service crosses: the gap exists on paper only"
             );
         }
 
@@ -312,11 +312,11 @@ fn the_house_ladder_has_the_shape_the_balancing_means() {
     let first = d.rules.house_level(Level::FIRST).expect("level 1");
     let last = d
         .rules
-        .house_level(top.expect("the ladder is not empty"))
+        .house_level(top.expect("the table is not empty"))
         .expect("the top level");
     assert!(
         last.required_services.len() > first.required_services.len(),
-        "with the same demands at every rung the per-level requirements do \
+        "with the same demands at every level the per-level requirements do \
          nothing the building's own list would not do"
     );
     assert_eq!(
@@ -488,7 +488,7 @@ fn a_satisfaction_curve_that_cannot_be_drawn() {
     );
 }
 
-/// A band at zero is not merely odd: it would leave `Mood::Desperate` empty,
+/// A band at zero is not merely odd: it would leave `Mood::Awful` empty,
 /// and a newly-built house would be born into a band nobody expects.
 #[test]
 fn a_mood_band_at_zero_is_refused() {
@@ -534,7 +534,7 @@ fn a_buildings_table_without_a_house() {
     );
 }
 
-/// The house and the ladder have to agree on how many rungs there are.
+/// The house and the levels have to agree on how many levels there are.
 #[test]
 fn a_house_that_declares_the_wrong_number_of_levels() {
     let e = errors_of(with_buildings(&replaced(
@@ -554,9 +554,9 @@ fn a_house_that_declares_the_wrong_number_of_levels() {
     );
 }
 
-/// And on **what** they ask for: the building's list is the union of the rungs'.
+/// And on **what** they ask for: the building's list is the union of the levels'.
 #[test]
-fn a_house_whose_list_is_not_the_union_of_its_rungs() {
+fn a_house_whose_list_is_not_the_union_of_its_levels() {
     let e = errors_of(with_buildings(&replaced(
         &valid_buildings(),
         r#"required_services: ["water", "food"],"#,
@@ -574,10 +574,10 @@ fn a_house_whose_list_is_not_the_union_of_its_rungs() {
     );
 }
 
-/// A rung that holds no more than the one below it: levelling up would shrink
+/// A level that holds no more than the one below it: levelling up would shrink
 /// the house.
 #[test]
-fn a_ladder_that_does_not_go_up() {
+fn the_levels_do_not_go_up() {
     let e = errors_of(with_rules(&replaced(
         &valid_rules(),
         "max_residents: 8,",
@@ -598,7 +598,7 @@ fn a_ladder_that_does_not_go_up() {
 
 /// No band between the two thresholds, and the city flips at every review.
 #[test]
-fn a_rung_with_no_hysteresis_band() {
+fn a_level_with_no_gap() {
     let e = errors_of(with_rules(&replaced(
         &valid_rules(),
         "decay_threshold: 25,",
@@ -608,7 +608,7 @@ fn a_rung_with_no_hysteresis_band() {
         e,
         [(
             "rules.house_levels[1].decay_threshold".to_string(),
-            ValidationErrorKind::Inconsistent(Inconsistency::NoHysteresis {
+            ValidationErrorKind::Inconsistent(Inconsistency::NoGap {
                 level: level(2),
                 decay: 50,
                 level_up: 50,
@@ -617,10 +617,10 @@ fn a_rung_with_no_hysteresis_band() {
     );
 }
 
-/// A threshold past the ceiling of the accumulator: a rung nobody can ever
+/// A threshold past the ceiling of the accumulator: a level nobody can ever
 /// reach, and nothing in the game would say so.
 #[test]
-fn a_rung_nobody_can_reach() {
+fn a_level_nobody_can_reach() {
     let e = errors_of(with_rules(&replaced(
         &valid_rules(),
         "level_up_threshold: 90,",
@@ -639,7 +639,7 @@ fn a_rung_nobody_can_reach() {
     );
 }
 
-/// A service the rungs ask for and no building supplies. One error per rung
+/// A service the levels ask for and no building supplies. One error per level
 /// that asks for it: each is a level that can never be held.
 ///
 /// The replacement makes the **well** declare food, so it also produces one
@@ -667,7 +667,7 @@ fn a_service_no_building_provides() {
             )
         })
         .collect();
-    // After the rungs: `inconsistencies()` runs the levels before the food
+    // After the levels: `inconsistencies()` runs the levels before the food
     // capacity, and that order is part of its contract.
     expected.push((
         "buildings[1].service.capacity_per_level".to_string(),
@@ -681,11 +681,11 @@ fn a_service_no_building_provides() {
     assert_eq!(e, expected);
 }
 
-/// A provider too small for a full house of that rung. Not a blocker with A12
+/// A provider too small for a full house of that level. Not a blocker with A12
 /// — the house is servable as long as it stays half empty — but it is a city
 /// that plugs up without saying why.
 #[test]
-fn a_rung_no_provider_can_serve_in_full() {
+fn a_level_no_provider_can_serve_in_full() {
     let e = errors_of(with_buildings(&replaced(
         &valid_buildings(),
         "capacity_per_level: [32],",
@@ -703,15 +703,15 @@ fn a_rung_no_provider_can_serve_in_full() {
             })
         )],
         "level 2 holds 8, which the shrunken well still covers: only the top \
-         rung is out of reach"
+         level is out of reach"
     );
 }
 
-/// A rung that asks for nothing would be climbed for free, `all()` over an
+/// A level that asks for nothing would be climbed for free, `all()` over an
 /// empty list being true. It is the one relation that stays in `sim-data`:
 /// it is a property of one field of one table.
 #[test]
-fn a_rung_that_asks_for_nothing() {
+fn a_level_that_asks_for_nothing() {
     let e = errors_of(with_rules(&replaced(
         &valid_rules(),
         r#"required_services: ["water"],"#,
@@ -867,11 +867,11 @@ fn the_hash_covers_every_table() {
     // exactly the kind that gets forgotten in a hash written by hand (A3):
     // without this, rebalancing the curve would leave every recording green
     // while the game has changed.
-    // The satisfaction curve and the house ladder are blocks **inside** the
+    // The satisfaction curve and the house levels are blocks **inside** the
     // rules, and a nested table is exactly the kind that gets forgotten in a
     // hash written by hand (A3): without these, rebalancing them would leave
-    // every recording green while the game has changed. Every field of a rung
-    // is perturbed, not just one: the hash is fed field by field, so one of
+    // every recording green while the game has changed. Every field of a level
+    // is changed, not just one: the hash is fed field by field, so one of
     // them can be left out on its own.
     for (from, to) in [
         ("step_up: 4", "step_up: 5"),

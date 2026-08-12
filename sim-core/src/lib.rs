@@ -35,7 +35,7 @@ pub use ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
 pub use levels::PopulationTotals;
 pub use network::{ComponentId, RoadNetwork, Visited};
 pub use production::FoodTotals;
-pub use rng::{RngDomain, RngSet};
+pub use rng::{RngKind, RngSet};
 pub use satisfaction::Mood;
 pub use service::{ServiceFlags, ServiceKind};
 pub use tick::{StepReport, step};

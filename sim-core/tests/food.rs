@@ -63,9 +63,9 @@ fn stocks_in_range(w: &World) -> Result<(), String> {
 
 /// How much food one house eats in one tick, read from the `DataSet`.
 ///
-/// The residents come from the **difficulty profile**, not from the ladder's
-/// first rung: since phase 11 that is what a house is really born with, and the
-/// rung's value is only its ceiling. On the profile these tests play on the two
+/// The residents come from the **difficulty profile**, not from the levels's
+/// first level: since phase 11 that is what a house is really born with, and the
+/// level's value is only its ceiling. On the profile these tests play on the two
 /// coincide — reading the right one is what stops that from being a coincidence
 /// the day they stop coinciding.
 fn food_per_house(w: &World) -> Milli {

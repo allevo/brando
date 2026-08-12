@@ -294,8 +294,8 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
 /// first one that does not fit — would keep distance as an absolute priority,
 /// but would leave places unused: a provider declared for twenty residents
 /// would serve sixteen, and the capacity in the table would stop telling the
-/// truth. For a producer that gap would also break the consistency between
-/// capacity and output that [`CapacityBeyondOutput`] guards. Worse, one
+/// truth. For a producer that shortfall would also break the consistency
+/// between capacity and output that [`CapacityBeyondOutput`] guards. Worse, one
 /// large house built near the provider would cut out *all* those beyond it,
 /// while places sat free.
 ///

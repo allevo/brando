@@ -24,14 +24,14 @@ use crate::world::{House, World};
 /// [`mood_of`]'s `min` mean "the worst service wins".
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Mood {
-    Desperate,
+    Awful,
     Unhappy,
     Happy,
-    Thriving,
+    Great,
 }
 
 impl Mood {
-    pub const ALL: [Mood; 4] = [Mood::Desperate, Mood::Unhappy, Mood::Happy, Mood::Thriving];
+    pub const ALL: [Mood; 4] = [Mood::Awful, Mood::Unhappy, Mood::Happy, Mood::Great];
 
     pub const COUNT: usize = Self::ALL.len();
 
@@ -40,7 +40,7 @@ impl Mood {
     /// The boundaries are data ([`SatisfactionRules::mood_thresholds`]), and a
     /// threshold is the **lower bound, inclusive**, of the band above.
     /// Validation guarantees they are strictly ascending and that the first is
-    /// above zero, so a satisfaction of zero is always `Desperate` — which is
+    /// above zero, so a satisfaction of zero is always `Awful` — which is
     /// what lets a newly-built house have a well-defined mood before anyone has
     /// computed one for it (see `tick::emit_events`).
     pub fn of(value: u8, rules: &SatisfactionRules) -> Self {
@@ -49,17 +49,14 @@ impl Mood {
             .iter()
             .filter(|t| value >= **t)
             .count();
-        Self::ALL
-            .get(bands_passed)
-            .copied()
-            .unwrap_or(Self::Thriving)
+        Self::ALL.get(bands_passed).copied().unwrap_or(Self::Great)
     }
 }
 
 /// A house's mood: the **minimum** across the services **its own level**
 /// requires.
 ///
-/// A house with water and no food is desperate, not half happy. Services the
+/// A house with water and no food is awful, not half happy. Services the
 /// level does not require are not looked at — even though [`update`] keeps
 /// their accumulators moving, which is a different question and answered there.
 /// A house that levels up into a stricter requirement can therefore lose mood
@@ -73,7 +70,7 @@ impl Mood {
 /// A house that requires nothing cannot exist — [`BuildingDef::is_house`]
 /// classifies as a house exactly what declares required services, and
 /// validation refuses a level that demands none — and the fallback is
-/// `Desperate` rather than `Thriving` so that even in that impossible case it
+/// `Awful` rather than `Great` so that even in that impossible case it
 /// agrees with the default a newborn house is compared against, and no event is
 /// emitted out of nothing.
 ///
@@ -84,7 +81,7 @@ pub fn mood_of(house: &House, rules: &Rules) -> Mood {
         .iter()
         .map(|k| Mood::of(house.satisfaction[k.index()], &rules.satisfaction))
         .min()
-        .unwrap_or(Mood::Desperate)
+        .unwrap_or(Mood::Awful)
 }
 
 /// Step 6.1 — the accumulators move by one tick.
@@ -148,29 +145,29 @@ mod tests {
     }
 
     /// A threshold is the lower bound of the band above, inclusive, and zero is
-    /// always `Desperate`.
+    /// always `Awful`.
     #[test]
     fn the_bands_are_inclusive_at_the_bottom() {
         let r = rules();
         let cases = [
-            (0, Mood::Desperate),
-            (24, Mood::Desperate),
+            (0, Mood::Awful),
+            (24, Mood::Awful),
             (25, Mood::Unhappy),
             (49, Mood::Unhappy),
             (50, Mood::Happy),
             (74, Mood::Happy),
-            (75, Mood::Thriving),
-            (100, Mood::Thriving),
-            (255, Mood::Thriving),
+            (75, Mood::Great),
+            (100, Mood::Great),
+            (255, Mood::Great),
         ];
         for (value, expected) in cases {
             assert_eq!(Mood::of(value, &r), expected, "satisfaction {value}");
         }
     }
 
-    /// A two-rung ladder: level 1 wants water only, level 2 wants both.
-    fn ladder() -> Rules {
-        let rung = |max_residents, required: &[ServiceKind]| HouseLevelDef {
+    /// A two-level table: level 1 wants water only, level 2 wants both.
+    fn two_levels() -> Rules {
+        let def = |max_residents, required: &[ServiceKind]| HouseLevelDef {
             max_residents,
             required_services: required.to_vec(),
             level_up_threshold: 50,
@@ -182,8 +179,8 @@ mod tests {
             months_per_year: 12,
             starting_treasury: Coins::ZERO,
             house_levels: vec![
-                rung(4, &[ServiceKind::Water]),
-                rung(8, &[ServiceKind::Water, ServiceKind::Food]),
+                def(4, &[ServiceKind::Water]),
+                def(8, &[ServiceKind::Water, ServiceKind::Food]),
             ],
             food_per_resident: Milli::ZERO,
             satisfaction: rules(),
@@ -204,14 +201,14 @@ mod tests {
     }
 
     /// The worst service decides: water at the maximum and food at zero is
-    /// desperate, not half happy — but only once the level asks for food.
+    /// awful, not half happy — but only once the level asks for food.
     #[test]
     fn the_mood_is_the_worst_of_the_required_services() {
-        let r = ladder();
-        assert_eq!(mood_of(&a_house(2), &r), Mood::Desperate);
+        let r = two_levels();
+        assert_eq!(mood_of(&a_house(2), &r), Mood::Awful);
         assert_eq!(
             mood_of(&a_house(1), &r),
-            Mood::Thriving,
+            Mood::Great,
             "a service the level does not require does not drag the mood down"
         );
     }
@@ -220,6 +217,6 @@ mod tests {
     /// a newborn house is compared against: no event out of nothing.
     #[test]
     fn a_level_off_the_table_is_desperate_not_thriving() {
-        assert_eq!(mood_of(&a_house(9), &ladder()), Mood::Desperate);
+        assert_eq!(mood_of(&a_house(9), &two_levels()), Mood::Awful);
     }
 }

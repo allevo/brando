@@ -47,7 +47,7 @@ pub enum Event {
     /// nothing.
     ///
     /// A newly-built house does not emit one: it is born at zero satisfaction,
-    /// which is always [`Mood::Desperate`], and that is the mood the renderer
+    /// which is always [`Mood::Awful`], and that is the mood the renderer
     /// has to assume from [`Event::HousePlaced`].
     HouseMoodChanged {
         house: HouseId,

@@ -1,7 +1,7 @@
 # Plan for the first stages of development — Brando
 
 This plan covers **M0 — Foundations** (phases 00–09, complete) and **M1 — A minimal game loop**
-(phases 11–19) of the roadmap in `CLAUDE.md`, broken into small phases.
+(phases 11–18) of the roadmap in `CLAUDE.md`, broken into small phases.
 
 M1 was planned after M0 closed, not before: doing it earlier would have meant deciding on the
 balancing without having watched a single tick run. [10-beyond-m0.md](10-beyond-m0.md) remains the
@@ -132,4 +132,7 @@ M1, A18 out of the bug hunt after phase 13. For each one, alongside the recommen
 **how it really went** — which is almost always the more useful information, because it diverges.
 
 ## Implemented till
-Everything is implemented till 13 included, plus the bug hunt that follows it.
+Everything is implemented till 13 included, plus the bug hunt that follows it and the vocabulary
+review after that ([naming-review-2026-08-12.md](naming-review-2026-08-12.md), which produced
+[A19](open-decisions.md) and the naming rule in `CLAUDE.md`). The review renamed identifiers only and
+moved no hash: it is the one batch so far whose correctness proof is that nothing changed.

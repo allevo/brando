@@ -27,8 +27,8 @@ pub struct Rules {
     pub satisfaction: SatisfactionRules,
 }
 
-/// One rung of the house ladder (phase 13): what it holds, what it demands,
-/// and what it is worth to the treasury.
+/// One entry of the house levels table (phase 13): what it holds, what it
+/// demands, and what it is worth to the treasury.
 ///
 /// **Why in `Rules` and not in `BuildingDef`.** `House` does not carry a
 /// [`BuildingKindId`], and in M1 there is only one kind of house. Adding one so
@@ -46,7 +46,7 @@ pub struct HouseLevelDef {
     /// The services needed to **rise to** this level and to **stay at** it.
     ///
     /// This is where `required_services` stops being declarative data read only
-    /// by [`BuildingDef::is_house`] — the gap noted in A9. Three systems read
+    /// by [`BuildingDef::is_house`] — the hole noted in A9. Three systems read
     /// it: the mood and the decay check use the house's **own** level, the
     /// level-up check the **destination's**.
     ///
@@ -64,16 +64,15 @@ pub struct HouseLevelDef {
     /// Below this, on any one of [`HouseLevelDef::required_services`], a house
     /// **at this level** decays.
     ///
-    /// Together with the field above it forms the hysteresis band
-    /// `decay_threshold..level_up_threshold`, inside which a house stays where
-    /// it is whichever side it came from. A band that is not strictly positive
-    /// is [`Inconsistency::NoHysteresis`] — hysteresis is a **check**, not a
-    /// comment (A10).
+    /// Together with the field above it forms the gap
+    /// `decay_threshold..level_up_threshold`, inside which a house stays where it
+    /// is whichever side it came from. A gap that is not strictly positive is
+    /// [`Inconsistency::NoGap`] — the gap is a **check**, not a comment (A10).
     ///
     /// Unread at level 1: there is no level 0 to fall to.
     pub decay_threshold: u8,
     /// The taxable base per resident (phase 16). Zero until then, and read by
-    /// nobody: it is declared now because the ladder is the table phase 16 will
+    /// nobody: it is declared now because the levels are the table phase 16 will
     /// want it in, and adding it later would regenerate the recordings a second
     /// time for one number.
     pub taxable_per_resident: Milli,
@@ -91,11 +90,11 @@ pub struct SatisfactionRules {
     /// Subtracted when it is missing. Larger than `step_up` in the production
     /// tables: losing the water is an event, getting it back is an investment.
     pub step_down: u8,
-    /// The lower bound, inclusive, of each band above [`Mood::Desperate`], in
+    /// The lower bound, inclusive, of each band above [`Mood::Awful`], in
     /// ascending order.
     ///
     /// Validated as strictly ascending, above zero and no greater than `max`:
-    /// that is what makes a satisfaction of zero always `Desperate`, and
+    /// that is what makes a satisfaction of zero always `Awful`, and
     /// [`Mood::of`] total.
     pub mood_thresholds: [u8; Mood::COUNT - 1],
 }
@@ -120,13 +119,13 @@ impl Rules {
         self.house_levels.get(level.as_usize())
     }
 
-    /// The ladder, rung by rung, each with its level.
+    /// Every entry of `house_levels`, paired with the level it stands for.
     ///
     /// The only place that pairs a position in the table with the level it
     /// stands for, which is why the cross-table checks and the tests that walk
-    /// the ladder all come through here instead of adding one to an index
+    /// the levels all come through here instead of adding one to an index
     /// apiece.
-    pub fn house_ladder(&self) -> impl Iterator<Item = (Level, &HouseLevelDef)> {
+    pub fn all_levels(&self) -> impl Iterator<Item = (Level, &HouseLevelDef)> {
         self.house_levels
             .iter()
             .enumerate()
@@ -214,8 +213,8 @@ impl ServiceDef {
         self.capacity_per_level.get(level.as_usize()).copied()
     }
 
-    /// The capacities, rung by rung, each with its level. The provider's
-    /// counterpart of [`Rules::house_ladder`].
+    /// Every capacity, paired with the level it stands for. The provider's
+    /// counterpart of [`Rules::all_levels`].
     pub fn capacities(&self) -> impl Iterator<Item = (Level, u16)> {
         self.capacity_per_level
             .iter()
@@ -413,8 +412,8 @@ impl DataSet {
     /// vectors.
     pub fn inconsistencies(&self) -> Vec<Inconsistency> {
         let mut out = Vec::new();
-        self.check_the_house_agrees_with_the_ladder(&mut out);
-        self.check_the_ladder(&mut out);
+        self.check_the_house_agrees_with_the_levels(&mut out);
+        self.check_the_levels(&mut out);
         self.check_the_levels_can_be_served(&mut out);
         self.check_food_capacity(&mut out);
         self.check_difficulty(&mut out);
@@ -430,7 +429,7 @@ impl DataSet {
     /// checks are what makes that impossible: one says a house exists at all,
     /// one that the levels are as many as declared, one that the building's
     /// list is exactly the union of the levels'.
-    fn check_the_house_agrees_with_the_ladder(&self, out: &mut Vec<Inconsistency>) {
+    fn check_the_house_agrees_with_the_levels(&self, out: &mut Vec<Inconsistency>) {
         let Some(house) = self.house_def() else {
             out.push(Inconsistency::NoHouse);
             return;
@@ -457,12 +456,11 @@ impl DataSet {
         }
     }
 
-    /// The ladder goes up, and each rung has a hysteresis band you can stand
-    /// on.
-    fn check_the_ladder(&self, out: &mut Vec<Inconsistency>) {
+    /// The levels go up, and each one has a gap you can stand on.
+    fn check_the_levels(&self, out: &mut Vec<Inconsistency>) {
         let max = self.rules.satisfaction.max;
         let mut previous: Option<u16> = None;
-        for (level, def) in self.rules.house_ladder() {
+        for (level, def) in self.rules.all_levels() {
             if let Some(previous) = previous
                 && def.max_residents <= previous
             {
@@ -481,7 +479,7 @@ impl DataSet {
                 continue;
             }
             if def.decay_threshold >= def.level_up_threshold {
-                out.push(Inconsistency::NoHysteresis {
+                out.push(Inconsistency::NoGap {
                     level,
                     decay: def.decay_threshold,
                     level_up: def.level_up_threshold,
@@ -501,7 +499,7 @@ impl DataSet {
 
     /// Somebody provides what the levels ask for, and to a house that is full.
     fn check_the_levels_can_be_served(&self, out: &mut Vec<Inconsistency>) {
-        for (level, def) in self.rules.house_ladder() {
+        for (level, def) in self.rules.all_levels() {
             for &service in &def.required_services {
                 let best = self
                     .buildings
@@ -646,7 +644,7 @@ pub enum Inconsistency {
     #[error(
         "level {level} holds {max_residents} residents, no more than level {} \
          with {previous}: levelling up would shrink the house",
-        // Unreachable: with no rung below there is no `previous` capacity to be
+        // Unreachable: with no level below there is no `previous` capacity to be
         // no more than, so the check cannot fire at the first level.
         level.previous().unwrap_or(Level::FIRST)
     )]
@@ -658,9 +656,9 @@ pub enum Inconsistency {
 
     #[error(
         "level {level} decays below {decay} and is reached at {level_up}: with \
-         no hysteresis band the city oscillates at every review"
+         no gap between the two thresholds the city flickers at every review"
     )]
-    NoHysteresis {
+    NoGap {
         level: Level,
         decay: u8,
         level_up: u8,
@@ -699,7 +697,7 @@ pub enum Inconsistency {
         /// Index into [`DataSet::buildings`].
         building: usize,
         /// The level at which the capacity overshoots. The **provider's**
-        /// level, not a house rung: the two ladders share a type, not a table.
+        /// level, not a house level: the two share a type, not a table.
         level: Level,
         /// Residents claimed in the table.
         capacity: u16,
@@ -722,7 +720,7 @@ pub enum Inconsistency {
     },
 }
 
-/// The services, in a canonical order and without repeats, so two lists can be
+/// The services, in a fixed order and without repeats, so two lists can be
 /// compared as sets.
 fn sorted(services: impl IntoIterator<Item = ServiceKind>) -> Vec<ServiceKind> {
     let mut v: Vec<ServiceKind> = services.into_iter().collect();

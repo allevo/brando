@@ -295,16 +295,16 @@ fn the_hash_covers_the_whole_state() {
     let h0 = hash_world(&base);
 
     // The compile-time half of the same guard: this call does nothing at
-    // runtime, but `World::field_canary` stops compiling the moment a field is
-    // added to the state — which is the reminder that a perturbation for it
+    // runtime, but `World::every_field` stops compiling the moment a field is
+    // added to the state — which is the reminder that a change for it
     // belongs in the list below. Without it, this test stays green on a field
     // the hash has gone blind on.
-    base.field_canary();
+    base.every_field();
 
-    /// A perturbation of a single field of the state.
-    type Perturbation = (&'static str, fn(&mut World));
+    /// A change to a single field of the state.
+    type Change = (&'static str, fn(&mut World));
 
-    let perturbations: Vec<Perturbation> = vec![
+    let changes: Vec<Change> = vec![
         ("the tick", |w| {
             sim_core::step(w, &[]);
         }),
@@ -314,7 +314,7 @@ fn the_hash_covers_the_whole_state() {
         ("a building", |w| {
             let id = w.buildings().next().map(|(id, _)| id).expect("a building");
             let b = w.building_mut(id).expect("alive");
-            b.level = b.level.next().expect("a rung above");
+            b.level = b.level.next().expect("a level above");
         }),
         ("a building's stock", |w| {
             let id = w.buildings().next().map(|(id, _)| id).expect("a building");
@@ -326,12 +326,12 @@ fn the_hash_covers_the_whole_state() {
             w.house_mut(id).expect("alive").residents += 1;
         }),
         // Hashed since M0, but it only started meaning anything in phase 13:
-        // a perturbation of its own is what says the recordings would notice a
+        // a change of its own is what says the recordings would notice a
         // change to the levelling rules and not merely to the tables.
         ("a house's level", |w| {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
             let h = w.house_mut(id).expect("alive");
-            h.level = h.level.next().expect("a rung above");
+            h.level = h.level.next().expect("a level above");
         }),
         ("a house's services", |w| {
             let id = w.houses().next().map(|(id, _)| id).expect("a house");
@@ -345,9 +345,9 @@ fn the_hash_covers_the_whole_state() {
             let k = sim_core::ServiceKind::Food.index();
             h.satisfaction[k] = h.satisfaction[k].wrapping_sub(1);
         }),
-        // The walkers are empty until M3, so this is the one perturbation that
+        // The walkers are empty until M3, so this is the one change that
         // cannot arise from replaying anything: it has to be put there by hand.
-        // That is exactly why it was missing — and why `field_canary` could not
+        // That is exactly why it was missing — and why `every_field` could not
         // help, since `walkers: _` was already written into it.
         ("a walker", |w| w.push_walker(TilePos::new(3, 4))),
         ("the treasury", |w| {
@@ -362,9 +362,9 @@ fn the_hash_covers_the_whole_state() {
         }),
     ];
 
-    for (what, perturb) in perturbations {
+    for (what, change) in changes {
         let mut w = base.clone();
-        perturb(&mut w);
+        change(&mut w);
         assert_ne!(
             hash_hex(&hash_world(&w)),
             hash_hex(&h0),
@@ -372,8 +372,8 @@ fn the_hash_covers_the_whole_state() {
         );
     }
 
-    // The position of every RNG stream, one domain at a time.
-    for d in sim_core::RngDomain::ALL {
+    // The position of every RNG stream, one kind at a time.
+    for d in sim_core::RngKind::ALL {
         let mut w = base.clone();
         w.consume_rng(d);
         assert_ne!(
@@ -404,12 +404,12 @@ fn the_derived_structures_stay_out_of_the_hash() {
 // --- 7. sensitivity to the seed (expected red in M0) ------------------------
 
 /// A different seed with the same commands ⇒ a different hash, **as soon as**
-/// an RNG domain is used.
+/// an RNG kind is used.
 ///
 /// In M0 no system draws from the RNG: migration and random events are M1. So
 /// the test is expected to fail, and it is written now because now is when you
 /// can see why it is needed. To be re-enabled with migration (M1, phase 2),
-/// which is the first real use of `RngDomain::Migration`.
+/// which is the first real use of `RngKind::Migration`.
 #[test]
 #[ignore = "in M0 no system uses the RNG: re-enable with migration (M1)"]
 fn different_seeds_give_different_hashes() {

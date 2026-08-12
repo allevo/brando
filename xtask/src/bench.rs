@@ -57,7 +57,7 @@ const BENCH_DIFFICULTY: &str = "easy";
 /// The two sizes measured by default. They are not balancing numbers: they are
 /// the project's reference scale (200x200, ~15,000 residents) and an
 /// intermediate size that shows how the costs scale.
-const PROFILES: [(&str, u16, u32); 2] = [("mid game", 100, 3_000), ("late game", 200, 15_000)];
+const PRESETS: [(&str, u16, u32); 2] = [("mid game", 100, 3_000), ("late game", 200, 15_000)];
 
 pub fn bench(args: &[String]) -> Result<(), String> {
     let reps = super::number(args, "--reps")?.unwrap_or(40).max(1);
@@ -78,11 +78,11 @@ pub fn bench(args: &[String]) -> Result<(), String> {
     // nothing else; with neither, the two reference profiles are measured.
     match (side, residents) {
         (None, None) => {
-            for (name, s, r) in PROFILES {
-                profile(&real, name, s, r, reps)?;
+            for (name, s, r) in PRESETS {
+                preset(&real, name, s, r, reps)?;
             }
         }
-        (s, r) => profile(
+        (s, r) => preset(
             &real,
             "custom",
             s.unwrap_or(200).try_into().unwrap_or(u16::MAX),
@@ -93,7 +93,7 @@ pub fn bench(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn profile(real: &DataSet, name: &str, side: u16, residents: u32, reps: u32) -> Result<(), String> {
+fn preset(real: &DataSet, name: &str, side: u16, residents: u32, reps: u32) -> Result<(), String> {
     println!("\n=== {name}: {side}x{side}, {residents} residents ===");
 
     let data = Arc::new(with_unlimited_treasury(real));

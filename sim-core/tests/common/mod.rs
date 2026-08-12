@@ -44,7 +44,7 @@ pub const STARTING_TREASURY: i32 = 1000;
 /// What a house holds at level 1, which is also what `easy` builds it with.
 pub const RESIDENTS_PER_HOUSE: u16 = 4;
 
-// The house ladder of the fixture (phase 13), one entry per level. Its own
+// The house levels of the fixture (phase 13), one entry per level. Its own
 // numbers, like everything else here: a test about the mechanics must not break
 // when the production balancing moves. What a test may **not** do is copy them
 // — the horizons are computed from the `DataSet`, which is what makes them stay
@@ -54,8 +54,8 @@ pub const LEVEL_RESIDENTS: [u16; HOUSE_LEVELS] = [RESIDENTS_PER_HOUSE, 8, 12];
 /// house is born there.
 pub const LEVEL_UP: [u8; HOUSE_LEVELS] = [0, 50, 90];
 /// The satisfaction below which a house at each level comes down. Level 1's is
-/// unread: there is no level 0. Strictly under [`LEVEL_UP`] on the same rung,
-/// which is the hysteresis band.
+/// unread: there is no level 0. Strictly under [`LEVEL_UP`] on the same level,
+/// which is the gap.
 pub const LEVEL_DECAY: [u8; HOUSE_LEVELS] = [0, 25, 60];
 pub const HOUSE_LEVELS: usize = 3;
 
@@ -95,32 +95,32 @@ pub fn dataset() -> Arc<DataSet> {
     dataset_where_a_house_requires(&[ServiceKind::Water, ServiceKind::Food])
 }
 
-/// Like [`dataset`], with **every** rung declaring the same services.
+/// Like [`dataset`], with **every** level declaring the same services.
 ///
 /// It exists for the one thing M0's tables could not express: a house that does
 /// **not** require a service the coverage reaches it with anyway. Coverage
-/// never reads `required_services` (the gap A9 names), so a house that requires
+/// never reads `required_services` (the hole A9 names), so a house that requires
 /// only water is still assigned a farm — and its food satisfaction has to stay
 /// still all the same.
 pub fn dataset_where_a_house_requires(required: &[ServiceKind]) -> Arc<DataSet> {
     dataset_with_levels_requiring(&[required; HOUSE_LEVELS])
 }
 
-/// Like [`dataset`], with a rung that asks for less than the rung above it:
+/// Like [`dataset`], with a level that asks for less than the level above it:
 /// level 1 wants water alone, the two above want water and food.
 ///
 /// This is the shape the production tables have since phase 13, and the one
 /// that makes the per-level requirements do real work — with three identical
-/// rungs the mechanism is there but nothing distinguishes it from reading the
+/// levels the mechanism is there but nothing distinguishes it from reading the
 /// building's union.
-pub fn dataset_with_a_service_ladder() -> Arc<DataSet> {
+pub fn dataset_with_service_levels() -> Arc<DataSet> {
     const BOTH: &[ServiceKind] = &[ServiceKind::Water, ServiceKind::Food];
     dataset_with_levels_requiring(&[&[ServiceKind::Water], BOTH, BOTH])
 }
 
-/// The fixture, with the requirements of each rung spelled out.
+/// The fixture, with the requirements of each level spelled out.
 ///
-/// The building's `required_services` is derived as the **union** of the rungs,
+/// The building's `required_services` is derived as the **union** of the levels,
 /// never written by hand: it is what `is_house()` reads, and a fixture where
 /// the two disagreed would be one `Inconsistency::InconsistentRequirements`
 /// away from failing for a reason that has nothing to do with the test using

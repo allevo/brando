@@ -174,15 +174,15 @@ mod levels {
     }
 
     /// **One jump per review.** A house sitting at the maximum meets level 3's
-    /// threshold as well as level 2's, and still climbs one rung a month.
+    /// threshold as well as level 2's, and still climbs one level a month.
     #[test]
-    fn a_house_at_the_maximum_still_climbs_one_rung_per_review() {
+    fn a_house_at_the_maximum_still_climbs_one_level_per_review() {
         let (mut w, house) = a_served_house();
         let max = w.data().rules.satisfaction.max;
         let top = w.data().rules.top_house_level();
         assert!(
             top >= Some(level(3)),
-            "the fixture needs three rungs to say anything"
+            "the fixture needs three levels to say anything"
         );
 
         // Saturated well before the first review, so the only thing rationing
@@ -197,7 +197,7 @@ mod levels {
 
         let month = w.data().rules.ticks_per_month;
         tick(&mut w, &[]);
-        assert_eq!(house_level(&w, house), level(2), "one rung, not two");
+        assert_eq!(house_level(&w, house), level(2), "one level, not two");
         let eve = w.tick() + month - 1;
         run_to(&mut w, eve);
         assert_eq!(
@@ -234,7 +234,7 @@ mod levels {
     /// Take the well away and the house comes back down, at the first review
     /// after the water has fallen through level 2's floor.
     #[test]
-    fn demolishing_the_well_sends_the_house_back_down_a_rung() {
+    fn demolishing_the_well_sends_the_house_back_down_a_level() {
         let (mut w, house) = a_served_house();
         let saturated = review_after(&w, ticks_up_to(&w, worst(&w, house), 100));
         run_to(&mut w, saturated);
@@ -330,7 +330,7 @@ mod levels {
         /// **The** test of the phase: with the services held constant, every
         /// house's level is monotone over a whole year.
         ///
-        /// It is the proof that the hysteresis really works, not merely that
+        /// It is the proof that the gap really works, not merely that
         /// validation imposes it — both are needed and neither replaces the
         /// other. Constant services means: the city is laid out, and after that
         /// no command is issued, so nothing but the levels themselves can move.
@@ -405,7 +405,7 @@ mod levels {
         assert_eq!(
             w.population(),
             population,
-            "a rung is permission, not people"
+            "a level is permission, not people"
         );
 
         // And the tick after, when a pending invalidation would have surfaced.
@@ -413,14 +413,14 @@ mod levels {
         assert_eq!(w.coverage().recomputes(), recomputes);
     }
 
-    // --- 5. the rungs really do ask for different things ---------------------
+    // --- 5. the levels really do ask for different things --------------------
 
-    /// On the ladder fixture, level 1 wants water alone and level 2 wants food
-    /// as well: a house with a well and no farm climbs to the top of level 1
-    /// and stops there, however long it waits.
+    /// On the service-levels fixture, level 1 wants water alone and level 2
+    /// wants food as well: a house with a well and no farm climbs to the top of
+    /// level 1 and stops there, however long it waits.
     #[test]
-    fn a_rung_that_asks_for_more_is_not_reached_on_the_service_below() {
-        let mut w = world_with(dataset_with_a_service_ladder(), 32, 32, EASY);
+    fn a_level_that_asks_for_more_is_not_reached_on_the_service_below() {
+        let mut w = world_with(dataset_with_service_levels(), 32, 32, EASY);
         let cells: Vec<(u8, u8)> = (1..=20).map(|x| (x, 4)).collect();
         roads(&mut w, &cells);
         build(&mut w, WELL, 2, 3);
@@ -445,7 +445,7 @@ mod levels {
             "level 2 wants food, so twelve reviews change nothing"
         );
 
-        // The farm arrives, and with it the rung. The satisfaction has to be
+        // The farm arrives, and with it the level. The satisfaction has to be
         // earned from zero: what the house was receiving anyway was credited,
         // what it was not receiving was not.
         build(&mut w, FARM, 5, 2);
@@ -468,7 +468,7 @@ mod levels {
     /// construction, capped at level 1. Phase 14 is what makes this branch
     /// reachable in play; the term is pinned down here because that phase's
     /// conservation depends on it.
-    fn a_house_too_full_for_the_rung_below() -> (World, HouseId) {
+    fn a_house_too_full_for_the_level_below() -> (World, HouseId) {
         let (mut w, house) = a_served_house();
         let saturated = review_after(&w, ticks_up_to(&w, worst(&w, house), 100));
         run_to(&mut w, saturated);
@@ -490,7 +490,7 @@ mod levels {
 
     #[test]
     fn decay_evicts_whoever_no_longer_fits_and_counts_them() {
-        let (mut w, house) = a_house_too_full_for_the_rung_below();
+        let (mut w, house) = a_house_too_full_for_the_level_below();
         let before = w.house(house).expect("alive").residents;
         let evicted_before = w.population_totals().evicted;
 
@@ -510,10 +510,10 @@ mod levels {
         );
     }
 
-    /// Coming down from a level the ladder does not contain evicts **nobody**.
+    /// Coming down from a level the table does not contain evicts **nobody**.
     ///
     /// `decays()` sends a house at an unknown level down on purpose, because
-    /// descending converges on a level that exists. But the rung below can be
+    /// descending converges on a level that exists. But the level below can be
     /// off the table too, and reading its capacity as zero emptied the house in
     /// one review — a population wipe wearing the clothes of a convergence.
     ///
@@ -521,7 +521,7 @@ mod levels {
     /// `top_house_level`, `residents_within_capacity` would flag a house at an
     /// off-table level, and levels only ever start at 1), which is why it takes
     /// `house_mut` to get here. It is written down because zero is a strange
-    /// answer to "what does this rung hold?" when the honest answer is "no
+    /// answer to "what does this level hold?" when the honest answer is "no
     /// idea", and the two differ by the whole population of the house.
     #[test]
     fn coming_down_from_a_level_off_the_table_evicts_nobody() {
@@ -531,13 +531,13 @@ mod levels {
             .data()
             .rules
             .top_house_level()
-            .expect("the ladder is not empty");
-        let full = w.data().rules.max_residents(top).expect("the top rung");
-        let above = top.next().expect("a rung above the top");
-        let two_above = above.next().expect("two rungs above the top");
+            .expect("the table is not empty");
+        let full = w.data().rules.max_residents(top).expect("the top level");
+        let above = top.next().expect("a level above the top");
+        let two_above = above.next().expect("two levels above the top");
         assert!(
             w.data().rules.house_level(above).is_none(),
-            "the ladder has to stop below the rungs this test invents"
+            "the table has to stop below the levels this test invents"
         );
         {
             let h = w.house_mut(house).expect("alive");
@@ -546,7 +546,7 @@ mod levels {
         }
         let evicted_before = w.population_totals().evicted;
 
-        // Two reviews: the first lands on a rung that is still off the table,
+        // Two reviews: the first lands on a level that is still off the table,
         // the second on the top one, which exists and holds them all.
         let after_two_reviews = (w.tick() / month + 2) * month + 1;
         run_to(&mut w, after_two_reviews);
@@ -554,12 +554,12 @@ mod levels {
         assert_eq!(
             house_level(&w, house),
             top,
-            "it converges on a rung that exists"
+            "it converges on a level that exists"
         );
         assert_eq!(
             w.house(house).expect("alive").residents,
             full,
-            "and it still has everybody: the unknown rung evicted nobody"
+            "and it still has everybody: the unknown level evicted nobody"
         );
         assert_eq!(w.population_totals().evicted, evicted_before);
     }
@@ -569,7 +569,7 @@ mod levels {
     /// counted on the residents present (A12).
     #[test]
     fn eviction_invalidates_the_coverage() {
-        let (mut w, house) = a_house_too_full_for_the_rung_below();
+        let (mut w, house) = a_house_too_full_for_the_level_below();
         let recomputes = w.coverage().recomputes();
 
         tick(&mut w, &[]);
