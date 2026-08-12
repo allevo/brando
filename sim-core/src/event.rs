@@ -5,7 +5,7 @@
 //! is unacceptable. An event is emitted on a **change of state**, never every
 //! tick: the wrong choice here costs 40,000 events per tick.
 
-use crate::ids::{BuildingId, BuildingKindId, HouseId, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TilePos};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
 
@@ -52,5 +52,32 @@ pub enum Event {
     HouseMoodChanged {
         house: HouseId,
         mood: Mood,
+    },
+    /// A house has gone up a level at the monthly review (phase 13).
+    ///
+    /// It is emitted where the transition happens, in step 6.2, and not derived
+    /// in step 10 like the mood: the site knows `from` and `to` exactly, and a
+    /// delta computed afterwards could only guess at them.
+    ///
+    /// A house that levels up **brings nobody in** (A12): the renderer is being
+    /// told the building has changed, not that the city has grown.
+    HouseEvolved {
+        house: HouseId,
+        from: Level,
+        to: Level,
+    },
+    /// A house has come down a level at the monthly review (phase 13).
+    ///
+    /// A separate variant rather than [`Event::HouseEvolved`] with `to < from`:
+    /// the renderer hangs two different animations off them, and discriminating
+    /// on a numeric comparison is the kind of thing you get wrong once but for
+    /// ever.
+    ///
+    /// It may have sent residents away — decay evicts whoever no longer fits —
+    /// which phase 14 will report separately.
+    HouseDegraded {
+        house: HouseId,
+        from: Level,
+        to: Level,
     },
 }

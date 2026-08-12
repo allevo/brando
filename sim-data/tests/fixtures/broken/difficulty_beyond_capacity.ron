@@ -1,7 +1,7 @@
 // A profile that builds houses beyond their own capacity. A level-1 house
-// holds 4 residents (rules.residents_per_house_level[0]), so a profile born at
-// 6 would produce a house the rest of the game cannot represent: from phase 13
-// on, residents <= max_residents(level) is assumed everywhere.
+// holds 4 residents (the first rung of rules.house_levels), so a profile born
+// at 6 would produce a house the rest of the game cannot represent: since phase
+// 13, residents <= max_residents(level) is assumed everywhere.
 //
 // The second profile is at the limit and legitimate: it is what makes the error
 // attributable to the first one alone.

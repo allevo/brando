@@ -1,13 +1,24 @@
-// The three buildings of M0. One level each: houses levelling up is M1, and
-// with it ranges and capacities will become vectors of more than one element.
+// The three buildings of M0. The house has three levels since phase 13; the
+// providers still have one each, and their ranges and capacities stay
+// one-element vectors until a phase gives them levels of their own.
 (
     buildings: [
         (
             id: "house",
             size: (1, 1),
             cost: 10,
-            levels: 1,
+            // As many as rules.house_levels has rungs, and the house's area
+            // stays 1x1 at every one of them: houses that merge by taking over
+            // their neighbours' tiles are a whole mechanic (Zeus has it) and
+            // they are M3.
+            levels: 3,
             service: None,
+            // The **union** of what the three rungs of rules.house_levels ask
+            // for, and it has to stay that: `is_house()` classifies a building
+            // as a house by this list being non-empty, so a house whose
+            // requirements moved entirely into the ladder would stop being read
+            // as one. Checked, not commented:
+            // `Inconsistency::InconsistentRequirements`.
             required_services: ["water", "food"],
         ),
         (
@@ -46,7 +57,7 @@
                 // state of hunger — houses assigned to a farm that does not
                 // feed them and that no other farm can take over. Validation
                 // checks this, not this comment: sim-core
-                // `DataSet::unsustainable_food_capacity`.
+                // `DataSet::inconsistencies`.
                 capacity_per_level: [20],
             )),
             required_services: [],

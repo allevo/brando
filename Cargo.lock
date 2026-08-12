@@ -403,6 +403,7 @@ dependencies = [
  "rand",
  "rand_pcg",
  "serde",
+ "sim-core",
  "slotmap",
  "thiserror",
 ]

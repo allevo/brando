@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 
 use crate::grid::Terrain;
 
-use crate::data::{BuildingDef, DifficultyDef, Rules, SatisfactionRules, TerrainDef};
+use crate::data::{
+    BuildingDef, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules, TerrainDef,
+};
 
 /// Domain prefix: keeps this hash apart from any other blake3 in the project.
 /// Changing it regenerates every recording.
@@ -36,16 +38,29 @@ pub(crate) fn dataset_hash(
         ticks_per_month,
         months_per_year,
         starting_treasury,
-        residents_per_house_level,
+        house_levels,
         food_per_resident,
         satisfaction,
     } = rules;
     h.update(&ticks_per_month.to_le_bytes());
     h.update(&months_per_year.to_le_bytes());
     h.update(&starting_treasury.get().to_le_bytes());
-    h.update(&(residents_per_house_level.len() as u64).to_le_bytes());
-    for a in residents_per_house_level {
-        h.update(&a.to_le_bytes());
+    h.update(&(house_levels.len() as u64).to_le_bytes());
+    for l in house_levels {
+        let HouseLevelDef {
+            max_residents,
+            required_services,
+            level_up_threshold,
+            decay_threshold,
+            taxable_per_resident,
+        } = l;
+        h.update(&max_residents.to_le_bytes());
+        h.update(&(required_services.len() as u64).to_le_bytes());
+        for s in required_services {
+            h.update(&[s.index() as u8]);
+        }
+        h.update(&[*level_up_threshold, *decay_threshold]);
+        h.update(&taxable_per_resident.to_millis().to_le_bytes());
     }
     h.update(&food_per_resident.to_millis().to_le_bytes());
 

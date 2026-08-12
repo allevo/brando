@@ -78,7 +78,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
             stock,
         } = b;
         h.update(&kind.get().to_le_bytes());
-        h.update(&[origin.x, origin.y, *level]);
+        h.update(&[origin.x, origin.y, level.get()]);
         h.update(&stock.to_millis().to_le_bytes());
     }
 
@@ -92,7 +92,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
             served,
             satisfaction,
         } = c;
-        h.update(&[origin.x, origin.y, *level]);
+        h.update(&[origin.x, origin.y, level.get()]);
         h.update(&residents.to_le_bytes());
         h.update(&[served.bits()]);
         h.update(satisfaction);

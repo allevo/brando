@@ -291,16 +291,30 @@ fn breaking_the_road_uncovers_the_houses_beyond_the_break() {
 
 // --- 8. idempotence ---------------------------------------------------------
 
+/// Nothing is recomputed while nothing moves the population.
+///
+/// It used to be "two empty ticks recompute nothing", which was the same
+/// statement while `residents` could not change. Since phase 13 it can — decay
+/// evicts — and since phase 14 it will constantly, so the invariant is written
+/// in the form that survives: what invalidates the coverage is the population
+/// moving, and an empty tick that moves nobody has to cost nothing (A12).
+///
+/// The run is long enough to cross two monthly reviews, and the houses do level
+/// up inside it: **levelling up must not invalidate anything**, because it
+/// brings no residents in.
 #[test]
-fn two_empty_ticks_recompute_nothing() {
+fn nothing_is_recomputed_while_the_population_does_not_move() {
     let mut w = linear_scenario(20, 4);
     let before = w.coverage().clone();
+    let population = w.population();
     let recomputes = w.coverage().recomputes();
     let rebuilds = w.roads().rebuilds();
 
-    tick(&mut w, &[]);
-    tick(&mut w, &[]);
+    for _ in 0..w.data().rules.ticks_per_month * 2 + 1 {
+        tick(&mut w, &[]);
+    }
 
+    assert_eq!(w.population(), population, "nobody moved");
     assert_eq!(w.coverage().assignments(), before.assignments());
     assert_eq!(w.coverage().recomputes(), recomputes, "no recomputation");
     assert_eq!(w.roads().rebuilds(), rebuilds, "no network rebuild");

@@ -261,17 +261,10 @@ mod satisfaction {
 
     // --- 6. the event fires on the band, not on the value -----------------------
 
+    /// Since phase 13 the mood reads the services the house's **own level**
+    /// requires, so there is no list to pass in: `mood_of` looks it up.
     fn mood(w: &World, house: HouseId) -> Mood {
-        let required = w
-            .data()
-            .house_def()
-            .map(|d| d.required_services.clone())
-            .expect("the house def");
-        sim_core::satisfaction::mood_of(
-            w.house(house).expect("alive"),
-            &required,
-            &w.data().rules.satisfaction,
-        )
+        sim_core::satisfaction::mood_of(w.house(house).expect("alive"), &w.data().rules)
     }
 
     #[test]

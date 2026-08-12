@@ -14,6 +14,8 @@
 //! | Food conserved: produced = consumed + lost + stock | here, `food_is_conserved` |
 //! | A house covered by food always eats | here, `covered_means_fed` |
 //! | Satisfaction inside `0..=max`, on every service | here, `satisfaction_stays_within_bounds` |
+//! | A house never holds more residents than its level allows | here, `residents_stay_within_the_house_capacity` |
+//! | A house's level is monotone with constant services | `levels.rs`, `the_level_shows_no_oscillation` |
 //! | A rejected command mutates nothing | here, `rejected_commands_mutate_nothing` |
 //! | No panic on arbitrary commands, malformed ones included | here, `no_panic_on_ten_thousand_commands` |
 //! | Incremental coverage identical to from-scratch | `coverage.rs`, `coverage_equivalence` |
@@ -119,6 +121,10 @@ fn no_overlap(w: &World) -> Result<(), String> {
 }
 
 /// Population never negative and consistent with the houses that exist (D5).
+///
+/// Since phase 13 it also pins A12 down from the other side: a house that goes
+/// up a level gains **permission** to hold more residents, never residents.
+/// If levelling up brought people in, the equality would break here first.
 fn population_is_consistent(w: &World) -> Result<(), String> {
     let expected = w.house_count() as u32 * u32::from(RESIDENTS_PER_HOUSE);
     if w.population() != expected {
@@ -139,9 +145,8 @@ fn population_is_consistent(w: &World) -> Result<(), String> {
 /// feeds, the ones in excess would stay covered and hungry forever, because the
 /// first provider wins a contest. It holds because the declared capacity does
 /// not exceed what the output sustains — which is exactly what
-/// `DataSet::unsustainable_food_capacity` guards, and what
-/// `the_fixture_keeps_capacity_and_output_consistent` pins down for these
-/// tests' fixture.
+/// `Inconsistency::CapacityBeyondOutput` guards, and what
+/// `the_fixture_has_no_inconsistencies` pins down for these tests' fixture.
 ///
 /// **How it is asked changed in phase 12.** Until then `House::served`'s food
 /// bit was written by step 4 and meant "it ate", so comparing it against the
@@ -157,6 +162,33 @@ fn covered_houses_are_fed(w: &World) -> Result<(), String> {
             "{unfed} house-ticks with a food provider assigned and nothing eaten: \
              hunger has gone back to being an absorbing state"
         ));
+    }
+    Ok(())
+}
+
+/// No house holds more residents than its level allows (phase 13).
+///
+/// It is the invariant the whole ladder rests on: `residents <=
+/// max_residents(level)` is assumed by the coverage, by the food arithmetic and
+/// by phase 14's demographics. Two things could break it — a house born beyond
+/// its level-1 capacity, and decay that shrinks a house without sending anyone
+/// away — and the first is refused by validation while the second is what
+/// `levels::review` evicts for.
+///
+/// A level outside the table is a failure too, not a skip: it is the only other
+/// way `max_residents` returns `None`, and it would make the check vacuous
+/// exactly where it matters.
+fn residents_within_capacity(w: &World) -> Result<(), String> {
+    for (id, h) in w.houses() {
+        let Some(max) = w.data().rules.max_residents(h.level) else {
+            return Err(format!("{id:?} is at level {}, off the table", h.level));
+        };
+        if h.residents > max {
+            return Err(format!(
+                "{id:?} holds {} residents at level {}, which takes {max}",
+                h.residents, h.level
+            ));
+        }
     }
     Ok(())
 }
@@ -313,6 +345,28 @@ proptest! {
         }
     }
 
+    /// No house ever holds more residents than its level allows, over a game
+    /// long enough for the monthly reviews to have acted.
+    #[test]
+    fn residents_stay_within_the_house_capacity(p in a_game()) {
+        let mut w = world();
+        let month = w.data().rules.ticks_per_month;
+        for cmds in &p {
+            tick(&mut w, cmds);
+            if let Err(e) = residents_within_capacity(&w) {
+                return Err(TestCaseError::fail(e));
+            }
+            // Past two reviews: a run in which the levels never move would make
+            // this test say nothing.
+            for _ in 0..=month * 2 {
+                tick(&mut w, &[]);
+                if let Err(e) = residents_within_capacity(&w) {
+                    return Err(TestCaseError::fail(e));
+                }
+            }
+        }
+    }
+
     /// Satisfaction saturates at both ends: after any sequence of commands and
     /// any number of ticks it stays inside `0..=max`.
     #[test]
@@ -419,6 +473,7 @@ fn no_panic_on_ten_thousand_commands() {
         no_overlap(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
         population_is_consistent(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
         satisfaction_in_range(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
+        residents_within_capacity(&w).unwrap_or_else(|e| panic!("tick {t}: {e}"));
     }
     covered_houses_are_fed(&w).expect("no house stayed covered and hungry over 1,000 ticks");
 
@@ -450,30 +505,25 @@ fn random_command(rng: &mut SplitMix64) -> Command {
 ///
 /// `sim-core`'s tests run on a hand-built dataset, which never goes through
 /// `sim-data`'s validation. Without this check the fixture could drift onto
-/// numbers that would be rejected in production, and `covered_means_fed` would
-/// be checking a property the real game does not have.
+/// numbers production would reject, and `covered_means_fed` would be checking a
+/// property the real game does not have.
+///
+/// Since phase 13 it is one assertion for **every** cross-table check rather
+/// than one test per check: whoever adds a rule to
+/// `DataSet::inconsistencies()` gets the fixture protected by it for free,
+/// which is the whole reason those checks live in `sim-core`.
 #[test]
-fn the_fixture_keeps_capacity_and_output_consistent() {
-    let d = dataset();
-    assert_eq!(
-        d.unsustainable_food_capacity(),
-        vec![],
-        "the fixture declares more capacity than its output sustains"
-    );
-}
-
-/// The same argument as above, for the difficulty profiles: a house born beyond
-/// `max_residents(1)` is a state the rest of the game cannot represent, and the
-/// fixture must not be allowed to reach it by a route production is closed off
-/// from.
-#[test]
-fn the_fixture_keeps_difficulty_within_house_capacity() {
-    let d = dataset();
-    assert_eq!(
-        d.difficulty_beyond_house_capacity(),
-        vec![],
-        "a fixture profile builds houses beyond their own capacity"
-    );
+fn the_fixture_has_no_inconsistencies() {
+    for (what, d) in [
+        ("dataset", dataset()),
+        ("the service ladder", dataset_with_a_service_ladder()),
+        (
+            "a house that wants water only",
+            dataset_where_a_house_requires(&[sim_core::ServiceKind::Water]),
+        ),
+    ] {
+        assert_eq!(d.inconsistencies(), vec![], "{what}");
+    }
 }
 
 /// A command off the map is always rejected, never a panic and never a silent

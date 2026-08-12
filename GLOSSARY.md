@@ -40,6 +40,13 @@ The rule is **plain words over jargon**.
 | **jitter** | A small random wobble added to a rate, so two games with different seeds do not play out identically. |
 | **hysteresis** | Deliberately using two different thresholds — one to go up, a lower one to come down — so a value sitting on the boundary does not flicker back and forth. |
 | **attractiveness** | One number saying how much the city draws new people in. |
+| **satisfaction** | How long a service has been reaching a house, not how much of it arrives. It climbs while the service is there and falls when it is not. |
+| **mood** | The coarse band a house's satisfaction falls into — desperate, unhappy, happy, thriving. It is what the renderer draws; the number itself never leaves the core. |
+| **level** / **rung** / **ladder** | A house's level is how far it has come up: a better house, holding more people and demanding more services. The **ladder** is the table of levels, and one entry in it is a **rung**. In the code it is the `Level` type, which counts from 1 the way the tables do and indexes them from 0 — so no caller ever writes the `±1` itself. |
+| **review** | The monthly moment when houses are looked at and decide whether to go up a level or come down. Between two reviews a level cannot change. |
+| **decay** | A house coming *down* a level because a service it depends on has been missing too long. The opposite of levelling up. |
+| **eviction** | Residents a house has to send away because decay shrank it below the number living there. |
+| **inconsistency** | A relation between two tables that does not hold — a level nobody can ever reach, a house born beyond its own capacity. Reported by `DataSet::inconsistencies` and refused at load time. |
 
 ---
 

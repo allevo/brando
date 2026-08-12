@@ -152,8 +152,8 @@ fn run(args: &[String]) -> Result<(), String> {
 
 fn table_header() {
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}  {:>7}",
-        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury", "sat."
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}  {:>7}  {:>10}",
+        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury", "sat.", "levels"
     );
 }
 
@@ -170,7 +170,7 @@ fn row(w: &World) {
     let houses = w.house_count();
     let max = w.data().rules.satisfaction.max;
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}  {:>3}/{:<3}",
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}  {:>3}/{:<3}  {:>10}",
         w.tick(),
         months,
         houses,
@@ -182,28 +182,50 @@ fn row(w: &World) {
         houses,
         w.economy().treasury,
         average_satisfaction(w),
-        max
+        max,
+        level_distribution(w)
     );
 }
 
-/// The average, over the houses, of the **worst** required service.
+/// How many houses sit at each level, level 1 first.
+///
+/// It is the column phase 13 is closed by eye with: the distribution has to
+/// rise and then **stop**. An average level would hide exactly the failure the
+/// phase is about — half a city flipping around a threshold averages out to a
+/// flat line.
+fn level_distribution(w: &World) -> String {
+    let mut counts = vec![0u32; w.data().rules.house_levels.len()];
+    for (_, h) in w.houses() {
+        if let Some(c) = counts.get_mut(h.level.as_usize()) {
+            *c += 1;
+        }
+    }
+    counts
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// The average, over the houses, of the **worst service its own level
+/// requires**.
 ///
 /// The worst and not the mean of the two: it is the quantity the mood is
 /// computed from, so the column and what the renderer would draw say the same
-/// thing. A house with water and no food is desperate, not half happy.
+/// thing. A house with water and no food is desperate, not half happy — unless
+/// its level does not ask for food, which since phase 13 is the case at level 1
+/// and is why the list is read per house instead of once.
 fn average_satisfaction(w: &World) -> u32 {
-    let required: &[ServiceKind] = w
-        .data()
-        .house_def()
-        .map_or(&[], |d| d.required_services.as_slice());
     let houses = w.house_count() as u32;
-    if houses == 0 || required.is_empty() {
+    if houses == 0 {
         return 0;
     }
     let total: u32 = w
         .houses()
         .map(|(_, h)| {
-            required
+            w.data()
+                .rules
+                .required_at(h.level)
                 .iter()
                 .map(|k| u32::from(h.satisfaction[k.index()]))
                 .min()

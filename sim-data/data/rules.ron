@@ -8,9 +8,50 @@
 
     starting_treasury: 1000,
 
-    // Residents per house level. In M0 there is only one level and the value is
-    // fixed: migration arrives with M1.
-    residents_per_house_level: [4],
+    // The house ladder (phase 13). One entry per level, level 1 first, and the
+    // building's `levels` in buildings.ron has to say the same number.
+    //
+    // Three relations are checked, not commented (sim-core
+    // `DataSet::inconsistencies`): max_residents grows, decay_threshold sits
+    // strictly below level_up_threshold on the same rung — that band is the
+    // hysteresis — and no threshold goes past satisfaction.max.
+    //
+    // Level 1's two thresholds are read by nobody: nothing rises into level 1
+    // and there is no level 0 to fall to. They are written as 0 so the table
+    // does not claim a rule that does not exist.
+    house_levels: [
+        (
+            // A hut: it wants water and nothing else. It is what makes the
+            // first rung reachable in a city that has not got a farm yet, and
+            // what makes the per-level requirements do real work instead of
+            // repeating the same list three times.
+            max_residents: 4,
+            required_services: ["water"],
+            level_up_threshold: 0,
+            decay_threshold: 0,
+            taxable_per_resident: 0,
+        ),
+        (
+            // From here on the house eats. At step_up 4 a served house passes
+            // 50 in 13 ticks, so the rung is earned inside the first month and
+            // taken at the review that closes it.
+            max_residents: 8,
+            required_services: ["water", "food"],
+            level_up_threshold: 50,
+            decay_threshold: 25,
+            taxable_per_resident: 0,
+        ),
+        (
+            // The top rung asks for near-perfect service: 90 is reached at tick
+            // 23, so it is the second review that grants it. Losing it takes a
+            // fall to 60, four ticks of missing water at step_down 8.
+            max_residents: 12,
+            required_services: ["water", "food"],
+            level_up_threshold: 90,
+            decay_threshold: 60,
+            taxable_per_resident: 0,
+        ),
+    ],
 
     // How long a service has to have been arriving before the house is content
     // (phase 12). It measures time, not quantity: with capacity and output

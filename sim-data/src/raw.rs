@@ -13,9 +13,19 @@ pub struct RawRules {
     pub ticks_per_month: u32,
     pub months_per_year: u32,
     pub starting_treasury: i32,
-    pub residents_per_house_level: Vec<u16>,
+    pub house_levels: Vec<RawHouseLevelDef>,
     pub food_per_resident: i32,
     pub satisfaction: RawSatisfaction,
+}
+
+/// One rung of the house ladder (phase 13).
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawHouseLevelDef {
+    pub max_residents: u16,
+    pub required_services: Vec<String>,
+    pub level_up_threshold: u8,
+    pub decay_threshold: u8,
+    pub taxable_per_resident: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]

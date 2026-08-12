@@ -241,8 +241,12 @@ cargo test -p sim-core coverage               # coverage_equivalence has to stay
 cargo test -p sim-data
 cargo xtask run --ticks 720 --dump-every 30   # two years: the levels have to rise and then stop
 cargo xtask regen-expected
-cargo xtask bench                             # A must not move: the coverage is not recomputed here
+cargo xtask bench --reps 100                  # A must not move: the coverage is not recomputed here
 ```
+
+The filter on the second line has to **match**: check the count of tests run, not the colour. It did
+not match when this file was written — see point 6 below — which is phase 12's lesson recurring in the
+document that recorded it.
 
 The dump at 720 ticks is the by-eye proof that closes the phase: the distribution of levels has to
 rise and then **stop**, not oscillate and not grow forever. If it oscillates with validation green,
@@ -256,3 +260,107 @@ indistinguishable from the expected cost.
 
 **Done when:** test 3 (no oscillation) and tests 4–5 (levelling up does not touch the coverage) pass.
 Those are the three that define the phase; the rest is correctness around the edges.
+
+## How it went
+
+The three defining tests are green and `A` did not move: 280 µs before, 282 µs after, medians of two
+runs at `--reps 100` on the same machine, which is inside the noise this measure has shown before.
+`G` did not move either. The dump at 720 ticks does what it had to: `minimal` goes `4/0/0` → `0/4/0`
+→ `0/0/4` and stops, `hunger` settles at `3/0/5` — the five houses the farm covers climb to the top,
+the three it does not stay at level 1 for ever. The `.ron` diff of the recordings is **one line**, the
+dataset hash: not a single command moved, which is the cheapest possible confirmation that the
+regeneration is about the tables and not about the log.
+
+Six things came out differently from the plan above, and the reasons are worth more than the
+decisions.
+
+**1. `NoHysteresis` compares two thresholds of the *same* rung.** The formula written above,
+`decay_threshold(l) >= level_up_threshold(l+1)`, mixes a 0-based index with a 1-based level and the
+two happen to name the same entry. The relation that actually matters is *within* one rung: a house
+rises to L at `up(L)` and falls from L below `decay(L)`, so the two rules overlap exactly when
+`decay(L) > up(L)`. The band `decay(L)..up(L)` is the hysteresis, and it is checked for every level
+from 2 up. The corollary is that **level 1's two thresholds are read by nobody** — nothing rises into
+level 1 and there is no level 0 — so they are written as zero and a test in `sim-data` pins that down,
+because a number in a table that decides nothing is the sort of thing somebody later balances.
+
+**2. Step 6.1 keeps stepping the accumulators for the building's union, not the level's list.** This
+looks like the wrong list and is the right one. With per-level requirements, a rung that introduces a
+service the rung below does not ask for would be **unreachable**: nothing would ever move that
+accumulator off zero, so its threshold could never be met, and the level would be dead without a
+single test going red. It is also exactly what `House::satisfaction`'s doc comment promised in phase
+12 — *the time already accumulated on a service it was receiving anyway was not a lie*. Which
+services are **read** is a separate question, and there the answer is per level: the mood and the
+decay check use the house's own rung, the level-up check the destination's.
+
+**3. Decay and levelling up are one pass, not two.** With two passes, "a house on its way down must
+not go back up in the same review" holds only *because* the hysteresis band is validated: the service
+that failed `decay(L)` is also below `up(L)`, so the second pass cannot promote it. True today, and a
+dependency that goes quiet the moment a table changes. One pass with at most one jump per house makes
+it structural, and costs nothing.
+
+**4. Eviction cannot happen yet, and that is provable.** Residents only ever arrive at construction,
+capped at `max_residents(1)`, and `CapacityNotIncreasing` keeps the ladder from ever shrinking — so
+the capacity a house falls back to is never below what it was born with. The branch is written and
+tested all the same, because phase 14's conservation depends on the term, but the only honest way to
+reach it is to put the residents there by hand. That is what the self dev-dependency on `sim-core`
+with `features = ["test-util"]` is for: a crate depending on itself is how you turn one of your own
+features on for your own tests.
+
+The consequence for **test 10**: `two_empty_ticks_recompute_nothing` does *not* change its outcome as
+this phase predicted, because no eviction can fire in it. It was rewritten anyway, into the form phase
+14 will want — *nothing is recomputed while the population does not move* — and lengthened to cross
+two reviews, so it now also witnesses that **levelling up invalidates nothing**.
+
+**5. `Inconsistency` collapsed `ValidationErrorKind` rather than extending it.** The plan had
+`sim-data` map each new case onto a variant of its own, which is the same enum written twice in two
+crates. Instead `ValidationErrorKind::Inconsistent(Inconsistency)` is `#[error(transparent)]` and the
+message lives in `sim-core`, next to the check; `sim-data` supplies only the RON path to blame. Adding
+a check is now one place. Two variants were added beyond the list above: `NoHouse`, because it is the
+only one of the three `is_house()` remedies that catches the building's list disappearing (with no
+house, `InconsistentRequirements` has nothing to compare), and — in `sim-data`, since it is a property
+of one field of one table — a rung that requires *nothing*, which `all()` over an empty list would
+otherwise climb for free.
+
+Only one broken fixture needed touching: the cross-table checks run after the per-table ones and only
+if those are clean, so the six fixtures that fail on shape never reach them. `unsustainable_capacity.ron`
+does reach them, and a buildings table of nothing but farms now produces four extra errors — no house,
+and no provider of water at any rung — so it gained a house and a well at the **end** of the list,
+where they do not shift the indices the expected report names.
+
+**6. The verification command in this file had the phase-12 bug in it.** `cargo test -p sim-core
+--release oscillation` matched zero tests, because the test was called `..._does_not_oscillate...`.
+Green, and checking nothing. The test is now `the_level_shows_no_oscillation_with_constant_services`.
+While fixing it, the property itself turned out to be weak for a second reason: a generated layout can
+contain no served house at all, and monotone is trivially true of a city where nothing moves. It now
+seeds a well, a farm and a house in a corner of the map the generator cannot reach, and asserts that
+corner house climbs all the way in a year — so every one of the 2,000 cases witnesses real movement.
+
+**7. The level shipped as a bare `u8`, and review sent it back.** Two comments on the PR, on
+`Rules::house_level(level: u8)` and on a private `fn level_of(index: usize) -> u8`, which are the two
+ends of one defect: a level counts from 1 and the table it names is indexed from 0, and that `±1` was
+written out by hand at seven sites in three crates, in three different spellings —
+`usize::from(l).checked_sub(1)?`, `l.saturating_sub(1)`, `index + 1`. It is phase 11's lesson
+recurring: the fix there was the same one, `usize::from(id.get())` folded into
+`BuildingKindId::as_usize()`.
+
+`Level` (in `sim-core/src/ids.rs`) stores the index and shows the number, so `as_usize` is total and
+`get` is what the tables, the messages and the state hash mean. **One type for both ladders**, the
+house's and a provider's, rather than a `HouseLevel` beside a `BuildingLevel`: they are the same
+shape, `inconsistencies()` reports on both — `CapacityBeyondOutput` carries a provider's level and
+sat in the same helper as the house rungs — and a second type would be the same thirty lines written
+twice for a ladder that stays one rung long for the whole of M1 (D6).
+
+The change is worth reading for what it removed rather than what it added. `review` had
+`from.saturating_sub(1)` and `from.saturating_add(1)`: saturating arithmetic on a number that has a
+bottom and a top, which on the boundary would have moved a house to a level it had just been told was
+not there. It is now `previous()`/`next()` returning `Option`, and the `None` branch skips — the
+guarantee that it cannot fire is still `decays`/`rises`, but the failure mode if it ever does is a
+house that stays put instead of one standing off the table. Likewise `CapacityNotIncreasing`'s
+message no longer subtracts one inside a format string. Nothing else moved: `regen-expected --check`
+said *recordings up to date* without regenerating, and the benchmark's two state hashes came out
+`b510504baaad2a32` and `25e3f485115e3598` before and after, which is what a pure type change owes.
+
+The balancing choice worth recording: **level 1 asks for water only**, levels 2 and 3 for water and
+food. Three identical rungs would have left the per-level requirements doing nothing the building's
+own list did not already do, and the mechanism would have gone untested in the production dataset. It
+also gives `hunger` a split distribution instead of a flat one, which is the more legible recording.

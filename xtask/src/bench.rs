@@ -39,7 +39,8 @@
 use std::sync::Arc;
 
 use sim_core::{
-    BuildingKindId, Coins, Command, DataSet, DifficultyId, Grid, Terrain, TilePos, World, step,
+    BuildingKindId, Coins, Command, DataSet, DifficultyId, Grid, Level, Terrain, TilePos, World,
+    step,
 };
 
 /// The profile the benchmark measures on.
@@ -295,7 +296,7 @@ impl Layout {
             .ok_or("the dataset contains no house")?;
 
         // The residents a house is really born with, which is the difficulty's
-        // knob and not `rules.residents_per_house_level` (A13). At the profile
+        // knob and not `rules.house_levels` (A13). At the profile
         // the benchmark measures on the two coincide; reading the profile is
         // what keeps the load honest if that ever stops being true.
         let per_house = u32::from(
@@ -328,7 +329,7 @@ impl Layout {
                 .map_err(|_| "too many kinds of building")?;
             let capacity = u32::from(
                 service
-                    .capacity(1)
+                    .capacity(Level::FIRST)
                     .ok_or_else(|| format!("'{}' declares no capacity at level 1", def.id))?,
             );
             if capacity == 0 {

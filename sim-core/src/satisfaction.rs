@@ -12,8 +12,7 @@
 
 use std::sync::Arc;
 
-use crate::data::SatisfactionRules;
-use crate::service::ServiceKind;
+use crate::data::{Rules, SatisfactionRules};
 use crate::world::{House, World};
 
 /// A house's satisfaction band. It is what the renderer draws, and it is
@@ -57,31 +56,51 @@ impl Mood {
     }
 }
 
-/// A house's mood: the **minimum** across the services its level requires.
+/// A house's mood: the **minimum** across the services **its own level**
+/// requires.
 ///
 /// A house with water and no food is desperate, not half happy. Services the
-/// level does not require are not looked at, the same way [`update`] does not
-/// touch them.
+/// level does not require are not looked at — even though [`update`] keeps
+/// their accumulators moving, which is a different question and answered there.
+/// A house that levels up into a stricter requirement can therefore lose mood
+/// in the very tick it is promoted, which is correct and is what the renderer
+/// has to be told.
+///
+/// The level is looked up here rather than passed in: with the requirements per
+/// level, a caller holding the wrong list is a mistake nobody would see, and
+/// there were three callers.
 ///
 /// A house that requires nothing cannot exist — [`BuildingDef::is_house`]
-/// classifies as a house exactly what declares required services — and the
-/// fallback is `Desperate` rather than `Thriving` so that even in that
-/// impossible case it agrees with the default a newborn house is compared
-/// against, and no event is emitted out of nothing.
+/// classifies as a house exactly what declares required services, and
+/// validation refuses a level that demands none — and the fallback is
+/// `Desperate` rather than `Thriving` so that even in that impossible case it
+/// agrees with the default a newborn house is compared against, and no event is
+/// emitted out of nothing.
 ///
 /// [`BuildingDef::is_house`]: crate::data::BuildingDef::is_house
-pub fn mood_of(house: &House, required: &[ServiceKind], rules: &SatisfactionRules) -> Mood {
-    required
+pub fn mood_of(house: &House, rules: &Rules) -> Mood {
+    rules
+        .required_at(house.level)
         .iter()
-        .map(|k| Mood::of(house.satisfaction[k.index()], rules))
+        .map(|k| Mood::of(house.satisfaction[k.index()], &rules.satisfaction))
         .min()
         .unwrap_or(Mood::Desperate)
 }
 
 /// Step 6.1 — the accumulators move by one tick.
 ///
-/// Walks the houses in `HouseId` order and, for each service the current level
-/// requires, applies `step_up` or `step_down` depending on `served`.
+/// Walks the houses in `HouseId` order and, for each service in the house
+/// kind's declared list, applies `step_up` or `step_down` depending on
+/// `served`.
+///
+/// **The union, not the current level's requirements** (phase 13). It looks
+/// like the wrong list and it is the right one: a level that introduces a
+/// service the level below does not require would otherwise be unreachable —
+/// nothing would ever move that accumulator off zero, so its threshold could
+/// never be met. It is also what [`House::satisfaction`]'s doc comment promised
+/// in phase 12: the time accumulated on a service the house was receiving
+/// anyway was not a lie. Which services are **read** is a separate question,
+/// and the answer there is per level: see [`mood_of`] and `levels::review`.
 pub(crate) fn update(world: &mut World) {
     // A refcount bump, not a copy of the dataset: it lets the tables be read
     // while the houses are mutated.
@@ -115,6 +134,9 @@ pub(crate) fn update(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::HouseLevelDef;
+    use crate::service::ServiceKind;
+    use crate::units::{Coins, Milli};
 
     fn rules() -> SatisfactionRules {
         SatisfactionRules {
@@ -146,26 +168,58 @@ mod tests {
         }
     }
 
-    /// The worst service decides: water at the maximum and food at zero is
-    /// desperate, not half happy.
-    #[test]
-    fn the_mood_is_the_worst_of_the_required_services() {
-        let r = rules();
+    /// A two-rung ladder: level 1 wants water only, level 2 wants both.
+    fn ladder() -> Rules {
+        let rung = |max_residents, required: &[ServiceKind]| HouseLevelDef {
+            max_residents,
+            required_services: required.to_vec(),
+            level_up_threshold: 50,
+            decay_threshold: 25,
+            taxable_per_resident: Milli::ZERO,
+        };
+        Rules {
+            ticks_per_month: 30,
+            months_per_year: 12,
+            starting_treasury: Coins::ZERO,
+            house_levels: vec![
+                rung(4, &[ServiceKind::Water]),
+                rung(8, &[ServiceKind::Water, ServiceKind::Food]),
+            ],
+            food_per_resident: Milli::ZERO,
+            satisfaction: rules(),
+        }
+    }
+
+    fn a_house(level: u8) -> House {
         let mut h = House {
             origin: crate::ids::TilePos::new(0, 0),
-            level: 1,
+            level: crate::ids::Level::new(level).expect("levels count from 1"),
             residents: 4,
             served: crate::service::ServiceFlags::empty(),
             satisfaction: [0; ServiceKind::COUNT],
         };
         h.satisfaction[ServiceKind::Water.index()] = 100;
         h.satisfaction[ServiceKind::Food.index()] = 0;
+        h
+    }
 
-        assert_eq!(mood_of(&h, &ServiceKind::ALL, &r), Mood::Desperate);
+    /// The worst service decides: water at the maximum and food at zero is
+    /// desperate, not half happy — but only once the level asks for food.
+    #[test]
+    fn the_mood_is_the_worst_of_the_required_services() {
+        let r = ladder();
+        assert_eq!(mood_of(&a_house(2), &r), Mood::Desperate);
         assert_eq!(
-            mood_of(&h, &[ServiceKind::Water], &r),
+            mood_of(&a_house(1), &r),
             Mood::Thriving,
             "a service the level does not require does not drag the mood down"
         );
+    }
+
+    /// A level outside the table demands nothing, and the fallback is the mood
+    /// a newborn house is compared against: no event out of nothing.
+    #[test]
+    fn a_level_off_the_table_is_desperate_not_thriving() {
+        assert_eq!(mood_of(&a_house(9), &ladder()), Mood::Desperate);
     }
 }

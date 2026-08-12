@@ -13,6 +13,7 @@ mod data_hash;
 pub mod event;
 pub mod grid;
 pub mod ids;
+pub mod levels;
 pub mod network;
 pub mod production;
 pub mod rng;
@@ -25,12 +26,13 @@ pub mod world;
 pub use command::{Command, CommandError};
 pub use coverage::Coverage;
 pub use data::{
-    BuildingDef, DataSet, DifficultyBeyondCapacity, DifficultyDef, DifficultyId, Rules,
-    SatisfactionRules, ServiceDef, TerrainDef, UnsustainableCapacity,
+    BuildingDef, DataSet, DifficultyDef, DifficultyId, HouseLevelDef, Inconsistency, Rules,
+    SatisfactionRules, ServiceDef, TerrainDef,
 };
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileOccupant};
-pub use ids::{BuildingId, BuildingKindId, HouseId, TileIdx, TilePos};
+pub use ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
+pub use levels::PopulationTotals;
 pub use network::{ComponentId, RoadNetwork, Visited};
 pub use production::FoodTotals;
 pub use rng::{RngDomain, RngSet};
