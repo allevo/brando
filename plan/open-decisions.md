@@ -732,6 +732,25 @@ sized for four, and the question stops being about satisfaction alone. Settle it
 moves the recordings rather than after: the same change is one line now and a regeneration to
 attribute later.
 
+> **Amended while planning phase 14 (2026-08-12), and the amendment is the interesting part.**
+> Everything above was written about `hard`, the profile where a house is **born** empty. Deaths
+> make zero residents reachable on **every** profile, `easy` included — which is to say inside the
+> two committed recordings. Two things follow, and the decision taken was to defer anyway:
+>
+> - the sentence "it moves no recording today" expires with phase 14. Closing A18 before the
+>   demographics land costs nothing and can be proved with `regen-expected --check`; closing it
+>   afterwards is a regeneration somebody has to attribute. That cost was accepted knowingly, which
+>   is the only way it is worth paying.
+> - an emptied house keeps its coverage, so its satisfaction climbs with nobody in it and it can be
+>   promoted at the monthly review. Harmless while it lasts — a promotion grants permission and not
+>   people (A12) — but it is exactly the state phase 15's immigration will fill, so whichever answer
+>   wins has to be checked against a house that is empty, served and at a level it never earned by
+>   housing anyone.
+>
+> Phase 14 leaves a test stating the behaviour as it stands, written to **change its outcome** rather
+> than break when this is closed ([14, test 15](14-births-deaths.md)). It is the third use of that
+> device, and it is what keeps a deferred decision visible in the suite and not only here.
+
 **And something to measure it with, which does not exist.** Nothing in the property suite exercises
 `hard` at all — every proptest builds its world with the bare `world()`, i.e. `easy`. Worse,
 `population_is_consistent` (`sim-core/tests/invariants.rs`) hardcodes
