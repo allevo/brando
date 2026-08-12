@@ -49,10 +49,10 @@ useful story: the starting hypothesis was wrong, and the measurement said so bef
 |---|---|---|
 | A12 | **Taken**, phases 13–15 | **the services chase the population**: capacity is counted on the residents present, and the coverage is recomputed when anyone moves |
 | A13 | **Taken**, phase 11 | game difficulty is a new axis: a table of profiles, an id in the `World` and in the replay's header |
-| A14 | **Taken**, phases 14–15 | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
+| A14 | **Taken**, phase 14 — **done** | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
 | A15 | **Taken**, phases 15–16 | attractiveness = average satisfaction + free places, and the tax rate **only** from phase 16 |
 | A16 | **Taken**, phase 17 | the objectives live in the `World`, `sim-scenario` builds them |
-| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price |
+| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
 
 A12 is the one to read: it is a *gameplay* choice paid for in computation time and in test coverage,
 and it was taken in full knowledge. A17 is the first genuinely open decision of the project since the
@@ -575,6 +575,34 @@ the state hash, which is why phase 02 put it there — and
 `different_seeds_give_different_hashes` would pass **even if the demographics did absolutely nothing**.
 A fixed-cost draw is needed, and the test that pins it down
 (`the_number_of_draws_does_not_depend_on_the_seed`), both written *before* the births.
+
+**How it really went (phase 14, done).** The decision held in every part that mattered, and the trap
+above was the most valuable thing written in this entry: `Stream::below` and its test landed in a
+commit of their own, before a single birth existed, and only then was
+`different_seeds_give_different_hashes` switched back on. Four corrections.
+
+**The two draw sites became two, conditionally.** "One draw per flow per tick" is true only of a flow
+that has somebody eligible. A flow with none takes no jitter at all — it costs nothing to write and
+it keeps `draws` a readable function of the city rather than of the calendar. It is also what lets
+`commands.rs` go on asserting that an empty world touches no stream: the sentence is unchanged since
+phase 04 and is now true for a reason instead of by absence.
+
+**The test named above could not be written as named.** `the_number_of_draws_does_not_depend_on_the_seed`
+describes something false: the choice of house is one draw *per event*, and how many events mature
+depends on the jitter, i.e. on the seed. The property splits in two — `below` costs exactly one draw
+whatever its argument, and a city whose rates are zero draws the same number of values under every
+seed — and only together do they make the re-enabled hash test mean anything.
+
+**The accumulator does not hold thousandths.** Dividing into thousandths once a tick truncates up to
+a thousandth per flow per tick, which over five years is a systematic *downward* drift of a couple of
+events: small, invisible, and precisely what the jitter test would otherwise have been blind to. It
+holds the undivided numerator, and the modulo keeps it under the divisor.
+
+**"Aggregated" turned out to have a second meaning.** The entry justified aggregation by cost and by
+D5. The stronger reason emerged in the tests: with a rate counted against the **eligible** residents,
+a city whose houses are full has nobody eligible and stops growing *by construction*. Counted against
+the population it would also have stopped, because `max_residents` clamps every birth — but for a
+reason no reader could point at. The plateau is a property of the rule, not an artefact of a clamp.
 
 ---
 

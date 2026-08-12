@@ -609,3 +609,61 @@ happens when you guess instead of measuring.
 **Done when:** test 3 (exact conservation), tests 6a and 6b (the draws are decided by the city, not by
 rejection sampling) and test 12 (the invalidation contract) pass, and the three numbers above are
 recorded. Test 6a comes **before** test 5 in writing order: without it, 5 means nothing.
+
+## How it went
+
+The three defining tests are green: conservation is an exact equality over 2,000 generated games,
+`below` costs one draw whatever its argument, and the invalidation fires when somebody moved and
+**only** then. `different_seeds_give_different_hashes` is off the ignore list and cannot go back on
+it. The five-year dump is what this file predicted: `minimal` climbs 16 → 21, meets the farm's
+twenty-resident capacity, drops to 3/4 on food and brings a house down a rung — a plateau with a
+sawtooth on it, not a smooth ceiling. The `.ron` diff of the recordings is one line, the dataset
+hash: not a single command moved.
+
+Attribution went through the recording rather than the hashes, as this file said it would have to:
+the city completes at tick 3 and the population first moves at tick 185, comfortably after the first
+review at 30, which is the earliest a house can have room for a child.
+
+Six things came out differently from the plan above.
+
+**1. Test 6b's predicted constant was wrong, and asserting it would have asserted the opposite of the
+rule.** `flows × ticks` assumes both flows always have somebody eligible. Births need a house with
+room and a satisfaction over the threshold, and for the first thirty-odd ticks — every house still
+full from construction, every accumulator still climbing from zero — there is nobody. So the births
+flow takes no jitter, which is exactly the "nothing is drawn when there is nothing to draw for" this
+file asks for two sections earlier. The property that is actually true, and the one worth testing, is
+that the count does not depend on the **seed**.
+
+**2. `Stream::below`'s sketch contradicted test 6a.** The code opened `if n == 0 { return 0; }`, the
+test asked for one draw "for every `n` ... including `n == 0`". The guard is redundant — the
+multiplication already gives zero — so it bought nothing except a cost that depends on the argument,
+which is the one thing the method exists to refuse. Dropped.
+
+**3. "Switched off" had to become a legal configuration, not a fixture smuggled past validation.**
+Three existing tests need a city whose population cannot move — `coverage_equivalence`,
+`nothing_is_recomputed_while_the_population_does_not_move`, and phase 07's capacity tests, which are
+stated in houses only because a house used to hold exactly four — and so does
+`bench --zero-demographics`. Every rate at zero is now an explicit state with a name
+(`DemographicsRules::is_off`), exempt from *births must beat deaths* because that check is about a
+game being winnable and a table describing no demographics is not describing one badly. Anything
+between zero and complete is still refused.
+
+**4. Two tests of mine were wrong before the code was, and the failures were the useful part.** The
+jitter test measured the accumulator instead of its delta, so it was reading five ticks of
+construction as well as the one it meant to; and it compared against the base death rate when every
+house in a just-built city is below `unserved_threshold` and therefore dying at the raised one. The
+coverage test counted served **houses**, which goes *up* as a city outgrows its farm, because an
+emptied house weighs nothing and is served for free — A18, arriving exactly where this file said it
+would. Counted in residents it says what it meant to say.
+
+**5. `easy_fills_a_house_the_way_m0_did` had to be re-aimed rather than deleted.** Until this phase
+"every house is full" and "every house arrived full" were the same sentence; only the second is
+A13's knob. `settled_on_construction` — the term this file added to the conservation equation —
+turned out to be exactly the thing to assert it against.
+
+**6. `J` is one, and the plan's arithmetic assumed it would not be.** Both this file and
+[A17](open-decisions.md) say A12's cost is `J × G` and that `J` is low in a full city. At the
+reference scale the population moves on all 502 measured ticks. The cost is `G`. The other surprise
+in the same measurement: `H` did not stay where phase 13 left it — 324 µs against ~280 µs — because
+step 6 scans the houses three times even with the rates at zero, which by this file's own rule makes
+it a different thing to optimise. The numbers are in A17 and in [18](18-invariants-closeout-m1.md).
