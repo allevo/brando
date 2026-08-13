@@ -92,6 +92,23 @@ milestone, and [ROADMAP.md](../ROADMAP.md) gives the reason: M2's renderer has t
 map model it will actually draw. Its structure is fixed; its numbers are not, which is the same
 division M1 kept while M0 was still open.
 
+## The two phases the map makes possible
+
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 20 | [Things on the ground, and the cost of clearing them](20-ground-clearing.md) | The same building costs more on wooded ground than on bare ground, and the map is what says which is which | M |
+| 21 | [Bridges](21-bridges.md) | A road crosses water within a limit and at a higher cost, the two banks become one network region, and demolishing the bridge splits them again | L |
+
+Both depend on **19** and on nothing else, and neither is scheduled against a milestone yet — see
+[ROADMAP.md](../ROADMAP.md), which is the file that says when. Phase 19 names both of them in its own
+"out of scope" section, which is where they came from: 20 is the other half of *the site is part of
+what the building costs*, and 21 is what lets phase 19's rule against a severed map be relaxed.
+
+Their files are **sketches, and say so in their own headers**. They were written when the tasks were
+added, not when the phases were designed, and they hold the goal and the open questions rather than a
+design. That is the same rule that kept M1 unplanned while M0 was open, applied one phase at a time:
+the detail is written after there is a real map to look at, not before.
+
 ## What gets built and what does not
 
 Of the nine crates planned in `CLAUDE.md`, M0 brings four into being — `sim-core`, `sim-data`,

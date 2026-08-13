@@ -70,6 +70,27 @@ They are closed *inside* phase 19 and written into [DECISIONS.md](DECISIONS.md) 
 neither holds a half-numbered slot here: nothing is planned on top of them, so neither can go
 invisible the way A17 and A18 did.
 
+## Waiting on the map — added, not scheduled
+
+| # | What | Verified by | Blocks |
+|---|---|---|---|
+| 20 | [Things on the ground, and the cost of clearing them](plan/20-ground-clearing.md) | the same building costs more on wooded ground than on bare ground, and the treasury invariant stays an **exact equality** | |
+| 21 | [Bridges](plan/21-bridges.md) | a bridge makes two bank-side networks one region, and demolishing it splits them again | |
+
+Both depend on 19 and on nothing else. **Neither has a place in the order yet:** whether they come
+before M2's renderer, alongside it, or after it is undecided, and the honest reason is that phase 19
+has not run. What relief really costs to draw and to play is the fact that decides it, and that fact
+does not exist yet.
+
+They are here rather than under "beyond" because they are not sketches of a milestone — they are two
+named phases with a dependency and a goal, taken straight out of phase 19's own "out of scope" list.
+20 is the other half of the rule phase 19 introduces: *the site you chose is part of what the building
+costs*, slope being the first half and what is standing on the ground the second. 21 is the phase that
+lets phase 19's refusal to load a severed map be relaxed — that refusal exists precisely because the
+player has no way to cross water yet.
+
+Their files hold the goal and the open questions, not a design, and say so in their headers.
+
 ## Beyond M1
 
 Sketched, not planned. The rule this project follows is that a milestone is planned only once the

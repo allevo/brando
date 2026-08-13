@@ -27,9 +27,9 @@ Scenario objectives are expressed in months and years, never in ticks.
 ### Terrain and roads
 
 Each terrain declares whether it is `buildable`, whether it is `walkable`, and its `road_cost` — the
-cost of walking a road laid on it. Every `Terrain` variant must appear in the table exactly once.
+cost of walking a road laid on it.
 
-Distance in this game is **walked along the road network**, never as the crow flies (D2). The road
+Distance in this game is **walked along the road network**. The road
 network is rebuilt only when it is dirty, and its connected-component labelling does not depend on the
 order the roads were built in.
 
@@ -37,7 +37,7 @@ order the roads were built in.
 
 A building kind declares its `id`, its `size` in tiles, its `cost`, how many `levels` it has, and the
 `required_services` it needs. A building that provides a service declares `kind`, `range_per_level`
-and `capacity_per_level` — one entry per level.
+and `capacity_per_level`, one entry per level.
 
 A building is classified as **a house** by its `required_services` being non-empty. A house's
 `required_services` is the union of what each of its levels asks for, and it has to stay that way, or
