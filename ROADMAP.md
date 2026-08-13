@@ -31,6 +31,7 @@ them.
 | # | What | Verified by | Blocks |
 |---|---|---|---|
 | **14.5** | **TO_BE_DECIDED — [A18](DECISIONS.md#a18--an-empty-house-consumes-no-capacity):** does an empty house consume provider capacity? | a decision written into A18, plus whichever test the answer implies | phase 15 |
+| **14.6** | **TO_BE_DECIDED — [A20](DECISIONS.md#a20--a-house-is-covered-by-services-its-level-does-not-require):** is a house covered by, and fed by, a service its own level does not require? | a decision written into A20, plus a test that changes its outcome rather than breaking | phase 15 |
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 17 | [`sim-scenario`](plan/17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
@@ -40,6 +41,12 @@ them.
 Why 14.5 comes first: A18 is one line to change **now** and a regeneration somebody has to attribute
 **later**. Phase 14 made zero residents reachable on every difficulty profile, including inside the
 two committed recordings, so the window in which closing it is free has already begun to shut.
+
+Why 14.6 sits next to it: it is the same question asked about a different house. Both are about who
+consumes a provider's places, both are answered inside `pick_within_capacity` and its caller, and
+phase 15 is what turns either from a curiosity into a real claim on a farm — it fills the empty
+houses of one and multiplies the huts of the other. Answered in one pass they cost one regeneration
+instead of two.
 
 Why 18.5 blocks M2: A12's cost is paid on every game and therefore on every batch of automatic
 balancing, which is the project's second non-functional requirement. Phase 14 measured it and found
@@ -69,6 +76,25 @@ whether a map is an asset or a seed, are the two decisions the phase turns on. *
 They are closed *inside* phase 19 and written into [DECISIONS.md](DECISIONS.md) then, which is why
 neither holds a half-numbered slot here: nothing is planned on top of them, so neither can go
 invisible the way A17 and A18 did.
+
+## Before M2 — a building says what it is
+
+| # | What | Verified by | Blocks |
+|---|---|---|---|
+| 22 | [A building says what it is](plan/22-building-kind.md) | the dataset hash moves once, every checkpoint of every recording moves with it, and no rule of the game changes | M2 |
+
+A building is currently classified as a house by a heuristic — it requires services and provides
+none — and three validation checks exist to stop that heuristic quietly becoming false. The building
+kind is stated outright instead, and two of the three checks go with it.
+
+It blocks nothing in M1 and depends on nothing, including the map. It is placed before M2 because M2's
+renderer and M3's second civilisation are the first things that genuinely have to tell one kind of
+building from another, and a heuristic is a poor thing to build either on. It is placed *after* the
+map work only because that work is already sequenced, not because it needs it.
+
+**It must own its commit.** It moves the dataset hash, which the state hash includes, so every
+checkpoint of every recording moves with it. That is a regeneration nobody can attribute if anything
+else lands beside it.
 
 ## Waiting on the map — added, not scheduled
 

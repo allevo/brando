@@ -334,6 +334,16 @@ paper — but it is a trap for whoever reads that field in M1.
 > pins the behaviour down. It becomes a real decision in phase 13, when levels stop requiring the
 > same things.
 
+> **Amended 2026-08-13, reviewing the documents.** The gap now has an entry of its own,
+> [A20](#a20--a-house-is-covered-by-services-its-level-does-not-require), and a slot in the roadmap.
+> Phase 13 arrived and the prediction above held exactly: with the first rung asking for water only,
+> the unrequired assignment stopped being harmless — a hut is fed, and it takes places on the farm.
+> What the prediction got wrong is that phase 13 did not turn it into "a real decision", because
+> nobody was looking at it while the levels were being built. It took a reader asking *does the food
+> a house needs really depend on its residents* to find it, four phases later. A gap named inside a
+> closed entry is a gap nobody is scheduled to close: that is why it is now an entry with a status
+> and a number, which is the mechanism A17 and A18 already proved was needed.
+
 ---
 
 ## A10 — House satisfaction is an accumulator of time, not a resource level
@@ -927,3 +937,69 @@ of reading like stale entries.
 The general lesson, and it is A5's again in a third place: **a document that is checked by nobody
 drifts.** The glossary had no test. It still has none, but it now has a rule that says what belongs in
 it, which is the cheapest available substitute.
+
+---
+
+## A20 — A house is covered by services its level does not require
+
+**Status: TO_BE_DECIDED** — slot [14.6 in ROADMAP.md](ROADMAP.md), to close before phase 15.
+
+`compute_from_scratch` (`sim-core/src/coverage.rs`) offers **every** house within range as a
+candidate, whatever that house's level asks for; the level is never read there. `production` then
+feeds every house that came out of it with a food provider attached. So a house on the first rung —
+which since phase 13 is a hut requiring water only — is assigned to a farm, eats
+`food_per_resident` per resident per tick, and occupies places the farm counts against its capacity.
+
+This is [A9](#a9--water-is-coverage-not-a-resource)'s gap, named in M0, made observable by phase 12,
+and made to matter by phase 13. It reached this entry because a reviewer asked whether the food a
+house needs really scales with its residents; the answer is yes, and the interesting half is *for
+every house, at every level*.
+
+### Why it is a decision and not a bug
+
+Because the same assignment does two jobs at once, and only one of them is questionable.
+
+- **It feeds the hut**, which costs the farm stock and places it could have given to a house that
+  actually requires food. That is the part that looks wrong.
+- **It is also the only way the hut ever gets promoted.** Satisfaction moves on the union of what
+  every level requires, precisely so that a rung introducing a new service is reachable; and the rung
+  above the hut asks for food at `level_up_threshold`. Stop assigning food to the hut and its food
+  accumulator sits at zero for ever: nothing rises past the first level again.
+
+So "assign only what the level requires" is not a one-line fix, it is a change to how the ladder is
+climbed. That is what makes this a decision.
+
+### Why it has to close before phase 15
+
+The same reason [A18](#a18--an-empty-house-consumes-no-capacity) does, and it is the same function.
+Today the number of huts is bounded by how many houses the player builds. Migration fills them, and
+every one it fills becomes a real claim on a farm sized for the rungs above. Both questions are about
+who consumes a provider's places, both are answered inside `pick_within_capacity` and its caller, and
+answering them in one pass costs one regeneration instead of two.
+
+### The candidate answers
+
+1. **Leave it, and write it down as intended.** The hut eats because it is being brought up to the
+   rung above; a farm feeding the district it will serve is not a leak, it is the ramp. Costs
+   nothing, and it is defensible — but it should be chosen, not inherited.
+2. **Cover for satisfaction, consume only what the level requires.** Splits the assignment's two
+   jobs: the hut keeps building its food satisfaction and stops eating. It sounds like the best of
+   both and it has a real cost — the coverage stops being one relation and becomes two, and
+   *a house covered by food always eats* stops being true as stated, which is a sentence three
+   documents and one validation check rest on.
+3. **Assign only what the level requires, and make the next rung reachable another way** — a rung is
+   entered on the services *below* it plus a wait, or satisfaction starts at a value instead of zero
+   when a service first arrives. Honest about what it costs: it moves the level rules, not the
+   coverage.
+
+### What it will need
+
+A test that pins today's behaviour first, in the form that **changes its outcome** rather than breaks
+when this closes — the device phase 14 used for A18. And the numbers phase 15 produces: how much of a
+farm's capacity huts really take once migration is filling them is a measurement, not a guess, and it
+does not exist yet.
+
+*Watch out for the same thing A18 warns about.* Whichever answer wins lands in the function
+`CapacityBeyondOutput` depends on for *a house covered by food always eats*. Answer 2 in particular
+changes what that sentence means, so the check has to be re-argued rather than assumed — for the
+third time in that function's life.

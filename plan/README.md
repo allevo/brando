@@ -109,6 +109,16 @@ added, not when the phases were designed, and they hold the goal and the open qu
 design. That is the same rule that kept M1 unplanned while M0 was open, applied one phase at a time:
 the detail is written after there is a real map to look at, not before.
 
+## The phase that depends on nothing
+
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 22 | [A building says what it is](22-building-kind.md) | A building declares its kind instead of being classified by what it lacks; the dataset hash moves once and no rule of the game changes | S |
+
+It came out of the review of the documents on 2026-08-13 and is the only phase in this index that
+depends on no other — not even the map. [ROADMAP.md](../ROADMAP.md) places it before M2 and says why.
+Its file is a sketch, like 20 and 21, and says so in its own header.
+
 ## What gets built and what does not
 
 Of the nine crates planned in `CLAUDE.md`, M0 brings four into being — `sim-core`, `sim-data`,

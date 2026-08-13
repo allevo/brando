@@ -29,9 +29,9 @@ Scenario objectives are expressed in months and years, never in ticks.
 Each terrain declares whether it is `buildable`, whether it is `walkable`, and its `road_cost` — the
 cost of walking a road laid on it.
 
-Distance in this game is **walked along the road network**. The road
-network is rebuilt only when it is dirty, and its connected-component labelling does not depend on the
-order the roads were built in.
+Distance in this game is **walked along the road network**, never measured in a straight line. Two
+places belong to the same network when a road path joins them, and which roads make up one network
+does not depend on the order they were built in.
 
 ### Buildings
 
@@ -39,50 +39,78 @@ A building kind declares its `id`, its `size` in tiles, its `cost`, how many `le
 `required_services` it needs. A building that provides a service declares `kind`, `range_per_level`
 and `capacity_per_level`, one entry per level.
 
-A building is classified as **a house** by its `required_services` being non-empty. A house's
-`required_services` is the union of what each of its levels asks for, and it has to stay that way, or
-the house stops being recognised as one. Checked, not commented.
+**A building that requires services without providing any is a house.** That is how the game tells
+the two kinds apart, which is why the list on a house is never empty.
+
+**Which services a house needs is declared per level**, in `house_levels` — see *House levels* below.
+The list on the building itself is the union of what every level asks for, and it has to stay the
+union, or the building stops being read as a house at all. That the two agree is checked when the
+tables are loaded, not left to a comment.
 
 Buildings may not overlap, and may only be placed on `buildable` terrain.
 
 ### Coverage
 
 A provider serves the houses within `range_per_level` of it, measured as walked distance along the
-roads. What it can serve at once is bounded by `capacity_per_level`, **counted in residents actually
-present, not in houses** (A12) — a house that could hold many but holds few weighs only the few.
+roads. What it can serve at once is bounded by `capacity_per_level`, **counted in the residents
+living in those houses and not in the houses themselves**: a house of two residents takes two places,
+a house of eight takes eight, and the same well therefore reaches fewer houses as the district fills
+up. A house with nobody in it takes no places at all.
 
-Because capacity is counted on the residents present, the coverage has to be recomputed whenever
-anyone moves in or out. That is A12's price, and it is paid at the end of step 6.
+A house is taken whole or left out whole — it is never half served — and a house that does not fit is
+skipped rather than blocking the ones behind it. Priority is by walked distance, the nearest first.
 
-A provider's capacity may not exceed what its output sustains. That relation is checked, and it is
-what makes ***a house covered by food always eats*** true rather than hopeful (A5). Hunger is still
-reachable — but only through **lack of coverage**, when houses outnumber the providers' capacity.
+Because places are counted in residents, an assignment stops being true the moment anyone is born,
+dies or is evicted. That is why the coverage is recomputed at the end of step 6, and it is what makes
+step 3 the most expensive part of the tick.
 
-An open question sits here: an empty house consumes no capacity, because it has no residents to count
-([A18](DECISIONS.md#a18--an-empty-house-consumes-no-capacity), slot 14.5 in [ROADMAP.md](ROADMAP.md)).
+A provider may not declare more capacity than its own output feeds, and that relation is checked when
+the tables are loaded. It is what turns ***a house covered by food always eats*** from a hope into a
+rule: a farm can never take on more residents than it can feed. Hunger is still reachable, but only
+through **lack of coverage**: more houses than the providers have places for. It cannot happen to a
+house that has a farm.
 
 ### Food
 
-A farm produces `output_per_tick` into its own local stock, which is capped at `max_stock`. Each
-resident of a covered house eats `food_per_resident` per tick, in thousandths.
+A farm produces `output_per_tick` into its own stock, which stops at `max_stock`; what would go past
+it is lost. Every resident of a house covered by food eats `food_per_resident` per tick, in
+thousandths — so what a house takes is that amount times the number of residents living in it, and it
+takes it whole or not at all. The capacity a farm may declare follows from this: its output divided
+by what one resident eats is how many residents it can feed.
 
-Food is conserved as an **exact equality**: what was produced equals what was consumed plus what is in
-stock. The capacity a farm may declare follows from this — `output_per_tick / food_per_resident` is
-how many residents it can sustain.
+**Every covered house eats, whatever its own level asks for.** The coverage does not read the level's
+requirements, so a first-rung hut that asks for water only is still assigned to a farm within reach,
+still eats, and still takes up places that farm counts. That is what lets it build up the food
+satisfaction the rung above demands — and it is also what makes it compete for the farm.
+
+Food is conserved as an **exact equality**: what was produced equals what was eaten, plus what is in
+stock, plus what was written off — food lost because the granary was full, and food lost along with a
+demolished farm.
 
 ### Satisfaction
 
-Satisfaction measures **how long a service has been arriving, not how much of it** (A10). With
-capacity and output consistent, a covered house always receives everything it needs, so "how much"
-would be a constant.
+Satisfaction measures **how long a service has been arriving, not how much of it arrives**. With a
+provider's capacity and its output kept consistent, a covered house always receives everything it
+needs, so "how much" would be the same number for every house and would say nothing.
 
-It is kept per service. While the service arrives, satisfaction rises by `step_up` each tick; while it
-does not, it falls by `step_down`. It is clamped to `satisfaction.max` and never goes below zero. It
-is lost faster than it is gained, because losing a service is an event and getting it back is an
-investment.
+It is kept per service, and it moves for **every** service the building declares in
+`required_services`, including the ones the house's current level does not ask for. It has to: a
+level that introduces a new service would otherwise be out of reach for ever, its accumulator sitting
+at zero with nothing to move it. While the service arrives, satisfaction rises by `step_up` each
+tick; while it does not, it falls by `step_down`. It stops at `satisfaction.max` and never goes below
+zero. It is lost faster than it is gained, because losing a service is an event and getting it back
+is an investment.
 
-`mood_thresholds` cuts the range into the bands the renderer draws — Awful, Unhappy, Happy, Great.
-The thresholds ascend and sit above zero, so a house at zero satisfaction is always Awful.
+Which services are **read** is a separate question, and there the answer is per level: a house's mood
+is the worst of the services **its own level** requires. `mood_thresholds` cuts the range into the
+bands the renderer draws — Awful, Unhappy, Happy, Great. The thresholds ascend and sit above zero, so
+a house at zero satisfaction is always Awful.
+
+**Levelling up does not reset satisfaction, and it can lower the mood on the spot.** The accumulators
+carry over untouched; what changes is the list that is read. A house promoted into a level that asks
+for a service it has never received reads that empty accumulator from the same tick, so it can be
+promoted and unhappy at once. That is the signal working, not a glitch: the new rung is harder to
+keep than the one below it.
 
 ### House levels
 
@@ -90,9 +118,16 @@ Each entry of `house_levels` declares `max_residents`, the `required_services` t
 its `level_up_threshold`, its `decay_threshold` and its `taxable_per_resident`.
 
 The review runs **only on a month boundary**. A house rises one level when it has every service the
-next level requires and its satisfaction is at or above that level's `level_up_threshold`. It falls
-when satisfaction drops below its `decay_threshold`. A house that falls below the first level is
-evicted.
+next level requires and its satisfaction is at or above that level's `level_up_threshold` on each of
+them. It falls one level when its satisfaction drops below its own level's `decay_threshold` on any
+one of them. Falling is decided first, so a house on its way down cannot climb back on one leftover
+requirement in the same review.
+
+**The first level never falls**: there is nothing below it to fall to. A house that empties out is
+the demographics' business, not the review's.
+
+Falling shrinks the house, and the residents who no longer fit under the new level's `max_residents`
+are **evicted**: they leave the city, and they are counted as having left.
 
 `decay_threshold` sits strictly below `level_up_threshold` on the same level, and the band between
 them is the **gap**. The gap plus the monthly cadence is what makes the absence of oscillation
@@ -100,8 +135,8 @@ them is the **gap**. The gap plus the monthly cadence is what makes the absence 
 gap must be strictly positive, `max_residents` must grow with the level, and no threshold may exceed
 `satisfaction.max`.
 
-The first level's two thresholds are read by nobody — nothing rises into the first level and there is
-no level below it to fall to. They exist so the table does not claim a rule that does not exist.
+The first level's two thresholds are read by nobody: nothing rises into the first level, and it never
+falls. They exist so the table does not claim a rule that does not exist.
 
 A promotion grants **permission, not people**: it raises the ceiling, and the residents arrive by
 their own rules.
@@ -109,41 +144,44 @@ their own rules.
 ### Births and deaths
 
 Rates are expressed **per month and per thousand residents**, because that is the form you read and
-reason in. The conversion to ticks loses nothing: whatever does not mature this tick stays in an
-accumulator and matures later.
+reason in. Nothing is lost in the conversion to ticks: a rate that would mature less than one event a
+month keeps its fraction until it does. A small city therefore still grows — slowly, and that is the
+shape of the early game. The first residents come from building houses, not from births.
 
-The rule the module implements is ***the rate is random, the distribution is deterministic***. A rate
-takes one jittered draw per tick; which house an event lands on is one draw per event. A city of
-fifteen thousand residents costs a handful of draws, not one per resident. Nothing is drawn when there
-is nothing to draw for.
-
-- **Births** run at `births_per_thousand_per_month`, counted against the **eligible** residents only —
-  those in a house that has room and satisfaction at or above `birth_threshold`. Counting against the
-  whole population instead would make the plateau an accident of the numbers; this way a city whose
-  houses are all full has nobody eligible, the rate is zero, and the population stops for a reason you
-  can point at.
-- **Deaths** run at `deaths_per_thousand_per_month` for a house that has every service its own level
-  asks for, and at `deaths_per_thousand_per_month_when_unserved` for a house going without.
+- **Births** run at `births_per_thousand_per_month`, counted against the **eligible** residents only
+  — those in a house that has room left and satisfaction at or above `birth_threshold` — and the rate
+  is then scaled by the city's average satisfaction, weighted by residents. A city that is struggling
+  has few children even in the houses that are doing well. Counting against the whole population
+  instead would make the plateau an accident of the numbers; this way a city whose houses are all
+  full has nobody eligible, the rate is zero, and the population stops for a reason you can point at.
+- **Deaths** run at `deaths_per_thousand_per_month` for the residents of a house that has every
+  service its own level asks for, and at `deaths_per_thousand_per_month_when_unserved` for the
+  residents of a house going without.
 - **Going without** is read off the worst service **the house's own level** requires, compared against
-  `unserved_threshold` — not off food. Since the first level is a hut that asks for water only, reading
-  hunger off food regardless of level would make the opening of every game a slow bleed.
-- `jitter_per_thousand` varies each rate by a symmetric fraction, drawn once per flow per tick. The
-  symmetry is checked: an asymmetric jitter would shift the whole balancing without showing up
-  anywhere.
+  `unserved_threshold` — not off food. Since the first rung is a hut that asks for water only, reading
+  hunger off food whatever the level would make the opening of every game a slow bleed.
+- `jitter_per_thousand` varies each rate by a symmetric fraction. The symmetry is checked: an
+  asymmetric jitter would shift the whole balancing without showing up anywhere.
 
-Two relations are checked: births must beat deaths at maximum satisfaction, or a perfect city shrinks
-and no growth scenario is winnable; and neither threshold may sit above `satisfaction.max`, or it is a
-condition no city can ever meet.
+Which house a birth or a death falls on is drawn at random among the houses eligible for it.
 
-**Departures happen before arrivals** within a tick. Technically, freeing a place first keeps
-`residents <= max_residents` true at every observable instant rather than only at the end of the step.
-For gameplay, a house that loses somebody can win them back the same tick, which makes the population
-responsive instead of jerky.
+**Departures happen before arrivals** within a tick. A house that loses somebody can win them back
+the same tick, which makes the population move smoothly instead of in jumps — and a house never holds
+more residents than its level allows at any moment you could look at it.
+
+Two relations are checked when the tables are loaded. Neither threshold may sit above
+`satisfaction.max`, or it is a condition no city can ever meet. And `births_per_thousand_per_month`
+has to beat `deaths_per_thousand_per_month` — but that comparison is the **best case, and only the
+best case**: a city at full satisfaction with every house served. All it guarantees is that such a
+city grows. It says nothing about a city doing badly, which is meant to shrink: the birth rate falls
+away with the average satisfaction, while the raised death rate applies to more and more houses.
 
 ### Difficulty
 
 A profile is chosen at the start of a game and **never changes afterwards**. Because it changes the
-simulation it is state: it enters the state hash and travels in the replay's header (A13).
+simulation it is state, not a setting: it enters the state hash and travels in the replay's header,
+so two games with the same seed and the same commands on different profiles are different games and
+cannot be confused for one another.
 
 Each profile declares `starting_residents_per_house`, the residents of a newly-built house. Validation
 refuses any value beyond the first level's `max_residents` — a house born beyond its own capacity is a
@@ -157,24 +195,41 @@ dataset hash.
 
 ---
 
-## Hardcoded — the rules that are not tunable, and why
+## In the code — what is not in the tables, and why
 
-These are in Rust because they are **structural**: changing one is a change to what the game *is*, or
-to what the engine can represent, not a rebalance.
+**No rate, and no gameplay minimum or maximum, is hardcoded.** A balancing number in a `.rs` file is
+a bug, not an exception to this section. What does live in the code is of two kinds, and they answer
+different questions.
 
-| Rule | Where | Why it is not data |
-|---|---|---|
-| The order of the ten tick steps, and step 6's sub-order | `sim-core/src/tick.rs` | Game semantics. See [ARCHITECTURE.md](ARCHITECTURE.md). |
-| The order of the demographic draws | `sim-core/src/demographics.rs` | A determinism contract: the RNG sequence depends on it. |
-| The maximum map side | `sim-core/src/grid.rs` (`MAX_SIDE`, A4) | `TileIdx` is a `u16` and cannot address more. A representational limit. |
-| `Milli` is thousandths | `sim-core/src/units.rs` | The definition of the unit, not a quantity. Floats never enter the state (D4). |
-| Money is `Coins`, never `Milli` | `sim-core/src/units.rs` (A1) | Money has no in-game fractions; thousandths would halve the useful range for nothing. |
-| The service kinds themselves | `sim-core/src/service.rs` (D6) | Their *effects* are rules, and the core indexes them into fixed-size arrays. Building kinds, by contrast, **are** data. |
-| Which RNG kinds exist, and their salts | `sim-core/src/rng.rs` | One stream per kind so adding a feature does not knock existing sequences out of phase. The salt is derived from the kind's **name**. |
-| Hash prefixes, the recording format version, the checkpoint cadence | `sim-core/src/data_hash.rs`, `sim-replay/` | File and hash format, not gameplay. |
-| A house is a house if its `required_services` is non-empty | `sim-core/src/data.rs` | A classification rule, not a quantity. |
-| Coverage is aggregate, never service walkers | `sim-core/src/coverage.rs` (D2) | An architectural decision. The walkers the player sees are decorative and live in the renderer. |
-| Rejected commands change nothing | `sim-core/src/tick.rs` | An invariant: an invalid command is discarded and reported, and does not interrupt the tick. |
+### Rules of the game that are not numbers
 
-If you find yourself wanting to tune something in this table, that is a design change worth an entry
+Changing one of these changes what the game *is*, so there is nothing to tune.
+
+| Rule | Where |
+|---|---|
+| A building that requires services without providing any is a house | `sim-core/src/data.rs` |
+| A service reaches a house by coverage over walked distance, never by a walker carrying it (D2). The walkers the player sees are decorative and live in the renderer | `sim-core/src/coverage.rs` |
+| A house is served whole or left out whole, and it eats whole or not at all | `sim-core/src/coverage.rs`, `sim-core/src/production.rs` |
+| Money has no fractions, and quantities do (A1) | `sim-core/src/units.rs` |
+| An invalid command is discarded and reported, and does not interrupt the tick | `sim-core/src/tick.rs` |
+| Which services exist at all (D6) — building kinds, by contrast, **are** data | `sim-core/src/service.rs` |
+| What happens before what inside a tick: coverage before eating, satisfaction before the review that reads it, departures before arrivals | `sim-core/src/tick.rs` |
+
+The last row looks like plumbing and is not. Departures before arrivals is why a house that loses
+somebody can take them back the same day; satisfaction before the review is why a month of service
+counts at the review that closes it. Reorder them and the game plays differently.
+
+### Contracts that keep two runs identical
+
+These decide nothing about the game and everything about whether the same seed and the same commands
+replay to the same city, down to the bit. **[ARCHITECTURE.md](ARCHITECTURE.md) is the file that
+describes them** — the frozen declaration orders, one random stream per kind with its salt taken from
+the kind's name, the fixed order of the demographic draws, and the hash and recording formats.
+
+Three numbers do live in the code, and none of them is balancing: the largest map side a tile index
+can address, how often a recording writes a hash down, and how many thousandths make a unit. Each is
+the definition of a representation or of a file format. A game where one of them differs is not a
+rebalanced game, it is an unreadable file.
+
+If you find yourself wanting to tune something on this page, that is a design change worth an entry
 in [DECISIONS.md](DECISIONS.md) — not an edit.
