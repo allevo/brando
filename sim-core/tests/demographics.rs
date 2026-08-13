@@ -174,7 +174,10 @@ mod demographics {
             0,
             "an unserved house has to empty out"
         );
-        assert_eq!(abandoned, 1, "once, on the tick it emptied — not every tick");
+        assert_eq!(
+            abandoned, 1,
+            "once, on the tick it emptied — not every tick"
+        );
     }
 
     // --- 6b. the draws are decided by the city ------------------------------
@@ -268,8 +271,7 @@ mod demographics {
             let before = w.demographics().remainder(Flow::Deaths);
             let died_before = w.population_totals().died;
             tick(&mut w, &[]);
-            let matured =
-                i64::try_from(w.population_totals().died - died_before).expect("fits");
+            let matured = i64::try_from(w.population_totals().died - died_before).expect("fits");
             total += w.demographics().remainder(Flow::Deaths) - before + matured * divisor;
         }
 
@@ -341,10 +343,7 @@ mod demographics {
 
         let r = tick(&mut w, &[Command::Demolish { at: pos(8, 5) }]);
         assert!(r.rejected.is_empty(), "{:?}", r.rejected);
-        assert_eq!(
-            w.population_totals().lost_to_demolition - before,
-            residents
-        );
+        assert_eq!(w.population_totals().lost_to_demolition - before, residents);
     }
 
     // --- 12. the invalidation contract (A12) --------------------------------
@@ -384,7 +383,10 @@ mod demographics {
                 assert!(!dirty, "nobody moved and the coverage was dirtied anyway");
             }
         }
-        assert!(saw_a_move, "the run has to contain a tick where somebody moved");
+        assert!(
+            saw_a_move,
+            "the run has to contain a tick where somebody moved"
+        );
         assert!(
             saw_a_still_tick,
             "and one where nobody did, or the converse is vacuous"
@@ -443,15 +445,13 @@ mod demographics {
     /// A house emptied by deaths keeps its coverage and goes on consuming no
     /// capacity.
     ///
-    /// **Written to change its outcome, not to break.** [A18] — an empty house
+    /// **Written to change its outcome, not to break.** A18 — an empty house
     /// consumes no provider capacity — was recorded about `hard`, where a house
     /// is *born* empty. Deaths make zero residents reachable on every profile,
     /// `easy` included, so the behaviour is now inside the committed
     /// recordings. This states it as it is today; when phase 15 closes A18, the
     /// assertion below is what has to be flipped, deliberately, rather than
     /// discovered.
-    ///
-    /// [A18]: ../../plan/open-decisions.md
     #[test]
     fn an_emptied_house_still_consumes_no_capacity() {
         let mut w = world_of(16, 16);
@@ -472,9 +472,7 @@ mod demographics {
 
         assert_eq!(w.house(victim).expect("alive").residents, 0);
         assert!(
-            w.coverage()
-                .houses_served_by(small_well)
-                .contains(&victim),
+            w.coverage().houses_served_by(small_well).contains(&victim),
             "an emptied house keeps its coverage, and weighs nothing while it \
              has it — that is exactly what A18 is about"
         );

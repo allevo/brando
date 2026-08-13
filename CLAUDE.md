@@ -13,10 +13,102 @@ Three non-functional requirements drive the whole architecture:
    judges), so the parameters can be balanced automatically.
 3. The game runs headless, with no graphics dependency at all.
 
-Language: Rust. Edition 2021+.
+Language: Rust, edition 2024.
 
 Every identifier, comment and document in this repository is in English. Any word you do not
 recognise is defined in [GLOSSARY.md](GLOSSARY.md).
+
+---
+
+## The documents, and which one to update
+
+Each document answers **exactly one question**, and nothing else may answer it. Two documents that
+can both answer the same question will eventually disagree, and then neither can be trusted.
+
+| Question | File | Lifecycle |
+|---|---|---|
+| Where does the code live, how does data flow? | [ARCHITECTURE.md](ARCHITECTURE.md) | present tense, edited in place |
+| What does the game do? | [RULES.md](RULES.md) | present tense, **no values** — names of parameters only |
+| Why is it this way? | [DECISIONS.md](DECISIONS.md) | **append only**, never rewritten |
+| What is next, what is undecided? | [ROADMAP.md](ROADMAP.md) | the only statement of how far the tree has got |
+| What does this word mean? | [GLOSSARY.md](GLOSSARY.md) | edited in place |
+| How do I work here? | this file | edited in place — **no statements of current state** |
+| What happened, in order? | [plan/](plan/README.md) | **frozen history** |
+
+**`plan/` is a record of moments in the past and is never edited to match the present.** When a phase
+document turns out to describe behaviour that later changed, you do **not** rewrite the sentence: you
+append a dated amendment block below it. The original prediction next to what really happened is the
+most useful thing in the whole record — rewriting it destroys the only evidence of how the design
+moved.
+
+### The definition of done for a phase
+
+A phase is not finished until all of these are true:
+
+1. `cargo test --workspace` is green, and the new behaviour has the tests its phase file promised.
+2. `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` are clean.
+3. `cargo xtask regen-expected --check` is green, **or** the recordings were regenerated on purpose
+   and the reason is written down. A hash that moves without the rules or tables changing is a
+   source of non-determinism: stop and find it.
+4. `cargo xtask doc-check` is green.
+5. Each of `ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has either been updated or
+   consciously declared unaffected. Say which, explicitly; "I did not think about it" is the failure
+   mode this list exists to prevent.
+6. The phase file gets its `## How it went` section — including the ways the plan was wrong — and its
+   status header.
+7. Any decision taken along the way is a new entry in `DECISIONS.md`. Any decision **deferred** gets a
+   half-numbered `TO_BE_DECIDED` slot in `ROADMAP.md`, at the point where it has to be closed.
+
+### `DECISIONS.md` records what was decided, never what will be
+
+**Do not write an entry for a decision that has not been taken yet.** Not for a phase that is planned
+and unbuilt, not "so it is not forgotten", not with a note saying it is provisional. The file is
+append-only: an entry written early cannot be withdrawn, only amended, so the cheapest repair is
+already more expensive than never having written it. Worse, it is a lie about the project's own
+history — the register's whole value is that reading it tells you what was really known when.
+
+**Do not reserve numbers either.** A reserved `A<n>` goes wrong the moment other work lands first, and
+a plan file citing an id that turned out to belong to something else is worse than one citing none.
+
+Where the argument goes instead, by case:
+
+- **Planning an unbuilt phase.** It goes in that phase's file under `plan/`, which opens by saying it
+  is a plan and may diverge. Arguing for an answer there is what a plan *is*. Name the decisions the
+  phase will produce, describe them, and leave them unnumbered.
+- **A decision something else is planned on top of.** That is the one case for a
+  `TO_BE_DECIDED` entry plus its half-numbered slot in `ROADMAP.md`. The slot exists because such a
+  decision goes invisible otherwise — which is exactly what happened to A17 and A18, both of which
+  stayed unseen while four phases were planned over them.
+- **A decision a phase closes by itself, in its own commit.** No entry and no slot until it is closed.
+  Nothing is planned on top of it, so it cannot go invisible; the phase file carries the reasoning
+  until the phase runs, and the entry is written then, saying what was really chosen.
+
+The test to apply before adding an entry: *has the work that settles this actually been done?* If the
+answer is "no, but I am confident", the entry is premature. Confidence is not a decision, and this
+file's most useful entries are precisely the ones where the recommendation was overturned.
+
+### Regenerating the recordings without losing the signal
+
+Almost every phase regenerates the recordings, and that is the moment the project's most valuable
+test risks becoming a ritual. The header of every `.hashes` states the rule — *if it changes without
+the balancing having changed, a source of non-determinism has been introduced: stop and find it, do
+not regenerate* — but applying it takes a protocol:
+
+1. **Green before you start.** `cargo xtask regen-expected --check` has to be green *before* you
+   touch the code. If it is not, the tree is already dirty for other reasons and the signal is lost.
+2. **Exactly the files you expected.** After the change, `--check` has to list the files the phase
+   declares it regenerates, not one more. A `.ron` that changes in a phase that does not touch the
+   header is already the clue.
+3. **Idempotence.** `regen-expected` twice in a row: the second has to say "nothing to do". It is
+   where non-determinism within a process shows up first.
+4. **A separate process.** `cargo test -p sim-replay` catches what point 3 cannot: memory addresses,
+   `RandomState`, the iteration order of hash collections.
+5. **Look at the first diverging tick** in the `.hashes` diff. It is the check nobody does and it is
+   worth more than the other four: if the new mechanic cannot act before tick 60 and the diff starts
+   at 30, the cause is something else and has to be found before committing. The recording's textual
+   format exists for this.
+6. **One reason to regenerate per commit.** A commit that regenerates the recordings and changes two
+   mechanics is no longer diffable.
 
 ---
 
@@ -61,8 +153,9 @@ Non-negotiable rules:
 
 - **Never** iterate a `HashMap`/`HashSet`. Use `BTreeMap`, `IndexMap` or indexed `Vec`s.
 - **Never** `rand::thread_rng()`. The RNG lives in the state and is seeded (`rand_pcg::Pcg64`).
-- RNGs **separated per kind** (events, migration, production). That way adding a feature does not
-  knock the existing sequences out of phase and does not invalidate every recorded replay.
+- RNGs **separated per kind**. That way adding a feature does not knock the existing sequences out of
+  phase and does not invalidate every recorded replay. The kinds that exist, and the fact that their
+  declaration order is frozen, are in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **No floats in the state.** Fractional quantities use the `Milli(i32)` newtype (thousandths) with
   checked operations. Floats are allowed only in the renderer.
 - No parallelism in the core until the reduction order is provably fixed.
@@ -91,67 +184,25 @@ The game supports both, but **the AI player only plays scenarios** with explicit
 
 ---
 
-## The shape of the workspace
+## The workspace, the state and the tick
 
-```
-sim-core/      state, tick, commands. No dependencies beyond serde/rand_pcg
-sim-data/      RON tables + validation at load time
-sim-civ/       the CivilizationRules trait + implementations
-sim-scenario/  scenarios, objectives, victory conditions
-sim-replay/    seed+log, save/load, hashing the state
-agent-bot/     compiles Intents -> primitive Commands
-agent-eval/    metrics and scoring for a game
-agent-llm/     adapter: semantic observation, tool schema
-game-bevy/     renderer, consumes snapshots and events
-xtask/         headless runner, batches of games, regenerating the recordings
-```
+**These live in [ARCHITECTURE.md](ARCHITECTURE.md), which is the only file that describes them.**
+Read it before writing code. It is kept in the present tense and is updated in the same commit as the
+code it describes; this file used to carry copies of all three, and every copy went stale.
 
-The dependencies always point towards `sim-core`, never the other way.
-If `game-bevy` shows up among another crate's dependencies, it is an architectural mistake.
+What binds regardless:
 
----
-
-## The state model
-
-```rust
-pub struct World {
-    tick: u32,
-    grid: Grid,                          // Vec<Tile>, index y*W+x
-    buildings: SlotMap<BuildingId, Building>,
-    houses: SlotMap<HouseId, House>,
-    walkers: Vec<Walker>,                // real logistics ones only (D3)
-    economy: Economy,
-    rng: RngSet,                         // RNGs separated per kind
-    dirty: DirtyFlags,
-}
-```
-
-`Tile` has to stay small: use `u16` indices, not pointers and not `Option<Box<...>>`.
-40,000 tiles have to stay in cache as much as possible.
-
----
-
-## The order of the tick
-
-This order is **game semantics**, not an implementation detail. Do not reorder without regenerating
-the recorded replays and documenting the reason.
-
-1. Apply the incoming commands
-2. Rebuild the road network if dirty
-3. Propagate the service coverage (BFS along the roads from the dirty providers)
-4. Production and consumption along the chains
-5. Step the real logistics walkers
-6. Houses levelling up / decaying, migration
-7. Finance and taxes
-8. Random events (fires, disease, invasions)
-9. Check the scenario objectives
-10. Emit the events for the renderer
-
-Step 3 is the hot path. Implementing it naively at first is fine, but the `DirtyFlags` have to exist
-from the very start: retrofitting them later is painful.
-
-Unit of time: **1 tick = 1 game day**, the month is a fixed multiple. Scenario objectives are
-expressed in months/years.
+- Dependencies always point towards `sim-core`, never the other way. If `game-bevy` shows up among
+  another crate's dependencies, it is an architectural mistake.
+- `Tile` has to stay small: `u16` indices, no pointers, no `Option<Box<...>>`. Forty thousand tiles
+  have to stay in cache as much as possible.
+- The order of the tick is **game semantics**, not an implementation detail. Do not reorder without
+  regenerating the recorded replays and documenting the reason. The same is true of step 6's internal
+  order and of the demographic draw order.
+- Step 3 is the hot path. Implementing it naively is fine; the `DirtyFlags` are not optional, because
+  retrofitting them later is painful.
+- Unit of time: **1 tick = 1 game day**, the month is a fixed multiple. Scenario objectives are
+  expressed in months and years.
 
 ---
 
@@ -241,7 +292,11 @@ The renderer never calls methods that mutate the core. The only write channel is
 - `#![forbid(unsafe_code)]` in every `sim-*` crate.
 - Comments in English, like the rest of the repository. Doc comments on the public traits and on
   every non-obvious invariant.
-- **Naming — plain words, and which hard words earn their place ([A19](plan/open-decisions.md)).**
+- **A comment states its rule in full and tags it with the id** (`A12`, `D4`) — the tag is a label on
+  a self-contained sentence, never a substitute for one. A reader with no access to the documents
+  should still learn the rule. Where an id resolves to a code item, link it there
+  (`/// [A13]: crate::data::DifficultyDef`): rustdoc then checks the link for you.
+- **Naming — plain words, and which hard words earn their place ([A19](DECISIONS.md)).**
   A hard word earns its place when it is the domain's own word, and then it is defined in
   [GLOSSARY.md](GLOSSARY.md): you learn it once and it pays you back. `capacity`, `provider`,
   `satisfaction`, `coverage`, `terrain` are of that kind and are staying. A hard word that is merely
@@ -272,42 +327,29 @@ that completes the scenario + an evaluator.
 introduced **together with the second civilisation**, not before. An LLM adapter on top of a bot that
 already works.
 
-### Current state
+### How far the tree has got
 
-> Milestone: **M0 — complete** (2026-08-08)
->
-> Update this section at every completed milestone.
+**[ROADMAP.md](ROADMAP.md) says, and it is the only file that does.** Do not restate the current
+milestone here: this section used to, and it was four phases out of date, which is worse than saying
+nothing. If you finish a phase, update `ROADMAP.md`.
 
-What M0 covers, one line per crate:
+### Two lessons that outrank any decision taken in the abstract
 
-- `sim-core` — a `World` with a grid of at most 256×256, roads with connected components, service
-  coverage over walked distance, food production and consumption, a ten-step tick (four full, six
-  empty pending M1/M3), primitive commands with structured errors, one RNG per kind. `Tile` fits in
-  4 bytes.
-- `sim-data` — three RON tables validated with a complete error report and a hash of the dataset.
-- `sim-replay` — saving as `seed + Vec<Command>`, the state hash, two recorded replays with a
-  checkpoint every 30 ticks.
-- `xtask` — `run`, `record`, `regen-expected [--check]`, `bench`.
+1. **Measure before you optimise, and measure the thing you are about to change.** Twice now the
+   obvious hypothesis about where the cost lay has been wrong, and the measurement said so before it
+   got expensive — once for step 3's invalidation ([A11](DECISIONS.md)), once for the multiplier A12
+   was counting on as a discount ([A17](DECISIONS.md)). Doing the optimisation in the same phase you
+   take the measurement in means not having the *before*.
+2. **A balancing number that has to stand in a particular relation with another one is a validation
+   check, not a comment.** This came out of coverage on a "first capacity taken, first served" basis
+   making hunger an **absorbing** state ([A5](DECISIONS.md)). The fix was not counting capacity in
+   another unit — that restates the same constraint — but making a producer's capacity consistent
+   with what its output sustains, from which the invariant *a house covered by food always eats*
+   follows. Generalise it: if you find yourself writing a comment explaining why two numbers must
+   agree, write a check instead.
 
-What M0 deliberately does **not** have: houses levelling up, migration, taxes, scenario objectives,
-random events, real logistics walkers, a renderer, agents. Those are M1–M3.
-
-Two things learned while implementing, which are worth more than the decisions taken in the abstract:
-
-1. Step 3 (coverage) is the hot path, confirmed by measurement and not by reasoning: a tick that
-   accepts a command costs ~75× an empty tick, because the invalidation is naive. The cost is **per
-   tick, not per command**. The numbers are in
-   [plan/09-invariants-closeout.md](plan/09-invariants-closeout.md).
-2. Coverage on a "first capacity taken, first served" basis made the hungry state **absorbing** for a
-   house already assigned. Dissolved right after M0, as a prerequisite for house levels: not by
-   counting the capacity in residents — that just restates the same constraint in another unit, and
-   the two scenarios give identical output — but by making a producer's capacity consistent with what
-   its output sustains. From that follows the invariant *a house covered by food always eats*. The
-   general lesson: a balancing number that has to stand in a particular relation with another one is
-   a **validation check**, not a comment.
-
-**After M0**, before going into M1: service capacity in residents served, and consistency between
-capacity and output ([A5](plan/open-decisions.md)).
+The same rule now covers the documents. If a document has to agree with the code, that agreement is a
+check in `cargo xtask doc-check` — not a promise to remember.
 
 ---
 
@@ -323,3 +365,8 @@ capacity and output ([A5](plan/open-decisions.md)).
 - Do not expand the scope: a city builder has an enormous number of interconnected systems and it is
   extremely easy to spend months on mechanics nobody ever plays. Every new system has to be reachable
   and observable in an existing scenario.
+- **Do not cite a document path from code.** Cite the stable id — `A12`, `D4` — and state the rule in
+  full where you cite it. Paths rot when files move; ids do not.
+- **Do not rewrite a file in `plan/`** to match what the code does now. Append a dated amendment.
+- **Do not restate the current state of the tree** anywhere except `ROADMAP.md`, and do not write a
+  balancing value into `RULES.md`.

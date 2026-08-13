@@ -1,10 +1,15 @@
 # Phase 17 — `sim-scenario` and objectives
 
+> **Status: not yet built.**
+>
+> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
+> work is really done — see [ROADMAP.md](../ROADMAP.md).
+
 **Goal:** the scenario "500 residents within 5 years" declares itself complete on the right tick, and
 not before.
 **Depends on:** 16.
 **Size:** L.
-**Decisions involved:** [A16](open-decisions.md), A2, A6, D7.
+**Decisions involved:** [A16](../DECISIONS.md), A2, A6, D7.
 
 ## Why now
 
@@ -22,7 +27,7 @@ you to fill it*.
 
 `CLAUDE.md` puts checking the objectives at **step 9 of the tick**, inside `step`. But the
 dependencies point towards `sim-core`, so `sim-scenario` depends on the core and the core cannot call
-it. The split is forced, and it is the same one as [A2](open-decisions.md):
+it. The split is forced, and it is the same one as [A2](../DECISIONS.md):
 
 - In **`sim-core`**: the `Objective` enum, its evaluation, and the progress state. They are pure
   structs with no I/O, and they belong to the core's vocabulary like `ServiceKind`.

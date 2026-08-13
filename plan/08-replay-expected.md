@@ -1,5 +1,11 @@
 # Phase 08 — Replay, the state hash and xtask
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** a `seed + Vec<Command>` replayed produces exactly the same state hashes;
 `cargo xtask regen-expected` produces no diff when nothing has changed.
 **Depends on:** 07 (or 05, if you want to bring it forward — see README).
@@ -52,6 +58,21 @@ pub fn hash_world(w: &World) -> [u8; 32];
 What goes in, in a fixed order: `tick`, `dataset_hash`, the grid's dimensions, the tiles in
 `TileIdx` order, the buildings in `BuildingId` order (with kind, origin, level, stock), the houses
 in `HouseId` order, the economy, **the position of every RNG stream** (phase 02).
+
+> **Amended by the documentation audit (2026-08-13).** The design held; the contents grew, and both
+> lists above are now short. M1 added to the hash: the **difficulty** (A13), the **walkers** vector —
+> empty until M3 and hashed anyway, because the length prefix alone is what makes the first walker to
+> exist move a recording — the houses' **satisfaction**, and the **demographics' pending fractions**,
+> whose two unused slots are hashed as zeros on purpose so that phase 15 moves no recording.
+>
+> `Header` also gained a field: `difficulty`, stored as the profile's **textual** id and not its
+> index, so that reordering the table cannot silently change the meaning of every save file already
+> written. `dataset_hash` is a hex `String` rather than `[u8; 32]`, so the file stays readable.
+> `format_version` is now 2.
+>
+> The list of what stays **out** is unchanged in principle and gained `PopulationTotals`, which is
+> diagnostic like `FoodTotals`. The guard against the known risk below turned out to be worth its
+> keep twice: see `World::every_field`.
 
 What does **not** go in: `RoadNetwork`, `Coverage`, `DirtyFlags`, `FoodTotals`. They are derived or
 diagnostic structures: if they went into the hash, a bug in an incremental rebuild would show up as

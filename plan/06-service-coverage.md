@@ -1,5 +1,11 @@
 # Phase 06 — Aggregate service coverage
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** the well serves the houses within its range **walked along roads**, with a limited
 capacity and a deterministic assignment; the result of the incremental computation matches the one
 computed from scratch.
@@ -26,6 +32,12 @@ pub struct Coverage {
 }
 ```
 
+> **Amended by the documentation audit (2026-08-13).** The sketch above is not the shape that was
+> built. `served_by` is a `BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]>` and not a
+> `Vec` — a `Vec` indexed by house cannot survive houses being removed — and the struct carries a
+> second field, `recomputes`, which counts recomputations for the dirty-flag tests and takes no part
+> in the game. It stays a derived structure, outside the state hash, exactly as the sketch says.
+
 The algorithm, for each provider in `dirty.coverage`:
 
 1. A BFS over the road network from the road tiles adjacent to the provider, cut off at
@@ -50,7 +62,7 @@ this point has to be reopened.
 > rules this phase did not have — no partial assignment, and whoever does not fit in the remaining
 > capacity is *skipped* instead of stopping the scan. The first provider still wins a contest, but
 > a contested house no longer consumes the capacity of whoever comes second.
-> See [A5](open-decisions.md) and `coverage::pick_within_capacity`.
+> See [A5](../DECISIONS.md) and `coverage::pick_within_capacity`.
 
 **In M0 `dirty.coverage` may be recomputed naively**: when the roads change, every provider is
 dirty. `CLAUDE.md` licenses the naivety here, as long as the flags exist — and they have since

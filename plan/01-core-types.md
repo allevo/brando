@@ -1,5 +1,11 @@
 # Phase 01 — Core types and the grid
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** `Milli`, `Coins`, the newtype ids and the `Grid` exist; `Tile` fits in its memory
 budget and the position↔index conversion round-trips over the whole map.
 **Depends on:** 00.
@@ -36,7 +42,7 @@ No bare `impl Add`/`Sub`: the operator invites you to ignore overflow, and in a 
 panic (conventions: no `unwrap` outside impossible invariants) a silent overflow is worse than the
 visual noise of `checked_add`.
 
-`Coins(i32)` for money, the same shape without thousandths (see [A1](open-decisions.md)).
+`Coins(i32)` for money, the same shape without thousandths (see [A1](../DECISIONS.md)).
 
 ### Newtype ids
 

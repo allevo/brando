@@ -1,5 +1,11 @@
 # Phase 09 — The invariant suite and closing M0
 
+> **Status: implemented — M0 closed 2026-08-08.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** the invariants listed in `CLAUDE.md` are green property tests in one identifiable place,
 and `CLAUDE.md` declares M0 complete.
 **Depends on:** 08.
@@ -150,6 +156,13 @@ out of step 3, but on the hot path of every tick. Not measured yet.
    if the player never builds: acceptable, but it is the number to watch when M1 adds levelling,
    migration and taxes to steps 6 and 7.
 
+   > **Amended by the documentation audit (2026-08-13).** It was the number to watch, and it moved.
+   > Phase 14 measured `A` at **3.600 ms** at the reference scale, against the 248 µs recorded above
+   > — because A12 makes step 6 invalidate the coverage on essentially every tick, so the empty tick
+   > now pays `G` in full. The tables above stay valid as the **end-of-M0** baseline, which is what
+   > `xtask/src/bench.rs` compares against; they are no longer a description of what a tick costs
+   > today. The current figures are in [A17](../DECISIONS.md).
+
 None of these has to be optimised now. Point 1 already has its safety net: phase 06's
 incremental/from-scratch equivalence test is written so that *any* future cleverness about
 incrementality is covered without rewriting it.
@@ -160,7 +173,7 @@ incrementality is covered without rewriting it.
   covers.
 - If during M0 a decision turned out to be wrong or incomplete, **now** is the moment to write it
   into `CLAUDE.md`, not to try and remember it.
-- [open-decisions.md](open-decisions.md): mark the resolved ones as closed and note how they were
+- [DECISIONS.md](../DECISIONS.md): mark the resolved ones as closed and note how they were
   really resolved (it often diverges from the recommendation, and that is the most useful
   information for whoever reads it later).
 

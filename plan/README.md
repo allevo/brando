@@ -1,11 +1,18 @@
 # Plan for the first stages of development — Brando
 
+> **Status: index.**
+>
+> The index of the development record below. It is **not** the statement of how far the tree
+> has got — [ROADMAP.md](../ROADMAP.md) is, and it is the only file that is.
+
 This plan covers **M0 — Foundations** (phases 00–09, complete) and **M1 — A minimal game loop**
-(phases 11–18) of the roadmap in `CLAUDE.md`, broken into small phases.
+(phases 11–18) of the roadmap in `CLAUDE.md`, broken into small phases, plus **19**, which sits
+between M1 and M2.
 
 M1 was planned after M0 closed, not before: doing it earlier would have meant deciding on the
 balancing without having watched a single tick run. [10-beyond-m0.md](10-beyond-m0.md) remains the
-document that sketches M2 and M3 by the same rule.
+document that sketches M2 and M3 by the same rule. Phase 19 is the single exception, and it is an
+exception about *structure* rather than balancing — see below.
 
 ## The guiding principle
 
@@ -35,7 +42,7 @@ Dependencies: the chain is sequential, with two exceptions.
 grid of nothing but roads, and the recording enriched as you go.
 
 Between M0 and M1 there is a batch of work with no phase file, documented in
-[open-decisions.md](open-decisions.md): the consistency between capacity and output (**A5**), the
+[DECISIONS.md](../DECISIONS.md): the consistency between capacity and output (**A5**), the
 clearing up of a since-deleted `dubbi.md` ("open questions", **A7–A10**) and the step 3
 optimisations (**A11**).
 
@@ -57,22 +64,33 @@ Merges are acceptable if eight phases feel like too many: **14+15** if the demog
 smaller than expected. Never 12+13, never 16 with anything, and never 14 with nothing — it is the one
 that touches the hot path.
 
-The decision all of M1 rests on is [A12](open-decisions.md): **the services chase the population**. A
+The decision all of M1 rests on is [A12](../DECISIONS.md): **the services chase the population**. A
 provider's capacity is counted on the residents present, so the coverage is recomputed when anyone
 moves — that is, on almost every tick. It is a gameplay choice paid for in computation time, taken in
-full knowledge, and the debt it opens is [A17](open-decisions.md), to be closed before M2. Both are
+full knowledge, and the debt it opens is [A17](../DECISIONS.md), to be closed before M2. Both are
 worth reading before phase 13.
 
 Between **13** and **14**, as between M0 and M1, there is a batch of work with no phase file: a review
 of the whole tree on 2026-08-11, kept in [bug-hunt-2026-08-11.md](bug-hunt-2026-08-11.md). Six
 findings, all of them latent — the suite was green throughout. Five were bugs and were fixed; the
-sixth was a question nobody had asked, and it became [A18](open-decisions.md), the second decision
+sixth was a question nobody had asked, and it became [A18](../DECISIONS.md), the second decision
 open at the same time as A17.
 
 Three of the six were done **there** rather than later for the same reason phase 11 comes early: they
 touch what the recordings see, and each of the two phases after 13 makes one of them more expensive.
 The one to read is the first, because its lesson is A5's in a new place — the check that guarantees
 *a house covered by food always eats* had a hole in the guard itself.
+
+## The phase between M1 and M2
+
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 19 | [Terrain: relief and cost](19-terrain.md) | The same building costs more on a hillside than on the flat and is refused on a cliff; the map is loaded from a file, and the dumps do not move when the tile is re-packed | L |
+
+It follows **18** and closes before M2 starts. It is the one phase in this index planned before its
+milestone, and [ROADMAP.md](../ROADMAP.md) gives the reason: M2's renderer has to be built against the
+map model it will actually draw. Its structure is fixed; its numbers are not, which is the same
+division M1 kept while M0 was still open.
 
 ## What gets built and what does not
 
@@ -98,32 +116,14 @@ Every identifier in this repository is in English. Any word you do not recognise
 
 ## Regenerating the recordings without losing the signal
 
-Every phase of M1 except 11 regenerates the recordings, and that is the moment the project's most
-valuable test risks becoming a ritual. The message at the top of every `.hashes` already states the
-rule — *if it changes without the balancing having changed, a source of non-determinism has been
-introduced: stop and find it, do not regenerate* — but applying it takes a protocol, and every phase
-file cites this one instead of repeating it.
-
-1. **Green before you start.** `cargo xtask regen-expected --check` has to be green *before* you touch
-   the code. If it is not, the tree is already dirty for other reasons and the signal is lost.
-2. **Exactly the files you expected.** After the change, `--check` has to list the files the phase
-   declares it regenerates, not one more. A `.ron` that changes in a phase that does not touch the
-   header is already the clue.
-3. **Idempotence.** `regen-expected` twice in a row: the second has to say "nothing to do". It is
-   where non-determinism within a process shows up first.
-4. **A separate process.** `cargo test -p sim-replay` catches what point 3 cannot: memory addresses,
-   `RandomState`, the iteration order of hash collections.
-5. **Look at the first diverging tick** in the `.hashes` diff. It is the check nobody does and it is
-   worth more than the other four: if the new mechanic cannot act before tick 60 and the diff starts
-   at 30, the cause is something else and has to be found before committing. The recording's textual
-   format exists for this.
-6. **One reason to regenerate per commit.** A commit that regenerates the recordings and changes two
-   mechanics is no longer diffable.
+**Moved to [CLAUDE.md](../CLAUDE.md), under the definition of done.** Every phase file cites this
+protocol, and it is a rule about how to work rather than a record of what was planned — so it lives
+with the other working rules and is kept true, instead of ageing here.
 
 ## Decisions
 
 Some choices are necessary in order to implement but are not fixed by `CLAUDE.md`: they are gathered
-in [open-decisions.md](open-decisions.md) with a recommendation for each. Phases 01, 03 and 08 assume
+in [DECISIONS.md](../DECISIONS.md) with a recommendation for each. Phases 01, 03 and 08 assume
 the recommendation; if one gets overturned, it changes the content of that phase, not the order of the
 plan.
 
@@ -131,8 +131,14 @@ The document carries on past M0: A7–A11 came out of clearing up that same `dub
 M1, A18 out of the bug hunt after phase 13. For each one, alongside the recommendation, there is
 **how it really went** — which is almost always the more useful information, because it diverges.
 
-## Implemented till
-Everything is implemented till 14 included, plus the bug hunt that follows 13 and the vocabulary
-review after that ([naming-review-2026-08-12.md](naming-review-2026-08-12.md), which produced
-[A19](open-decisions.md) and the naming rule in `CLAUDE.md`). The review renamed identifiers only and
-moved no hash: it is the one batch so far whose correctness proof is that nothing changed.
+## How far the tree has got
+
+**[ROADMAP.md](../ROADMAP.md) says, and it is the only file that does.** This section used to answer
+the same question as `CLAUDE.md`'s "Current state", and the two disagreed — which is how a reader
+ends up trusting neither.
+
+What belongs here, because it is about the record and not about the tree: the bug hunt follows phase
+13, and the vocabulary review follows that
+([naming-review-2026-08-12.md](naming-review-2026-08-12.md), which produced [A19](../DECISIONS.md)
+and the naming rule in `CLAUDE.md`). The review renamed identifiers only and moved no hash: it is the
+one batch so far whose correctness proof is that nothing changed.

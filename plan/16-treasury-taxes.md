@@ -1,10 +1,15 @@
 # Phase 16 — Treasury and taxes
 
+> **Status: not yet built.**
+>
+> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
+> work is really done — see [ROADMAP.md](../ROADMAP.md).
+
 **Goal:** phase 09's treasury invariant extends to the income and stays an **exact equality**; the
 tax rate is a real lever, not free money.
 **Depends on:** 15.
 **Size:** M.
-**Decisions involved:** [A15](open-decisions.md), A1, D4, tick order step 7.
+**Decisions involved:** [A15](../DECISIONS.md), A1, D4, tick order step 7.
 
 ## Why now
 
@@ -19,7 +24,7 @@ tried out before an objective is put on top of it (phase 17).
 
 The tax rate enters here **also** as the third term of the attractiveness, which phase 15
 deliberately left out so as not to have to balance two things at once
-([A15](open-decisions.md)).
+([A15](../DECISIONS.md)).
 
 ## What gets built
 
@@ -103,7 +108,7 @@ The arithmetic: `Σ_houses taxable_per_resident(level) × residents`, accumulate
 multiplied by the rate's per-thousand and added to `remainder`; the whole coins move into `treasury`.
 
 The `i64` is not generic caution: 15,000 residents times a taxable base times a per-thousand leaves
-`i32`, and `Milli` is `i32` ([A1](open-decisions.md)). The same rule as `FoodTotals`, which is `i64`
+`i32`, and `Milli` is `i32` ([A1](../DECISIONS.md)). The same rule as `FoodTotals`, which is `i64`
 for the same reason — city-wide aggregates accumulate wide and are converted exactly once.
 
 `taxable_per_resident` lives in `HouseLevelDef` (phase 13), where it was already planned at zero: the

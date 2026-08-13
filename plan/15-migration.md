@@ -1,11 +1,16 @@
 # Phase 15 — Immigration and emigration
 
+> **Status: not yet built.**
+>
+> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
+> work is really done — see [ROADMAP.md](../ROADMAP.md).
+
 **Goal:** two cities identical except for their coverage receive different migration flows; a city
 with no free places receives nobody, and one that has places but has left them uncovered fills them
 **and then gets worse**.
 **Depends on:** 14.
 **Size:** M.
-**Decisions involved:** [A15](open-decisions.md), [A12](open-decisions.md), A10, A14, D3, D5.
+**Decisions involved:** [A15](../DECISIONS.md), [A12](../DECISIONS.md), A10, A14, D3, D5.
 
 ## Why now
 
@@ -17,7 +22,7 @@ needs a city-wide index and a distribution rule. With the two RNG domains separa
 not knock phase 14's sequence out of phase and that phase's recording stays as it was — which is
 exactly why the domains are separated by name and not by position.
 
-And it is the phase in which [A12](open-decisions.md)'s loop becomes observable in full: until now
+And it is the phase in which [A12](../DECISIONS.md)'s loop becomes observable in full: until now
 the population only grew from the inside, with a natural ceiling in the existing house capacities.
 With immigration the city can **outgrow its own services** quickly, which is the dynamic behind the
 services chasing the population — and the first one in which it can go wrong.
@@ -95,13 +100,13 @@ Zero free places ⇒ zero immigration, at any attractiveness. Not a reduced rate
 only container for population (D5), and with no container there is no flow.
 
 Within the houses with room, the eligible set is the **served** houses. It is the cheapest part of
-[A10](open-decisions.md): *"migrants only go where life is good"* is not a separate mechanism, it is
+[A10](../DECISIONS.md): *"migrants only go where life is good"* is not a separate mechanism, it is
 the filter — the same houses levelling up considers worthy, for the same reason.
 
 **The gate that does not get put in**, and it is the decision to write down: immigration is **not**
 made conditional on the providers' remaining capacity. It would be easy and it would look prudent —
 let nobody in if the well is at its limit — but it is exactly the opposite of
-[A12](open-decisions.md). With that gate the services would go back to preceding the population, and
+[A12](../DECISIONS.md). With that gate the services would go back to preceding the population, and
 the city would stop on its own without the player having to notice anything.
 
 Without it, what has to happen does: the city fills up, outgrows its own services, the coverage
@@ -167,10 +172,10 @@ The `Summary` gains `immigrated`, `emigrated` and `attractiveness`.
 ## Out of scope
 
 **Immigrant walkers.** D3 says immigrants are genuinely simulated entities, and they will be: in M3,
-along with the logistics walkers. In M1 migration is a number ([A14](open-decisions.md)), and what M3
+along with the logistics walkers. In M1 migration is a number ([A14](../DECISIONS.md)), and what M3
 will add is the **travel time**, not the attractiveness rule. It has to be written here, because it
 is this phase's simplification and it will be whoever reads it in M3 who has to dismantle it — the
-same shape as [A5](open-decisions.md) for the farm.
+same shape as [A5](../DECISIONS.md) for the farm.
 
 Emigration towards a destination, rival cities, immigrants with trades or wealth: none of this
 exists, and no scenario asks for it.
@@ -234,7 +239,7 @@ the scenario is too generous; if it collapses and does not come back, it is too 
 `bench` has to be re-run and compared with phase 14's three numbers: immigration moves population
 every tick like the births, so the cost of the recomputation does not grow, but the **frequency** of
 the ticks in which the population moves does. The count of recomputations is the number to watch, and
-it goes into [A17](open-decisions.md)'s data.
+it goes into [A17](../DECISIONS.md)'s data.
 
 **Done when:** test 5 (conservation still exact) and test 9 (the loop damps) pass, and the game at
 `hard` reaches a living city within five years.

@@ -1,17 +1,23 @@
 # Phase 14 — Births and deaths
 
+> **Status: implemented — phase 14, 2026-08-12.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** a served city grows until it fills up its houses, one that loses its services empties out;
 and `different_seeds_give_different_hashes`, `#[ignore]` since phase 08, is re-enabled and passes.
 **Depends on:** 13.
 **Size:** L — it is the riskiest phase of M1.
-**Decisions involved:** [A12](open-decisions.md), [A14](open-decisions.md), A10, D4, D5.
+**Decisions involved:** [A12](../DECISIONS.md), [A14](../DECISIONS.md), A10, D4, D5.
 
 > **Revised on 2026-08-12**, before writing any of it, by reading the plan against the tree it has to
 > land in. Four things had drifted or were wrong, and two of them would have sunk the phase's own
 > goals: the conservation equality was missing the term for residents who arrive with a new house,
 > the replacement for `population_stays_consistent` was `x == x`, test 6 asked for something the
 > design makes impossible, and `RngDomain` had been renamed `RngKind` by the vocabulary review
-> ([A19](open-decisions.md)). Each is corrected in place below and marked **(revised)**. The general
+> ([A19](../DECISIONS.md)). Each is corrected in place below and marked **(revised)**. The general
 > lesson is A5's again: a plan written before the code it has to fit is a hypothesis, and the cheap
 > moment to test it is before the first commit, not after the third.
 
@@ -24,7 +30,7 @@ them: `commands.rs` still contains
 circle, and with it test 7 of phase 08.
 
 And it is the phase in which **the population starts moving every tick**, which is
-[A12](open-decisions.md)'s choice and its price. Everything that follows in this document descends
+[A12](../DECISIONS.md)'s choice and its price. Everything that follows in this document descends
 from that.
 
 It has to be kept separate from migration (phase 15) for two reasons. One of readability: births and
@@ -39,7 +45,7 @@ never come up.
 It comes first because it is the point where M1 touches the hot path, and it is the part that can be
 got wrong silently.
 
-A provider's capacity is consumed by the **residents present** ([A12](open-decisions.md)): the
+A provider's capacity is consumed by the **residents present** ([A12](../DECISIONS.md)): the
 services chase the population, they do not precede it. Until now `residents` only changed on a
 command — and every command already invalidates the coverage — or on eviction (phase 13). From here
 it changes **every tick**, and three things are needed.
@@ -81,7 +87,7 @@ quantities **both** written between step 3 and step 4 and therefore stays valid 
 tick": `G` is 3.05 ms against the empty tick's 248 µs, so the typical tick heads towards ~3.3 ms —
 **~13×**. Ten years of play at 200×200 go from ~0.9 s to ~12 s. It is A12's explicit price, accepted,
 and **it is not optimised in M1**: the measurement and the countermeasures are an open task to be
-closed before M2 ([A17](open-decisions.md)). What this phase has to do is **measure it well**, not
+closed before M2 ([A17](../DECISIONS.md)). What this phase has to do is **measure it well**, not
 reduce it — see the Verification section.
 
 From here on the `DirtyFlags` hardly avoid anything at all in a living city. They remain the right
@@ -117,7 +123,7 @@ pub struct PopulationTotals {
     ///
     /// **(revised.)** It was missing, and without it the phase's accounting goal
     /// cannot hold: a new house is born with `starting_residents_per_house`
-    /// people out of nowhere ([A13](open-decisions.md), `tick.rs`), so at `easy`
+    /// people out of nowhere ([A13](../DECISIONS.md), `tick.rs`), so at `easy`
     /// the equality below is out by four on the first `PlaceBuilding`. It is the
     /// inflow mirror of `lost_to_demolition`, and the third time this shape has
     /// been needed — the first two were a demolished farm's stock (phase 07) and
@@ -204,7 +210,7 @@ resident can win one back in the same tick, which makes the population responsiv
 **Births have three conditions**: `residents > 0` (you need people to make people),
 `residents < max_residents(level)`, and satisfaction above a threshold. The base rate is scaled by
 the city's average satisfaction — it is the "tied to overall wellbeing" part of
-[A14](open-decisions.md): a city that is doing well has children, one that is struggling does not,
+[A14](../DECISIONS.md): a city that is doing well has children, one that is struggling does not,
 even in the houses that are doing well.
 
 **Deaths** have a base rate and a raised one for the houses that are going without. It is the
@@ -270,7 +276,7 @@ pub enum RngKind { Events, Migration, Production, Demographics }
 ```
 
 *(revised: the type was `RngDomain` when this was written and is `RngKind` since the vocabulary
-review, [A19](open-decisions.md). The variant is the only thing being added.)*
+review, [A19](../DECISIONS.md). The variant is the only thing being added.)*
 
 Four lines (`ALL`, `salt`, `index` with the **new slot at the end**, `from_index`), and by
 construction it does not knock the existing recordings out of phase —
@@ -388,7 +394,7 @@ they are outside M1. Age, families, trades — D5 says the unit is the house.
 
 ### What this phase hands to A18, deliberately *(new)*
 
-[A18](open-decisions.md) — an empty house consumes no provider capacity — stays open and stays
+[A18](../DECISIONS.md) — an empty house consumes no provider capacity — stays open and stays
 phase 15's to close. But this phase changes the fact it rests on, and the entry has to be amended
 rather than left as it reads.
 
@@ -424,7 +430,7 @@ One phase, one PR, and inside it the commits are ordered so that exactly one of 
    It is one commit and not four because every one of its parts moves the dataset hash or
    `RngKind::ALL`, and four commits would mean four regenerations of the same two files.
 3. **The measurement.** `bench --zero-demographics`, the recompute deltas, the three numbers written
-   into [18](18-invariants-closeout-m1.md) and [A17](open-decisions.md). No hash moves.
+   into [18](18-invariants-closeout-m1.md) and [A17](../DECISIONS.md). No hash moves.
 4. **The documents.** A14 gains its "how it really went"; A18 gains the amendment above; `GLOSSARY.md`
    gains a row for **demographics** and one for **flow**, promotes **jitter** out of the
    "not written yet" note, and adds `Flow`'s declaration order to the frozen values next to
@@ -459,7 +465,7 @@ One phase, one PR, and inside it the commits are ordered so that exactly one of 
    `residents_stay_within_the_house_capacity` (phase 13). So `population_stays_consistent` goes away
    and test 3 takes its row in `invariants.rs`'s table. Conservation is also profile-agnostic by
    construction — it reads the flows, never `house_count × 4` — which is the prerequisite
-   [A18](open-decisions.md) asks phase 14 for: from here the property suite *can* be pointed at
+   [A18](../DECISIONS.md) asks phase 14 for: from here the property suite *can* be pointed at
    `hard`.
 5. **`different_seeds_give_different_hashes` is re-enabled**, and from here it can never be
    `#[ignore]` again.
@@ -602,7 +608,7 @@ measure, with the delta printed. An `A` paying milliseconds with zero recomputat
 completely different diagnosis.
 
 The three numbers go into [18](18-invariants-closeout-m1.md) and are the input to
-[A17](open-decisions.md), the open performance task to be closed before M2. **Nothing gets optimised
+[A17](../DECISIONS.md), the open performance task to be closed before M2. **Nothing gets optimised
 in this phase**: `CLAUDE.md` says not to optimise before the profiler, and A11 is the story of what
 happens when you guess instead of measuring.
 
@@ -662,7 +668,7 @@ A13's knob. `settled_on_construction` — the term this file added to the conser
 turned out to be exactly the thing to assert it against.
 
 **6. `J` is one, and the plan's arithmetic assumed it would not be.** Both this file and
-[A17](open-decisions.md) say A12's cost is `J × G` and that `J` is low in a full city. At the
+[A17](../DECISIONS.md) say A12's cost is `J × G` and that `J` is low in a full city. At the
 reference scale the population moves on all 502 measured ticks. The cost is `G`. The other surprise
 in the same measurement: `H` did not stay where phase 13 left it — 324 µs against ~280 µs — because
 step 6 scans the houses three times even with the rates at zero, which by this file's own rule makes

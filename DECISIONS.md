@@ -1,18 +1,32 @@
-# Open decisions
+# Decisions
 
-Choices needed to implement M0 that `CLAUDE.md` does not fix. For each one: the recommendation the
-phases assume, and what changes if it is decided otherwise.
+**This file answers one question: why is it this way?** It is the project's decision register and
+the target of every `A<n>` tag in the code. Whoever is looking for "why does the code do it this way
+and not that way" finds the answer here.
 
-From A7 onwards the file carries on past M0: these are decisions taken after it was closed, in the
-same form. Whoever is looking for "why does the code do it this way and not that way" finds the
-answer here.
+For each decision: the recommendation the phases assumed, the reasoning, what it would cost to decide
+otherwise, and — added after implementation — how it really went. That last part is almost always the
+more useful information, because it diverges.
 
-> **Genuinely open, right now, there are two:**
-> [A17 — the per-tick recomputation cost](#a17--the-per-tick-recomputation-cost--open-to-close-before-m2),
-> to be closed before M2 — it is the debt [A12](#a12--the-services-chase-the-population) opens on
-> purpose — and
-> [A18 — an empty house consumes no capacity](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15),
-> to be closed before phase 15.
+**This file is append-only.** A decision is never rewritten to match what the code does now: that
+would destroy the only record of why the code changed. It is *amended* with a dated block, or
+superseded by a later decision that names the one it replaces.
+
+**And it holds only decisions already taken.** An entry is never written ahead of the work that
+settles it — not for a phase that is planned and unbuilt, not to stop something being forgotten. Being
+append-only is what makes this strict: an early entry cannot be withdrawn, only amended, so the
+cheapest repair costs more than never having written it. Numbers are not reserved ahead of time
+either. Until the work is done the argument belongs in that phase's file under `plan/`, which says on
+its face that it is a prediction. The rule and the two cases that look like exceptions are in
+[CLAUDE.md](CLAUDE.md).
+
+The architectural decisions `D1`–`D7` are the project's constitution and live in
+[CLAUDE.md](CLAUDE.md). The `A` codes here are implementation decisions, taken as the work went on.
+Code cites both by id and never by path — an id survives any reorganisation of these files.
+
+> **Two decisions are open**, and neither is left here as prose to be forgotten. Each holds a
+> numbered slot in [ROADMAP.md](ROADMAP.md) at the point where it has to be closed:
+> **A18** at **14.5**, before phase 15, and **A17** at **18.5**, before M2.
 
 ## The state at the end of M0
 
@@ -52,23 +66,24 @@ useful story: the starting hypothesis was wrong, and the measurement said so bef
 | A14 | **Taken**, phase 14 — **done** | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
 | A15 | **Taken**, phases 15–16 | attractiveness = average satisfaction + free places, and the tax rate **only** from phase 16 |
 | A16 | **Taken**, phase 17 | the objectives live in the `World`, `sim-scenario` builds them |
-| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
+| A17 | **TO_BE_DECIDED** — [ROADMAP 18.5](ROADMAP.md), before M2 | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
 
 A12 is the one to read: it is a *gameplay* choice paid for in computation time and in test coverage,
 and it was taken in full knowledge. A17 is the first genuinely open decision of the project since the
 end of M0, and that is no accident: it is the debt A12 opens.
 
-A12–A16 are still **predictions**. When M1 closes (phase 18) they have to be rewritten with how they
-really went — which for A2, A5 and A11 has been the most useful information in the document.
+Of these, only A14 has been written up with how it really went. A12 and A13 are implemented but not
+yet reviewed; A15 and A16 are still **predictions**. When M1 closes (phase 18) each gains the same
+treatment — which for A2, A5 and A11 has been the most useful information in the document.
 
 ## Decisions from the bug hunt after phase 13
 
 | # | Outcome | Note |
 |---|---|---|
-| A18 | **Open**, to close **before phase 15** | an empty house consumes no provider capacity, so on `hard` one well serves unboundedly many |
+| A18 | **TO_BE_DECIDED** — [ROADMAP 14.5](ROADMAP.md), before phase 15 | an empty house consumes no provider capacity, so on `hard` one well serves unboundedly many |
 
 It came out of a review of the whole tree on 2026-08-11 (see
-[the report](bug-hunt-2026-08-11.md)), which turned up six things. Five were bugs and were fixed
+[the report](plan/bug-hunt-2026-08-11.md)), which turned up six things. Five were bugs and were fixed
 in the same batch; this one is not a bug, it is a question nobody had been asked, and it is the
 second entry in this file to be genuinely open at the same time as another.
 
@@ -340,7 +355,7 @@ today, because coverage does get lost (demolish a farm, break a road).
 
 > **Amended while planning M1.** The type is `[u8; ServiceKind::COUNT]`, not `[i16; …]`: the
 > accumulator is clamped to `0..=max` and never needs the sign or the range, and that way `House`
-> stays small. The rest of the decision holds unchanged, and [phase 12](12-satisfaction.md)
+> stays small. The rest of the decision holds unchanged, and [phase 12](plan/12-satisfaction.md)
 > implements it to the letter — with one addition it did not foresee, the `covered_but_unfed`
 > counter that A9 above explains.
 
@@ -375,7 +390,7 @@ nothing.
 **It was not the right hypothesis.** The cost was not the number of BFS runs, it was what each one
 dragged along with it: three `BTreeMap`s in the inner loop and a scratch buffer the size of the grid
 allocated per provider. Removing them gave **6.5×** without adding a byte of state
-([09-invariants-closeout.md](09-invariants-closeout.md) for the numbers).
+([09-invariants-closeout.md](plan/09-invariants-closeout.md) for the numbers).
 
 **Decision:** with `G` at 3.05 ms and 2.5 µs per provider, the cache is not being built now.
 
@@ -452,7 +467,7 @@ balancing from a minute and a half to twenty minutes. Requirement 2 of `CLAUDE.m
 drivable by an AI that runs many games — is the one that pays.
 
 It does not get optimised inside M1: the cost has to be **measured and attributed** (phases 14 and 18)
-and the countermeasures are [A17](#a17--the-per-tick-recomputation-cost--open-to-close-before-m2), to
+and the countermeasures are [A17](#a17--the-per-tick-recomputation-cost), to
 be closed before M2. It is A11's lesson applied beforehand instead of afterwards: the obvious
 hypothesis about where the cost lies has already been wrong once.
 
@@ -532,7 +547,7 @@ its own without touching the code. The header gets the textual id and not the in
 recorded `.ron` saying `difficulty: 1` cannot be read and reordering the table would silently change
 the meaning of every save file already written.
 
-**It has to be done early** — [phase 11](11-difficulty.md), right after A12 — for the same argument as
+**It has to be done early** — [phase 11](plan/11-difficulty.md), right after A12 — for the same argument as
 the `DirtyFlags`: it touches `World::new`, the `Header` and `hash_world`, i.e. the three things that
 regenerate the recordings, and doing it late regenerates them twice. It is born with **one knob only**
 (`starting_residents_per_house`) and phases 14, 15 and 17 hang theirs off it without touching the
@@ -654,11 +669,13 @@ declared in D4 and leaves their state outside the hash, i.e. outside the recordi
 
 ---
 
-## A17 — The per-tick recomputation cost — **OPEN**, to close before M2
+## A17 — The per-tick recomputation cost
+
+**Status: TO_BE_DECIDED** — slot [18.5 in ROADMAP.md](ROADMAP.md), to close before M2.
 
 The first decision in this project to stay open, and that is no accident: it is the debt
 [A12](#a12--the-services-chase-the-population) opens on purpose. (It was the only one until
-[A18](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15) joined it, which is
+[A18](#a18--an-empty-house-consumes-no-capacity) joined it, which is
 also A12's doing, from the other side.)
 
 With the services chasing the population, the coverage is recomputed almost every tick instead of only
@@ -740,7 +757,9 @@ of the tick. That would be the first job to do, before touching any performance.
 
 ---
 
-## A18 — An empty house consumes no capacity — **OPEN**, to close before phase 15
+## A18 — An empty house consumes no capacity
+
+**Status: TO_BE_DECIDED** — slot [14.5 in ROADMAP.md](ROADMAP.md), to close before phase 15.
 
 `pick_within_capacity` (`sim-core/src/coverage.rs`) walks the candidates in priority order and
 subtracts each one's residents from what is left:
@@ -810,7 +829,7 @@ attribute later.
 >   housing anyone.
 >
 > Phase 14 leaves a test stating the behaviour as it stands, written to **change its outcome** rather
-> than break when this is closed ([14, test 15](14-births-deaths.md)). It is the third use of that
+> than break when this is closed ([14, test 15](plan/14-births-deaths.md)). It is the third use of that
 > device, and it is what keeps a deferred decision visible in the suite and not only here.
 
 **And something to measure it with, which does not exist.** Nothing in the property suite exercises

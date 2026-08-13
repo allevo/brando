@@ -1,5 +1,10 @@
 # Phase 18 — The invariant suite and closing M1
 
+> **Status: not yet built.**
+>
+> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
+> work is really done — see [ROADMAP.md](../ROADMAP.md).
+
 **Goal:** the table at the top of `invariants.rs` covers the new invariants, the benchmark is
 re-measured with M1's measures, and `CLAUDE.md` declares M1 complete.
 **Depends on:** 17.
@@ -15,7 +20,7 @@ learn what must not be broken.
 
 And for a reason phase 09 showed to be worth more than expected: it is **here** that you write down
 how the decisions really went. A5 and A11 are the two most useful entries in
-[open-decisions.md](open-decisions.md) precisely because both of them record that the starting
+[DECISIONS.md](../DECISIONS.md) precisely because both of them record that the starting
 hypothesis was wrong. Without this phase, M1's surprises stay in the head of whoever had them.
 
 ## What gets built
@@ -41,14 +46,14 @@ lives. M1 adds nine and changes three.
 | Incremental coverage ≡ from scratch, **on a zero-rate dataset** | phase 06, reformulated in phase 14 |
 
 The last row is the one worth stopping on, and it is where M1 paid for
-[A12](open-decisions.md). `coverage_equivalence` did not survive intact: with the population moving
+[A12](../DECISIONS.md). `coverage_equivalence` did not survive intact: with the population moving
 every tick, the end-of-tick comparison always diverges, by construction. The form is the same, but it
 runs on a fixture with the demographics switched off, and what it checks has become **half** of what
 it used to check — the forgotten invalidation after a command, not after a change of population. The
 other half is the row above, which is a different test.
 
 It has to be written down without sugaring it: the guard on step 3 is now split in two, and whoever
-wants to optimise the coverage before M2 ([A17](open-decisions.md)) has to keep both green.
+wants to optimise the coverage before M2 ([A17](../DECISIONS.md)) has to keep both green.
 
 **The three that changed their outcome on purpose**, to be noted next to the test as was done with
 `a_hungry_house_is_not_saved_by_a_second_farm`:
@@ -77,7 +82,7 @@ few hundred ticks, with fewer cases, is worth having.
 
 ### The benchmark, re-measured — and it is the phase's main deliverable
 
-M1 bought a game dynamic with some computation time ([A12](open-decisions.md)), and this phase has to
+M1 bought a game dynamic with some computation time ([A12](../DECISIONS.md)), and this phase has to
 say **how much**, so that whoever optimises before M2 knows where to look. A single number is not
 enough: attribution is needed.
 
@@ -94,18 +99,24 @@ method (`--release`, 40 repetitions, median):
   multiplier: A12's total cost is `J × G`, not `G`. In a full or empty city `J` is low and nothing is
   paid; in a growing one it is close to 1.
 
+  > **Refuted — read the measurement below before using this bullet.** `J` was measured in phase 14
+  > and it is **1**: 502 recomputations in 502 ticks at the reference scale, 97% at mid-game. A city
+  > large enough has at least one birth or death maturing every single tick, so A12's cost is `G`,
+  > not `J × G`. The discount this paragraph assumes **does not exist**, and no countermeasure that
+  > relies on `J` being small is worth building.
+
 The measures have to be **recorded in this file**, with the date and the machine, as in
 [09](09-invariants-closeout.md). And they have to be read together: `A` was 248 µs at the end of M0
-and it is the number [A11](open-decisions.md) names as the one to watch, because it is paid on every
+and it is the number [A11](../DECISIONS.md) names as the one to watch, because it is paid on every
 tick. With A12 it becomes `248 µs + J × 3.05 ms`, and the expectation is ~3.3 ms in a living city —
 **~13×**.
 
 That number is not a failure: it is A12's declared price, decided in full knowledge. But it is also
-the input to [A17](open-decisions.md), the open task to close **before M2**, and in this phase it has
+the input to [A17](../DECISIONS.md), the open task to close **before M2**, and in this phase it has
 to be written down without rounding it downwards.
 
 > **Taken early, in phase 14** (2026-08-12, Apple M-series laptop, `--reps 100`, one sitting). The
-> numbers are in [A17](open-decisions.md); this file has to re-take them at the end of M1, when
+> numbers are in [A17](../DECISIONS.md); this file has to re-take them at the end of M1, when
 > migration and taxes have added their own work to step 6, and compare.
 >
 > | | 100×100, 3,000 res. | 200×200, 15,000 res. |
@@ -155,10 +166,10 @@ Three corrections to the bench, which the phases have accumulated:
   all, if the number of RNG draws depends on the seed (phase 14); and that a *gameplay* choice — the
   services chase the population — bought a quantifiable computation cost and a loss of test coverage,
   both accepted with eyes open (A12).
-- [open-decisions.md](open-decisions.md): A12–A16 marked as closed, **with how they really went**.
+- [DECISIONS.md](../DECISIONS.md): A12–A16 marked as closed, **with how they really went**.
   For A12 in particular: the expected cost was ~13× on the empty tick — say what it turned out to be,
   and whether the game dynamic it was buying really did show up in the games.
-- **[A17](open-decisions.md) stays open**, and it is the only one. It has to be updated with the
+- **[A17](../DECISIONS.md) stays open**, and it is the only one. It has to be updated with the
   numbers measured here, which are its input: it is the task to close before M2.
 - [10-beyond-m0.md](10-beyond-m0.md): the questions M1 answered have to be struck through with the
   answer, as was done with M0's. Two are already there waiting: *does 30 ticks/month give a playable
@@ -166,7 +177,7 @@ Three corrections to the bench, which the phases have accumulated:
 
 ## Out of scope
 
-**Optimising the per-tick recomputation**, which is [A17](open-decisions.md)'s subject and has to be
+**Optimising the per-tick recomputation**, which is [A17](../DECISIONS.md)'s subject and has to be
 done before M2, not here. This phase **measures** it and gives it the numbers; separating the two is
 deliberate, and it is A11's lesson: the obvious hypothesis about where the cost was turned out to be
 wrong, and it was the measurement that said so. Optimising in the same phase you measure in means not
@@ -197,7 +208,7 @@ cargo fmt --all --check
 ```
 
 **Done when:** every command is green, measures H, I and J are recorded in this file and carried over
-into [A17](open-decisions.md), and `CLAUDE.md` says M1 is complete. At that point there is a game: a
+into [A17](../DECISIONS.md), and `CLAUDE.md` says M1 is complete. At that point there is a game: a
 city that grows if you serve it, empties out if you neglect it, pays its taxes and can say when you
 have won — deterministic, measured and protected by recordings. It is what M2 can rest a renderer and
 a bot on without touching the core.

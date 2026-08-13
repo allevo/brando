@@ -1,5 +1,11 @@
 # Phase 07 — The farm, food, and the first observable loop
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** food is conserved (produced = consumed + stock, always) and houses go uncovered when the
 stock is empty.
 **Depends on:** 06.
@@ -25,6 +31,14 @@ Step 4 of the tick, `production(world)`:
    the rule in phase 06.
 3. If the stock does not cover a house's consumption, that house **consumes nothing** (no partial
    consumption) and is marked as unserved for food this tick.
+
+   > **Amended by the documentation audit (2026-08-13).** The second half of that sentence expired
+   > in phase 12. **Step 4 no longer writes `House::served`**: the bit means *covered*, for water and
+   > food alike, and step 3 is now the only writer (A9). Reading a field whose meaning changed with
+   > the bit was the trap A9 announced, and satisfaction was the first system that would have fallen
+   > into it. What used to be said by rewriting the bit is now said by `covered_but_unfed`, a
+   > diagnostic that has to stay at zero — because since A5 a house covered by food always eats, so
+   > the case this point describes can no longer arise for a covered house.
 
 The choice of "no partial consumption" is deliberate: it makes conservation checkable with an exact
 equality (test 1) instead of an inequality, and in M1 it gives a clean binary signal for "the house
@@ -82,7 +96,7 @@ kinds of food.
    > **Updated after M0.** In phase 07 this point failed: the hungry state *was* absorbing, and the
    > test was written to pin down the limitation instead of the property. Now the property really
    > does hold — *a house covered by food always eats* — because a producer's capacity cannot
-   > exceed what its output sustains. See [A5](open-decisions.md).
+   > exceed what its output sustains. See [A5](../DECISIONS.md).
 5. **Saturation**: a farm with no houses covered ⇒ `stock` grows to `max_stock` and stops;
    `lost_to_full_stock` grows accordingly.
 6. **Deterministic order**: enough stock for two houses out of three ⇒ it is always the same two

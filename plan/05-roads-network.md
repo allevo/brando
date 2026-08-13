@@ -1,5 +1,11 @@
 # Phase 05 — Roads and the road network
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** the road network is rebuilt only when it is `dirty`, and its labelling is independent of
 the order the roads were built in.
 **Depends on:** 04.

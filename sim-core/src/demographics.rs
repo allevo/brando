@@ -365,7 +365,10 @@ fn births(world: &mut World, divisor: i64) -> bool {
             moved = true;
             h.residents
         };
-        if rules.max_residents(level_of(world, house)).is_some_and(|m| full >= m) {
+        if rules
+            .max_residents(level_of(world, house))
+            .is_some_and(|m| full >= m)
+        {
             eligible.remove(at);
         }
     }

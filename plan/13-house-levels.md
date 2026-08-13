@@ -1,11 +1,17 @@
 # Phase 13 — House levels
 
+> **Status: implemented — phase 13.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** a house served with water and food reaches level 2 in a number of ticks you can compute
 from the `DataSet`; take the water away and it goes back to level 1; and on the boundary it **does
 not oscillate**.
 **Depends on:** 12.
 **Size:** L.
-**Decisions involved:** [A12](open-decisions.md), A9, A10, A5, D5, D6.
+**Decisions involved:** [A12](../DECISIONS.md), A9, A10, A5, D5, D6.
 
 ## Why now
 
@@ -13,7 +19,7 @@ Because phase 12's satisfaction exists in order to be read by someone, and this 
 that reads it. And it is the moment when the house's capacity stops being a single number:
 `Rules::max_residents` (phase 11) changes its body and becomes the per-level table.
 
-One thing that does **not** happen here, because of [A12](open-decisions.md): levelling up does not
+One thing that does **not** happen here, because of [A12](../DECISIONS.md): levelling up does not
 touch the coverage. A provider's capacity is consumed by the **residents present**, and going up a
 level does not bring people in — it only brings permission to hold more of them. It is the
 demographics (phase 14) that fill the new space, and that is where the coverage starts to chase.
@@ -78,13 +84,13 @@ fn houses_and_migration(world: &mut World) {
 ```
 
 **Why the review is monthly and not every tick.** Not for the cost — with
-[A12](open-decisions.md) levelling up does not touch the coverage, so it is cheap. It is because
+[A12](../DECISIONS.md) levelling up does not touch the coverage, so it is cheap. It is because
 hysteresis on its own only protects against oscillation if the thresholds are far apart, whereas an
 infrequent cadence makes it **structural**: thirty ticks pass between two decisions, and a house
 cannot go up and down more than twelve times a year by construction.
 
 Satisfaction keeps accumulating **every tick**: it is only the *decision* that is monthly. It
-introduces no new concept — the month has existed since phase 03 ([A6](open-decisions.md)) — it is
+introduces no new concept — the month has existed since phase 03 ([A6](../DECISIONS.md)) — it is
 Zeus-like, and it makes the recordings more readable: a level that only changes at multiples of 30
 can be followed by eye.
 
@@ -104,7 +110,7 @@ it is not counted, phase 14's conservation is not an equality. It is the same re
 
 **No gate on levelling up.** An early draft of this phase had a
 `places_to_level_up(world, h, level)` that stopped a house from rising if its providers had no
-capacity for the extra space. With [A12](open-decisions.md) it is not needed, and the reason is
+capacity for the extra space. With [A12](../DECISIONS.md) it is not needed, and the reason is
 worth writing down: **going up a level consumes no capacity**, because capacity is counted on the
 residents present and levelling up brings no people in. It brings permission to hold more of them,
 which is a different thing.
