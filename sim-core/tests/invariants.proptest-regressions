@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9a7c096289bd40fd7d120d3e0bb9dd69ece94a0c3740e21d733ab20265950ee6 # shrinks to p = [[PlaceBuilding { kind: BuildingKindId(0), origin: TilePos { x: 0, y: 0 } }], [PlaceBuilding { kind: BuildingKindId(0), origin: TilePos { x: 0, y: 1 } }], [], [], [], [], []]

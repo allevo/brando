@@ -13,7 +13,7 @@ use crate::coverage::Coverage;
 use crate::data::{DataSet, DifficultyId};
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
-use crate::levels::PopulationTotals;
+use crate::demographics::{Demographics, PopulationTotals};
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
@@ -159,6 +159,11 @@ pub struct World {
     /// `the_hash_covers_the_whole_state`) had both already been spent on it.
     pub(crate) walkers: Vec<Walker>,
     pub(crate) economy: Economy,
+    /// **State**, and in the hash: the fractions of an event not yet matured
+    /// decide the following ticks. Two of its four slots do nothing until phase
+    /// 15 and are hashed as zeros on purpose, so that adding migration moves no
+    /// recording.
+    pub(crate) demographics: Demographics,
     pub(crate) rng: RngSet,
     pub(crate) dirty: DirtyFlags,
     /// A structure **derived** from the grid: it does not enter the state hash
@@ -172,7 +177,7 @@ pub struct World {
     pub(crate) food: FoodTotals,
     /// Diagnostic like [`FoodTotals`], and outside the hash for the same
     /// reason. It is where the flows of population accumulate: one of them in
-    /// phase 13, all four in phase 14.
+    /// phase 13, all of them from phase 14.
     pub(crate) population: PopulationTotals,
     /// Indexes from origin tile to id. They are `BTreeMap`s and not `HashMap`s
     /// (D4): the iteration order is a contract.
@@ -206,6 +211,7 @@ impl World {
             houses: SlotMap::with_key(),
             walkers: Vec::new(),
             economy: Economy { treasury },
+            demographics: Demographics::default(),
             rng: RngSet::from_seed(seed),
             dirty: DirtyFlags::default(),
             roads: RoadNetwork::new(tiles),
@@ -257,6 +263,11 @@ impl World {
 
     /// The running totals of the population's flows, as opposed to
     /// [`World::population`], which is how many people there are right now.
+    /// The fractions of an event pending, one per flow.
+    pub const fn demographics(&self) -> &Demographics {
+        &self.demographics
+    }
+
     pub const fn population_totals(&self) -> &PopulationTotals {
         &self.population
     }
@@ -488,6 +499,15 @@ impl World {
         self.walkers.push(Walker { at });
     }
 
+    /// Moves a flow's pending fraction, to check that it enters the hash.
+    ///
+    /// The demographics' accumulator cannot be set through a command, and a
+    /// test that drove it with real births would depend on the balancing. This
+    /// is the same hook `push_walker` is, for the same test.
+    pub const fn nudge_demographics(&mut self, flow: crate::demographics::Flow) {
+        self.demographics.remainder[flow.index()] += 1;
+    }
+
     /// Consumes one value from a kind's stream, to check that the RNG's
     /// position enters the hash.
     pub fn consume_rng(&mut self, kind: crate::rng::RngKind) {
@@ -528,6 +548,7 @@ impl World {
             houses: _,
             walkers: _,
             economy: _,
+            demographics: _,
             rng: _,
             dirty: _,
             roads: _,

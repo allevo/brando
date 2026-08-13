@@ -11,7 +11,7 @@
 //! recordings stop protecting it: it is the known risk of A3, mitigated by the
 //! `the_hash_covers_the_whole_state` test.
 
-use sim_core::{Building, Economy, House, RngKind, ServiceKind, Walker, World};
+use sim_core::{Building, Demographics, Economy, Flow, House, RngKind, ServiceKind, Walker, World};
 
 /// Hash prefix: keeps this hash apart from the dataset's.
 /// Changing it regenerates every recording.
@@ -21,7 +21,8 @@ const PREFIX: &[u8] = b"brando/world/v1";
 ///
 /// What goes in: the tick, the dataset hash, the difficulty, the grid's
 /// dimensions, the tiles in `TileIdx` order, the buildings and the houses in id
-/// order, the walkers, the economy and the position of every RNG stream.
+/// order, the walkers, the economy, the demographics' pending fractions and the
+/// position of every RNG stream.
 ///
 /// What does **not** go in: `RoadNetwork`, `Coverage`, `DirtyFlags`,
 /// `FoodTotals`, `PopulationTotals`. They are derived or diagnostic structures;
@@ -118,6 +119,17 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     // --- economy ---
     let Economy { treasury } = w.economy();
     h.update(&treasury.get().to_le_bytes());
+
+    // --- the demographics' pending fractions (phase 14) ---
+    // State: they decide how many events mature on the following ticks. Two of
+    // the four slots do nothing until phase 15 and are hashed as zeros on
+    // purpose — the array is sized for all four flows now, so adding migration
+    // moves no recording. The running totals stay out, like `FoodTotals` and
+    // for the same reason: they decide nothing.
+    let demographics: &Demographics = w.demographics();
+    for flow in Flow::ALL {
+        h.update(&demographics.remainder(flow).to_le_bytes());
+    }
 
     // --- position of the RNG streams ---
     // A state in which Events has consumed 5 values is not the same as one in

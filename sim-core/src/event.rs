@@ -80,4 +80,22 @@ pub enum Event {
         from: Level,
         to: Level,
     },
+    /// The last resident of a house has died: the house still stands, and
+    /// nobody lives in it.
+    ///
+    /// The only thing about the demographics worth an event. Births and deaths
+    /// themselves travel in [`StepReport::summary`] as an aggregate: one event
+    /// per house per tick is precisely the polling the boundary with the
+    /// renderer exists to forbid.
+    ///
+    /// There is deliberately no `HouseRepopulated` yet. Nothing in phase 14 can
+    /// put a resident back into an empty house — a birth needs `residents > 0` —
+    /// so the variant would be unreachable from the day it was added. Events are
+    /// outside the hash, so adding it with immigration in phase 15 costs
+    /// nothing; `taxable_per_resident` was declared early for the opposite
+    /// reason, being a **table** field, where arriving late means a second
+    /// regeneration.
+    ///
+    /// [`StepReport::summary`]: crate::tick::StepReport::summary
+    HouseAbandoned { house: HouseId },
 }

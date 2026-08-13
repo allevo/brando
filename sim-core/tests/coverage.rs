@@ -40,7 +40,10 @@ fn only_well(w: &World) -> BuildingId {
 /// A horizontal corridor along row 5, a well at the start, a house `dist` road
 /// tiles away. The well's range is 12 (from the fixture).
 fn linear_scenario(length: u8, house_x: u8) -> World {
-    let mut w = world();
+    linear_scenario_on(world(), length, house_x)
+}
+
+fn linear_scenario_on(mut w: World, length: u8, house_x: u8) -> World {
     let cells: Vec<(u8, u8)> = (1..=length).map(|x| (x, 5)).collect();
     roads(&mut w, &cells);
     build(&mut w, WELL, 1, 4);
@@ -348,7 +351,13 @@ fn breaking_the_road_uncovers_the_houses_beyond_the_break() {
 /// brings no residents in.
 #[test]
 fn nothing_is_recomputed_while_the_population_does_not_move() {
-    let mut w = linear_scenario(20, 4);
+    // On the fixture with the demographics **switched off**. The name is the
+    // premise: from phase 14 a living city moves somebody nearly every tick and
+    // step 6 invalidates the coverage on purpose, so with the real rates this
+    // would be asserting that births do not happen. Switched off, it goes on
+    // checking what it was written to check — that a still city recomputes
+    // nothing — which is the negative half of the invalidation contract.
+    let mut w = linear_scenario_on(world_without_demographics(), 20, 4);
     let before = w.coverage().clone();
     let population = w.population();
     let recomputes = w.coverage().recomputes();
@@ -399,7 +408,18 @@ proptest! {
     fn coverage_equivalence(p in prop::collection::vec(
         prop::collection::vec(any_command(), 0..5), 1..10)
     ) {
-        let mut w = world();
+        // **On a dataset with the demographic rates at zero, and that is not
+        // an accident to be tidied away.** This test compares the stored
+        // coverage against a from-scratch one at the *end* of the tick. From
+        // phase 14, step 6 moves the population after step 3 has assigned, so
+        // with the real rates the two diverge on nearly every tick — not
+        // because of a bug, but because the stored coverage is one step behind
+        // by design (A12). Put the production rates back and the project's most
+        // valuable oracle stops checking anything, without ever going red.
+        //
+        // What the real rates need is a different question, and
+        // `demographics_invalidate_the_coverage` is where it is asked.
+        let mut w = world_without_demographics();
         for cmds in &p {
             tick(&mut w, cmds);
             let from_scratch = sim_core::coverage::compute_from_scratch(&w);

@@ -22,7 +22,16 @@ fn an_empty_tick_only_advances_the_tick() {
     assert_eq!(w.economy(), before.economy());
     assert_eq!(w.building_count(), 0);
     assert_eq!(w.house_count(), 0);
-    assert_eq!(w.rng(), before.rng(), "no system draws from the RNG in M0");
+    // The outcome is the same as it was in M0 and the reason is not. This
+    // world has no houses, so no flow has an eligible resident and the
+    // demographics draw nothing: *a tick with nothing to decide draws nothing*,
+    // which is a live rule rather than a note about a milestone that is over.
+    // Its sharper companion is `a_still_city_draws_a_fixed_number_of_values`.
+    assert_eq!(
+        w.rng(),
+        before.rng(),
+        "a tick with nothing to decide has to draw nothing"
+    );
 }
 
 #[test]

@@ -6,10 +6,19 @@ and `different_seeds_give_different_hashes`, `#[ignore]` since phase 08, is re-e
 **Size:** L — it is the riskiest phase of M1.
 **Decisions involved:** [A12](open-decisions.md), [A14](open-decisions.md), A10, D4, D5.
 
+> **Revised on 2026-08-12**, before writing any of it, by reading the plan against the tree it has to
+> land in. Four things had drifted or were wrong, and two of them would have sunk the phase's own
+> goals: the conservation equality was missing the term for residents who arrive with a new house,
+> the replacement for `population_stays_consistent` was `x == x`, test 6 asked for something the
+> design makes impossible, and `RngDomain` had been renamed `RngKind` by the vocabulary review
+> ([A19](open-decisions.md)). Each is corrected in place below and marked **(revised)**. The general
+> lesson is A5's again: a plan written before the code it has to fit is a hypothesis, and the cheap
+> moment to test it is before the first commit, not after the third.
+
 ## Why now
 
 Because it is the **first real use of the RNG** in the whole project. Since phase 02 there have been
-three streams seeded per domain, their position goes into the state hash, and nobody has ever used
+three streams seeded per kind, their position goes into the state hash, and nobody has ever used
 them: `commands.rs` still contains
 `assert_eq!(w.rng(), before.rng(), "no system draws from the RNG in M0")`. This phase closes that
 circle, and with it test 7 of phase 08.
@@ -20,9 +29,9 @@ from that.
 
 It has to be kept separate from migration (phase 15) for two reasons. One of readability: births and
 deaths are local to the house, migration needs a city-wide index and a distribution rule — different
-ways to fail, different tests. One concrete: with **two distinct RNG domains**, writing 15 does not
+ways to fail, different tests. One concrete: with **two distinct RNG kinds**, writing 15 does not
 knock this one's sequence out of phase and does not regenerate a recording that had no reason to
-change. It is literally the use case `RngDomain` was written for in phase 02, and until now it had
+change. It is literally the use case `RngKind` was written for in phase 02, and until now it had
 never come up.
 
 ## The contract: the coverage chases the population
@@ -104,6 +113,16 @@ pub struct Demographics {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PopulationTotals {
+    /// Residents who arrived with a newly-built house.
+    ///
+    /// **(revised.)** It was missing, and without it the phase's accounting goal
+    /// cannot hold: a new house is born with `starting_residents_per_house`
+    /// people out of nowhere ([A13](open-decisions.md), `tick.rs`), so at `easy`
+    /// the equality below is out by four on the first `PlaceBuilding`. It is the
+    /// inflow mirror of `lost_to_demolition`, and the third time this shape has
+    /// been needed — the first two were a demolished farm's stock (phase 07) and
+    /// a demolished house's residents.
+    pub settled_on_construction: u64,
     pub born: u64,
     pub died: u64,
     pub immigrated: u64,
@@ -114,14 +133,38 @@ pub struct PopulationTotals {
     ///
     /// It exists for the same reason as `FoodTotals::lost_to_demolition`:
     /// without it, population conservation stops being an equality and the
-    /// phase's most important test would report a bug that is not there. It is
-    /// the second time this term is needed — the first was the stock of a
-    /// demolished farm, in phase 07.
+    /// phase's most important test would report a bug that is not there.
     pub lost_to_demolition: u64,
 }
 
+/// The declaration order is **frozen**: `remainder` is indexed by it and the
+/// array goes into the state hash, so reordering the variants silently reassigns
+/// every accumulated fraction. It is the same hazard as `RngKind`'s order and
+/// `Terrain`'s, and it belongs in `GLOSSARY.md`'s frozen values alongside them.
 pub enum Flow { Births, Deaths, Immigration, Emigration }
 ```
+
+**`PopulationTotals` is not new** *(revised)*: phase 13 created it in `sim-core/src/levels.rs` with
+`evicted` alone, and wrote in its doc comment that phase 14 is what makes the counter live. It moves
+here, keeps `evicted` written by `levels::review`, and `lib.rs` re-exports it from its new home. The
+same split `FoodTotals` already has — defined next to the system that owns the concept, written by
+whoever causes the flow.
+
+**The unit of `remainder`, spelled out** *(revised)*. "Thousandths of an event" is not enough
+precision: dividing into thousandths once per tick truncates up to one thousandth per flow per tick,
+which over 1,800 ticks is a systematic **downward** bias of a couple of events — small, invisible,
+and exactly what test 7 exists to catch. The accumulator holds the undivided numerator instead:
+
+```text
+remainder[flow] += base_rate × eligible_residents × (1000 + jitter)
+divisor          = 1000 (per thousand) × 1000 (jitter base) × ticks_per_month
+events           = remainder[flow] / divisor;  remainder[flow] %= divisor
+```
+
+Nothing is truncated, the modulo keeps the accumulator below `divisor`, and at the reference scale
+one tick's increment is ~2×10⁸ against an `i64` — no overflow, and no need to reason about one. The
+divisor is a function of the tables, so `ticks_per_month == 0` needs the same guard
+`Rules::is_month_boundary` already has: the core does not panic on data.
 
 ### Step 6, extended
 
@@ -164,9 +207,23 @@ the city's average satisfaction — it is the "tied to overall wellbeing" part o
 [A14](open-decisions.md): a city that is doing well has children, one that is struggling does not,
 even in the houses that are doing well.
 
-**Deaths** have a base rate and a raised one for the houses below the hunger threshold. It is the
+**Deaths** have a base rate and a raised one for the houses that are going without. It is the
 channel through which a city that loses its food really does empty out, instead of merely stopping
 growing.
+
+**What "going without" means, and it is not "hungry"** *(revised)*. The obvious reading — food
+satisfaction below a threshold — breaks the early game. Since phase 13 the production table's level 1
+is a hut that requires **water only**, and it is that way on purpose: it is what makes the first level
+reachable in a city that has not got a farm yet. Read hunger off the food accumulator regardless of
+level and every hut in a farmless city dies at ten times the base rate, so the opening of every game
+is a slow bleed by construction, and the level table would have to be rebalanced to compensate for a
+rule nobody chose.
+
+The reading that fits is the one the rest of step 6 already uses: **the worst service the house's own
+level requires**, the same `required_at(level)` that `mood_of` and the decay check read. A hut with
+water is fine; a level-2 house without food is not. One threshold, no new concept, and the raised rate
+generalises to every service a level ever demands instead of being wired to food. The table key is
+named for what it measures.
 
 ### The table, in `rules.ron`
 
@@ -178,7 +235,10 @@ conversion to ticks divides by `ticks_per_month` with no loss, because the remai
 demographics: (
     births_per_thousand_per_month: 12,        // at maximum satisfaction
     deaths_per_thousand_per_month: 6,         // at maximum satisfaction
-    deaths_per_thousand_per_month_hungry: 60,
+    // The rate for a house below `unserved_threshold` on any service its own
+    // level requires — not "hungry": see above.
+    deaths_per_thousand_per_month_when_unserved: 60,
+    unserved_threshold: 25,
     birth_threshold: 60,                      // minimum satisfaction to have children
     // +/- 20% on the rate, from the RNG. It can move into the difficulty
     // profile if high difficulty should also be more volatile.
@@ -186,20 +246,35 @@ demographics: (
 ),
 ```
 
-**A cross-table check** (`Inconsistency::UnsustainableDemographics`): at maximum satisfaction the
-births have to exceed the deaths. Otherwise a perfect city empties out and **no growth scenario is
-winnable** — a piece of balancing the game would never flag, and which would only be discovered with
-M2's heuristic bot.
+**Two cross-table checks**, both in `DataSet::inconsistencies` so the `sim-core` fixture is protected
+by them too (A5's lesson, generalised in phase 13):
 
-### The RNG: a new domain, and a serious trap
+- `UnsustainableDemographics` — at maximum satisfaction the births have to exceed the deaths.
+  Otherwise a perfect city empties out and **no growth scenario is winnable**, a piece of balancing
+  the game would never flag and which would only surface with M2's heuristic bot.
+- the two thresholds have to be reachable, i.e. no greater than `satisfaction.max`. It is the same
+  check as `UnreachableThreshold` and for the same reason: a birth threshold above the ceiling means
+  no city ever has a child, in silence.
+
+**Which residents the rate is counted against** *(revised, and it decides test 1)*. Births are
+counted against the **eligible** residents — those in houses meeting all three conditions — not
+against the population. That is what makes the plateau structural instead of a consequence of the
+numbers: a city whose houses are all full has nobody eligible, so the rate is zero and the population
+stops, and it stops for a reason a reader can point at. Deaths are counted against every resident,
+split between the two rates by whether their house is going without.
+
+### The RNG: a new kind, and a serious trap
 
 ```rust
-pub enum RngDomain { Events, Migration, Production, Demographics }
+pub enum RngKind { Events, Migration, Production, Demographics }
 ```
+
+*(revised: the type was `RngDomain` when this was written and is `RngKind` since the vocabulary
+review, [A19](open-decisions.md). The variant is the only thing being added.)*
 
 Four lines (`ALL`, `salt`, `index` with the **new slot at the end**, `from_index`), and by
 construction it does not knock the existing recordings out of phase —
-`sequences_are_reproducible_with_the_expected_values` checks that. `RngDomain::ALL` grows, so
+`sequences_are_reproducible_with_the_expected_values` checks that. `RngKind::ALL` grows, so
 `hash_world` changes anyway: this phase's regeneration is expected.
 
 Two draw sites, and only two:
@@ -209,6 +284,16 @@ Two draw sites, and only two:
    result accumulates in `remainder` and matures into whole events.
 2. **The choice of house** the event falls on, one draw per event, from the eligible set built in
    `HouseId` order.
+
+**Nothing is drawn when there is nothing to draw for** *(revised)*: a flow whose eligible residents
+are zero takes no jitter. It costs nothing to write, it keeps `draws` a readable function of the city
+rather than of the calendar, and it is what lets `an_empty_tick_only_advances_the_tick` keep asserting
+that a world with no houses touches no stream at all — the same sentence it has asserted since phase
+04, now true for a reason instead of by absence.
+
+The order of the draws within a tick — deaths' jitter, deaths' houses, births' jitter, births' houses
+— is a determinism contract like the order of the ten steps, and is written down in
+`demographics.rs`, not left to the reading order of the code.
 
 **Not a die per house** (3,750 draws per tick). It is not for the cost: D5 asks for a coarse
 simulation, and the rule "the rate is random, the distribution is deterministic" is easier to
@@ -248,7 +333,7 @@ impl Stream {
 }
 ```
 
-It has to be written **before** the births, not after, with the test that pins it down (test 6).
+It has to be written **before** the births, not after, with the test that pins it down (test 6a).
 
 #### How it squares with D4
 
@@ -282,18 +367,68 @@ pub struct Summary {
 }
 ```
 
-The only things that stay events are the rare changes of state: `HouseAbandoned { house }` when the
-residents reach zero, `HouseRepopulated { house }` when they come back up.
+The only thing that stays an event is the rare change of state: `HouseAbandoned { house }` when the
+residents reach zero. *(Revised: `HouseRepopulated` is **not** written here. Nothing in this phase can
+put a resident back into an empty house — births need `residents > 0` — so the variant would be
+unreachable from the day it was added, and events are outside the hash, so adding it with
+immigration in phase 15 costs nothing. `taxable_per_resident` was declared early for the opposite
+reason: it is in a **table**, and a table field arriving late means a second regeneration.)*
 
 ### The hash
 
-`remainder` (4 × `i64`) in the state block. The totals stay out, like `FoodTotals` and for the same
-reason: they are diagnostics, they decide nothing.
+`remainder` (4 × `i64`) in the state block, two of the four slots unused until phase 15 and hashed as
+zeros on purpose: the array is sized for all four flows now so that adding migration moves no
+recording. The totals stay out, like `FoodTotals` and for the same reason: they are diagnostics, they
+decide nothing.
 
 ## Out of scope
 
 Immigration and emigration (phase 15). Disease and epidemics: those are random events, step 8, and
 they are outside M1. Age, families, trades — D5 says the unit is the house.
+
+### What this phase hands to A18, deliberately *(new)*
+
+[A18](open-decisions.md) — an empty house consumes no provider capacity — stays open and stays
+phase 15's to close. But this phase changes the fact it rests on, and the entry has to be amended
+rather than left as it reads.
+
+A18 was written about `hard`, the profile where a house is **born** with zero residents. Deaths make
+zero residents reachable on **every** profile, `easy` included, and therefore inside the two committed
+recordings. Two consequences, both of which are the point of writing this down now:
+
+- the recordings this phase freezes contain the unbounded assignment, so when A18 is closed its cost
+  is a regeneration to attribute, not the free one-line change A18 currently promises. That promise
+  is no longer true after this commit and the entry should say so;
+- an emptied house keeps its coverage, so its satisfaction climbs while nobody lives there, and a
+  house at maximum satisfaction with zero residents can be promoted at the monthly review. Harmless —
+  a promotion grants permission and not people (A12) — but it is the state phase 15's immigration
+  will be filling, so whichever answer A18 takes has to be checked against it.
+
+Test 15 pins the behaviour so the change is visible when it comes.
+
+## The order the work lands in *(new)*
+
+One phase, one PR, and inside it the commits are ordered so that exactly one of them moves a hash.
+
+1. **`Stream::below` and test 6a.** No behaviour, no regeneration. It is first because the trap it
+   closes has to be closed before anything draws — the phase file has said so from the start, and it
+   is the one instruction here that was already right.
+2. **The phase proper, with the single regeneration.** `demographics.rs`; `RngKind::Demographics`;
+   the `rules.demographics` table with its raw shape, its field checks, its two cross-table checks and
+   its line in `dataset_hash`; step 6 extended and the conditional invalidation as its last act;
+   `PopulationTotals` moved and completed; `Summary`; `HouseAbandoned`; `hash_world`, `every_field`
+   and the `test-util` hook the hash-coverage test needs; and the test rework — conservation in place
+   of `population_stays_consistent`, `coverage_equivalence` moved onto a zero-rate fixture with the
+   comment that says why, `commands.rs`'s RNG assertion re-worded.
+
+   It is one commit and not four because every one of its parts moves the dataset hash or
+   `RngKind::ALL`, and four commits would mean four regenerations of the same two files.
+3. **The measurement.** `bench --zero-demographics`, the recompute deltas, the three numbers written
+   into [18](18-invariants-closeout-m1.md) and [A17](open-decisions.md). No hash moves.
+4. **The documents.** A14 gains its "how it really went"; A18 gains the amendment above; `GLOSSARY.md`
+   gains a row for **demographics** and one for **flow**, promotes **jitter** out of the
+   "not written yet" note, and adds `Flow`'s declaration order to the frozen values next to
+   `RngKind`'s; `README.md`'s "Implemented till" moves to 14.
 
 ## Tests
 
@@ -302,33 +437,64 @@ they are outside M1. Age, families, trades — D5 says the unit is the house.
    constraint bites.
 2. **Emptying out**: with the farm demolished, the population falls. With the hunger rate the fall
    is computable from the `DataSet`.
-3. **Population conservation** (property test, *the phase's accounting goal*):
-   `Σ residents == born + immigrated − died − emigrated − evicted − lost_to_demolition`, an
-   **exact** equality after any sequence of commands. It is the analogue of food conservation, and
-   like that one it finds the flow somebody forgot to count.
-4. **`population_stays_consistent` changes its outcome on purpose**: `population == house_count × 4`
-   is false by construction from here. It becomes two stronger invariants —
-   `population == Σ residents` and `residents <= max_residents(level)` for every house. The second
-   is what holds up *covered ⇒ eats*, so it is not cosmetic.
+3. **Population conservation** (property test, *the phase's accounting goal*) *(revised)*:
+
+   ```text
+   Σ residents == settled_on_construction + born + immigrated
+                − died − emigrated − evicted − lost_to_demolition
+   ```
+
+   an **exact** equality after any sequence of commands. It is the analogue of food conservation, and
+   like that one it finds the flow somebody forgot to count — starting with the one this line was
+   itself missing. `immigrated` and `emigrated` stay at zero until phase 15 and are in the equation
+   from now so that phase adds no term to it.
+
+4. **`population_stays_consistent` is replaced, not rewritten** *(revised)*. The plan said it should
+   become `population == Σ residents`, and that is `x == x`: `World::population()` is defined as the
+   sum over the houses. It is the same trap phase 12 fell into when unifying the two `served` bits
+   turned `covered_means_fed` into a comparison of a field with itself — twice in three phases, which
+   is enough times to make it a thing to look for rather than an accident.
+
+   The half that was worth keeping, `residents <= max_residents(level)`, already exists as
+   `residents_stay_within_the_house_capacity` (phase 13). So `population_stays_consistent` goes away
+   and test 3 takes its row in `invariants.rs`'s table. Conservation is also profile-agnostic by
+   construction — it reads the flows, never `house_count × 4` — which is the prerequisite
+   [A18](open-decisions.md) asks phase 14 for: from here the property suite *can* be pointed at
+   `hard`.
 5. **`different_seeds_give_different_hashes` is re-enabled**, and from here it can never be
    `#[ignore]` again.
-6. **The number of draws does not depend on the seed** — the test that makes `draws` information
-   rather than an accident: the same game with ten different seeds, `draws(d)` identical for every
-   domain at every tick. Without this, test 5 is green and empty.
+6. **The draws are a function of the state, not of rejection sampling** *(revised)* — the test that
+   makes `draws` information rather than an accident. As first written it asked for the same game
+   under ten seeds to report identical `draws` at every tick, and that cannot hold: the choice of
+   house is one draw **per event**, and how many events mature depends on the jitter, i.e. on the
+   seed. The property is real, the formulation was not. It splits in two, and both are needed:
+
+   - **6a — `below(n)` consumes exactly one draw**, for every `n` and every seed, including
+     `n == 0` and `n == u64::MAX`. This is the anti-rejection-sampling guard itself, tested on
+     `Stream` where it can be asked directly instead of inferred from a game.
+   - **6b — a game in which no event can mature consumes a known number of draws**, the same under
+     every seed: zero for a world with no houses, and `flows × ticks` for a city whose rates are at
+     zero. It is 6a's consequence observed through `step`, and it is what says the count is decided
+     by the city and not by the values that came out.
+
+   Without both, test 5 is green and empty.
 7. **The jitter does not move the mean**: over ten thousand ticks the number of births is within 1%
    of the base rate. It catches asymmetric jitter, which would shift the whole balancing invisibly.
 8. **A hundred seeds give different but always plausible trajectories**: the population at five years
    sits in a narrow band and is never twice the same. It is the operational definition of "a minimum
    of randomness but not two identical games" — without the first half the balancing is a lottery,
    without the second the RNG is of no use.
-9. **Adding a domain does not knock the others out of phase**:
+9. **Adding a kind does not knock the others out of phase**:
    `sequences_are_reproducible_with_the_expected_values` stays green with `Demographics` in the
    table. It is the proof, four phases later, that phase 02 was right.
 10. **Demolishing an inhabited house** counts the residents in `lost_to_demolition`. The same test as
     `demolishing_a_farm_records_the_stock_it_loses`, and for the same reason.
-11. **`commands.rs:25` changes its outcome**: `assert_eq!(w.rng(), before.rng())` becomes false as
-    soon as the demographics run. To be rewritten as "an empty tick consumes a **known** number of
-    draws", which is stronger.
+11. **`commands.rs:25` keeps its outcome and changes its meaning** *(revised)*.
+    `assert_eq!(w.rng(), before.rng(), "no system draws from the RNG in M0")` was expected to go
+    false. It does not: that world has no houses, so no flow has an eligible resident and nothing is
+    drawn. The assertion stays, the message stops being true, and it is rewritten to say what now
+    holds — *a tick with nothing to decide draws nothing* — which is a live rule rather than a note
+    about a milestone that is over. Its sharper companion is 6b.
 12. **`demographics_invalidate_the_coverage`** (new, A12's contract): if the population changed
     during a tick, then at the end of the tick `dirty.coverage_needs_recompute()` is true. And the
     converse holds too — a still population, a clean coverage — because that is what says the
@@ -339,6 +505,15 @@ they are outside M1. Age, families, trades — D5 says the unit is the house.
 14. **The coverage adapts to growth**: a served house that grows beyond what the provider can serve
     ⇒ on the next tick it falls out of the coverage, and *covered ⇒ eats* stays green. It is A12's
     game loop observed at its smallest: the city outgrows its services.
+15. **An emptied house is pinned down, and the test is written to change its outcome** *(new)*. See
+    "What this phase hands to A18" below: deaths make a house of zero residents reachable on every
+    profile, and such a house goes on consuming no provider capacity. The behaviour gets a test that
+    states it as it is today — a house emptied by deaths keeps its coverage, and a small well keeps
+    serving it — so that when phase 15 closes A18 the test **changes its outcome** rather than
+    breaking. It is the third time this device is used, after
+    `a_hungry_house_is_not_saved_by_a_second_farm` and its successor
+    `hunger_is_cured_by_building_a_second_farm`, and it is the cheapest way to make a deferred
+    decision visible in the suite instead of only in a document.
 
 ## Verification
 
@@ -355,23 +530,72 @@ The 1800 ticks are the by-eye proof that closes the phase, and they should be lo
 suspicion as phase 07's dump: if the curve explodes or dies out, that is balancing (`sim-data`), not
 code — but it has to be sorted out now, because `regen-expected` freezes it.
 
+**What the curve is expected to look like, so that "plausible" is not decided after the fact.**
+On `minimal` at the production numbers: four houses of four, so nobody is eligible for a child until
+the first monthly review promotes them to level 2 and the ceiling goes from four to eight. From tick
+30 the eligible population is sixteen, births run at 12 per thousand per month and deaths at six, so
+the year the recordings cover contains roughly two births and one death — enough to move the hash and
+few enough to read by hand, which is what the 32×32 scenarios are for.
+
+Over five years the interesting part arrives: the farm sustains twenty residents, the city grows past
+it, and the house that falls out of the food coverage loses its food satisfaction at eight a tick,
+drops under the decay threshold in ten, comes down a level at the next review and **evicts** whoever
+no longer fits. So expect a plateau with a sawtooth on it, not a smooth ceiling — and expect
+`evicted` to be the largest outflow in `PopulationTotals`, because in this phase eviction and death
+are the only ways to leave. Emigration is phase 15, and until it exists the city's answer to
+overcrowding is to delete people. That is worth seeing before it is frozen, and it is the strongest
+argument for keeping 14 and 15 adjacent.
+
+**Attribution, and why protocol point 5 does not apply here** *(revised)*.
+[README](README.md)'s regeneration protocol says to look at the first diverging tick in the `.hashes`
+diff. That check cannot say anything in this phase: `hash_world` hashes the dataset hash at every
+checkpoint, so **any** new table field diverges the recordings from the first checkpoint, whatever the
+mechanic does. The same is true of `RngKind::ALL` growing. The point-5 question — *did the new
+mechanic act when it could first have acted, and not before* — has to be asked of the textual dump
+instead:
+
+```sh
+cargo xtask run --scenario minimal --ticks 1800 --dump-every 1 > after.txt   # and before.txt on HEAD~
+```
+
+and the first line where the population column differs has to be at or after the first review that
+promotes a house, because before that no house has room for a child. If it differs earlier, something
+else moved and it has to be found before committing. This is worth adding to the protocol in
+`README.md` as the general rule: **point 5 is about the recording, not about the hashes, whenever the
+change touches a table.**
+
 ### Measuring A12's price, which is this phase's real job
 
 The cost has to be **attributed**, not just noted, or before M2 nobody will know where to start
 taking it away. Three runs on the same machine are needed:
 
 ```sh
-cargo xtask bench --difficulty normal                       # real rates
-cargo xtask bench --difficulty normal --zero-demographics   # zero rates
+cargo run --release -p xtask -- bench                       # real rates
+cargo run --release -p xtask -- bench --zero-demographics   # zero rates
 ```
 
-- **`A` at zero rates** has to stay where it was at the end of phase 13. If it has moved, the cost is
-  not the coverage recomputation but step 6 itself, and that is a different thing to optimise.
+*(Revised: the flag was written as `--difficulty normal`. It should not be. `bench` measures on
+`easy` by an explicit choice documented in `BENCH_DIFFICULTY`, because that is the profile the numbers
+in [09](09-invariants-closeout.md) and phase 13 were taken on, and at `normal` the synthetic city has
+half the residents — the measure would stop being comparable with the ones A17 has to be closed
+against. `--zero-demographics` is the flag this phase adds, and it builds the same dataset variant
+`with_unlimited_treasury` already builds.)*
+
+- **`A` at zero rates** (`H`) has to stay where it was at the end of phase 13. If it has moved, the
+  cost is not the coverage recomputation but step 6 itself, and that is a different thing to optimise.
 - **`A` at real rates** is the number A12 costs. The expectation is ~3.3 ms against 248 µs; if it
   were much worse, there is something else and it has to be found now.
-- **Measure `I`** (step 6 alone) separates the demographic work from the recomputation it triggers.
-  Without it, the cost of the demographics can only be deduced by subtraction, and the difference is
-  dominated by noise.
+- **`I` (step 6 alone) is derived, not measured, and that is a limit to state rather than work
+  around** *(revised)*. `G` can be measured directly because `compute_from_scratch` is pure and can be
+  run on the same world a hundred times; step 6 mutates, so measuring it in isolation would mean
+  either cloning the world per repetition — the clone dominates — or exposing a mutating internal of
+  the core to `xtask`, which is a worse thing to own than an imprecise number. What is measured is
+  `H`, `A`, `G` and `J` (the fraction of ticks where the population moved, **counted** over a real
+  1,800-tick game and not estimated), and `I` follows as `(A − H) − J × G`. Every term on the right is
+  measured, so the derivation is arithmetic and not a guess. If it comes out noisy, the next step is a
+  bench preset whose city cannot move — every house full at the top level, fully served — which
+  isolates step 6's fixed cost with no new API; it is not worth building before the number says it is
+  needed.
 
 The **count of recomputations** should be added too: `coverage().recomputes()` before and after each
 measure, with the delta printed. An `A` paying milliseconds with zero recomputations would be a
@@ -382,6 +606,64 @@ The three numbers go into [18](18-invariants-closeout-m1.md) and are the input t
 in this phase**: `CLAUDE.md` says not to optimise before the profiler, and A11 is the story of what
 happens when you guess instead of measuring.
 
-**Done when:** test 3 (exact conservation), test 6 (draws independent of the seed) and test 12 (the
-invalidation contract) pass, and the three numbers above are recorded. Test 6 comes **before** test 5
-in writing order: without it, 5 means nothing.
+**Done when:** test 3 (exact conservation), tests 6a and 6b (the draws are decided by the city, not by
+rejection sampling) and test 12 (the invalidation contract) pass, and the three numbers above are
+recorded. Test 6a comes **before** test 5 in writing order: without it, 5 means nothing.
+
+## How it went
+
+The three defining tests are green: conservation is an exact equality over 2,000 generated games,
+`below` costs one draw whatever its argument, and the invalidation fires when somebody moved and
+**only** then. `different_seeds_give_different_hashes` is off the ignore list and cannot go back on
+it. The five-year dump is what this file predicted: `minimal` climbs 16 → 21, meets the farm's
+twenty-resident capacity, drops to 3/4 on food and brings a house down a rung — a plateau with a
+sawtooth on it, not a smooth ceiling. The `.ron` diff of the recordings is one line, the dataset
+hash: not a single command moved.
+
+Attribution went through the recording rather than the hashes, as this file said it would have to:
+the city completes at tick 3 and the population first moves at tick 185, comfortably after the first
+review at 30, which is the earliest a house can have room for a child.
+
+Six things came out differently from the plan above.
+
+**1. Test 6b's predicted constant was wrong, and asserting it would have asserted the opposite of the
+rule.** `flows × ticks` assumes both flows always have somebody eligible. Births need a house with
+room and a satisfaction over the threshold, and for the first thirty-odd ticks — every house still
+full from construction, every accumulator still climbing from zero — there is nobody. So the births
+flow takes no jitter, which is exactly the "nothing is drawn when there is nothing to draw for" this
+file asks for two sections earlier. The property that is actually true, and the one worth testing, is
+that the count does not depend on the **seed**.
+
+**2. `Stream::below`'s sketch contradicted test 6a.** The code opened `if n == 0 { return 0; }`, the
+test asked for one draw "for every `n` ... including `n == 0`". The guard is redundant — the
+multiplication already gives zero — so it bought nothing except a cost that depends on the argument,
+which is the one thing the method exists to refuse. Dropped.
+
+**3. "Switched off" had to become a legal configuration, not a fixture smuggled past validation.**
+Three existing tests need a city whose population cannot move — `coverage_equivalence`,
+`nothing_is_recomputed_while_the_population_does_not_move`, and phase 07's capacity tests, which are
+stated in houses only because a house used to hold exactly four — and so does
+`bench --zero-demographics`. Every rate at zero is now an explicit state with a name
+(`DemographicsRules::is_off`), exempt from *births must beat deaths* because that check is about a
+game being winnable and a table describing no demographics is not describing one badly. Anything
+between zero and complete is still refused.
+
+**4. Two tests of mine were wrong before the code was, and the failures were the useful part.** The
+jitter test measured the accumulator instead of its delta, so it was reading five ticks of
+construction as well as the one it meant to; and it compared against the base death rate when every
+house in a just-built city is below `unserved_threshold` and therefore dying at the raised one. The
+coverage test counted served **houses**, which goes *up* as a city outgrows its farm, because an
+emptied house weighs nothing and is served for free — A18, arriving exactly where this file said it
+would. Counted in residents it says what it meant to say.
+
+**5. `easy_fills_a_house_the_way_m0_did` had to be re-aimed rather than deleted.** Until this phase
+"every house is full" and "every house arrived full" were the same sentence; only the second is
+A13's knob. `settled_on_construction` — the term this file added to the conservation equation —
+turned out to be exactly the thing to assert it against.
+
+**6. `J` is one, and the plan's arithmetic assumed it would not be.** Both this file and
+[A17](open-decisions.md) say A12's cost is `J × G` and that `J` is low in a full city. At the
+reference scale the population moves on all 502 measured ticks. The cost is `G`. The other surprise
+in the same measurement: `H` did not stay where phase 13 left it — 324 µs against ~280 µs — because
+step 6 scans the houses three times even with the rates at zero, which by this file's own rule makes
+it a different thing to optimise. The numbers are in A17 and in [18](18-invariants-closeout-m1.md).

@@ -55,12 +55,16 @@ The rule is **plain words over jargon**.
 | **decay** | A house coming *down* a level because a service it depends on has been missing too long. The opposite of levelling up. |
 | **eviction** | Residents a house has to send away because decay shrank it below the number living there. |
 | **inconsistency** | A relation between two tables that does not hold — a level nobody can ever reach, a house born beyond its own capacity. Reported by `DataSet::inconsistencies` and refused at load time. |
+| **demographics** | Births and deaths, counted for the city as a whole rather than person by person. Nobody has an age or a name: a rate says how many are born and how many die, and which house it happens in is drawn. |
+| **flow** | One of the four ways the population moves — births, deaths, immigration, emigration. Each keeps its own running total, and the four together are what makes conservation an exact equality. |
+| **jitter** | A small random wobble added to a rate, so two games with different seeds do not play out identically. Symmetric, so it does not move the average. |
+| **eligible** | Whoever a rate is counted against. Births are counted against the residents of houses with room to spare and a satisfaction above the threshold — *not* against the whole population, which is what makes a full city stop growing on its own. |
 
-Two words are defined here but do not exist in the code yet, because the phases that introduce them
-are not written: **jitter** (a small random wobble added to a rate, so two games with different seeds
-do not play out identically) and **attractiveness** (one number saying how much the city draws new
-people in). They arrive with phases 14–16. Until then, finding them in `plan/` and not in a `.rs` is
-expected, not a stale entry.
+One word is defined here but does not exist in the code yet, because the phase that introduces it is
+not written: **attractiveness** (one number saying how much the city draws new people in). It arrives
+with phase 15. Until then, finding it in `plan/` and not in a `.rs` is expected, not a stale entry.
+**jitter** was in this note until phase 14, and is now in the table above because it is in
+`demographics.rs`.
 
 ---
 
@@ -107,10 +111,11 @@ history and breaks the recorded replays.
 
 | What | Value | Why it is frozen |
 |---|---|---|
-| `RngKind::salt()` | `"brando/rng/v1/events"`, `.../migration`, `.../production` | Each random-number stream is seeded from its kind's *name*. Change the text and every recorded game shifts. |
-| Declaration order of `RngKind` | `Events, Migration, Production` | `sim-replay/src/hash.rs` iterates `RngKind::ALL` and hashes each stream's position. Reordering silently changes every state hash — the same hazard as `Terrain` below. |
+| `RngKind::salt()` | `"brando/rng/v1/events"`, `.../migration`, `.../production`, `.../demographics` | Each random-number stream is seeded from its kind's *name*. Change the text and every recorded game shifts. |
+| Declaration order of `RngKind` | `Events, Migration, Production, Demographics` | `sim-replay/src/hash.rs` iterates `RngKind::ALL` and hashes each stream's position. Reordering silently changes every state hash — the same hazard as `Terrain` below. |
 | The dataset hash prefix | `b"brando/dataset/v1"` | Keeps this hash apart from every other hash in the project. |
 | The state hash prefix | `b"brando/world/v1"` | Same, for the state. |
+| Declaration order of `Flow` and `Flow::index()` | `Births, Deaths, Immigration, Emigration` | `Demographics::remainder` is indexed by it and the whole array goes into the state hash, so reordering silently reassigns every accumulated fraction to a different flow. The same hazard as `RngKind` above. |
 | Declaration order of `Terrain` | `Plain, Water, Rock` | The hash stores the position, not the name. Reordering silently changes every hash. |
 | Declaration order of `ServiceKind` and `ServiceKind::index()` | `Water = 0, Food = 1` | Same. |
 | Building ids in `buildings.ron` | `"house"`, `"well"`, `"farm"` | `sim-core/src/data_hash.rs` feeds each id string into blake3, so renaming one moves every recorded hash. |

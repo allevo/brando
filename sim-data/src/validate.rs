@@ -9,10 +9,10 @@ use std::fmt;
 
 use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
 
-use crate::raw::{RawBuildingDef, RawDataSet, RawSatisfaction};
+use crate::raw::{RawBuildingDef, RawDataSet, RawDemographics, RawSatisfaction};
 use sim_core::data::{
-    BuildingDef, DataSet, DifficultyDef, HouseLevelDef, Inconsistency, Rules, SatisfactionRules,
-    ServiceDef, TerrainDef,
+    BuildingDef, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef, Inconsistency, Rules,
+    SatisfactionRules, ServiceDef, TerrainDef,
 };
 
 /// A single problem, with the logical path of the field that causes it.
@@ -201,6 +201,12 @@ fn path_of(i: &Inconsistency) -> String {
         Inconsistency::StartingResidentsBeyondCapacity { difficulty, .. } => {
             format!("profiles[{difficulty}].starting_residents_per_house")
         }
+        Inconsistency::UnsustainableDemographics { .. } => {
+            "rules.demographics.births_per_thousand_per_month".to_string()
+        }
+        Inconsistency::UnreachableDemographicThreshold { what, .. } => {
+            format!("rules.demographics.{what}")
+        }
     }
 }
 
@@ -253,7 +259,93 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
         house_levels: validate_house_levels(raw, rep),
         food_per_resident: Milli::from_millis(r.food_per_resident),
         satisfaction: validate_satisfaction(&r.satisfaction, rep),
+        demographics: validate_demographics(&r.demographics, rep),
     }
+}
+
+/// Field checks for the demographic rates.
+///
+/// Only what can be judged from **one field of one table**: the two relations
+/// that cross tables — births above deaths, and the thresholds against
+/// `satisfaction.max` — live in `DataSet::inconsistencies`, so `sim-core`'s
+/// hand-built fixture is protected by them too.
+fn validate_demographics(d: &RawDemographics, rep: &mut ValidationReport) -> DemographicsRules {
+    const PATH: &str = "rules.demographics";
+
+    let rules = DemographicsRules {
+        births_per_thousand_per_month: d.births_per_thousand_per_month,
+        deaths_per_thousand_per_month: d.deaths_per_thousand_per_month,
+        deaths_per_thousand_per_month_when_unserved: d.deaths_per_thousand_per_month_when_unserved,
+        unserved_threshold: d.unserved_threshold,
+        birth_threshold: d.birth_threshold,
+        jitter_per_thousand: d.jitter_per_thousand,
+    };
+
+    // A jitter of a thousand or more lets `1000 + jitter` reach zero and flip
+    // the sign of a rate: a tick with negative births. Checked even when the
+    // demographics are off, because it is a property of the field and not of
+    // the game the table describes.
+    if d.jitter_per_thousand >= 1_000 {
+        rep.push(
+            format!("{PATH}.jitter_per_thousand"),
+            ValidationErrorKind::BeyondMax {
+                found: d.jitter_per_thousand,
+                max: 999,
+            },
+        );
+    }
+
+    // Every rate at zero means the demographics are **switched off**, which is
+    // a configuration and not a mistake: `coverage_equivalence` needs a city
+    // whose population cannot move, and `bench --zero-demographics` needs the
+    // same to measure `H`. The rest of these checks are about a game, and a
+    // table that describes no demographics at all is not describing one badly.
+    if rules.is_off() {
+        return rules;
+    }
+
+    // A rate of zero on its own is a table somebody half filled in. Zero for
+    // the unserved in particular would make demolishing the farm cost nothing,
+    // which is the whole mechanic of the `hunger` scenario.
+    for (field, value) in [
+        (
+            "births_per_thousand_per_month",
+            d.births_per_thousand_per_month,
+        ),
+        (
+            "deaths_per_thousand_per_month",
+            d.deaths_per_thousand_per_month,
+        ),
+        (
+            "deaths_per_thousand_per_month_when_unserved",
+            d.deaths_per_thousand_per_month_when_unserved,
+        ),
+    ] {
+        if value < 1 {
+            rep.push(
+                format!("{PATH}.{field}"),
+                ValidationErrorKind::TooSmall {
+                    min: 1,
+                    found: i64::from(value),
+                },
+            );
+        }
+    }
+
+    // Going without has to be worse than being served, or the raised rate is a
+    // number that decides nothing — and a number in a table that decides
+    // nothing is the sort of thing somebody later balances.
+    if d.deaths_per_thousand_per_month_when_unserved <= d.deaths_per_thousand_per_month {
+        rep.push(
+            format!("{PATH}.deaths_per_thousand_per_month_when_unserved"),
+            ValidationErrorKind::TooSmall {
+                min: i64::from(d.deaths_per_thousand_per_month) + 1,
+                found: i64::from(d.deaths_per_thousand_per_month_when_unserved),
+            },
+        );
+    }
+
+    rules
 }
 
 /// The house levels (phase 13), checked field by field.

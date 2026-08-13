@@ -49,10 +49,10 @@ useful story: the starting hypothesis was wrong, and the measurement said so bef
 |---|---|---|
 | A12 | **Taken**, phases 13–15 | **the services chase the population**: capacity is counted on the residents present, and the coverage is recomputed when anyone moves |
 | A13 | **Taken**, phase 11 | game difficulty is a new axis: a table of profiles, an id in the `World` and in the replay's header |
-| A14 | **Taken**, phases 14–15 | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
+| A14 | **Taken**, phase 14 — **done** | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
 | A15 | **Taken**, phases 15–16 | attractiveness = average satisfaction + free places, and the tax rate **only** from phase 16 |
 | A16 | **Taken**, phase 17 | the objectives live in the `World`, `sim-scenario` builds them |
-| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price |
+| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
 
 A12 is the one to read: it is a *gameplay* choice paid for in computation time and in test coverage,
 and it was taken in full knowledge. A17 is the first genuinely open decision of the project since the
@@ -576,6 +576,34 @@ the state hash, which is why phase 02 put it there — and
 A fixed-cost draw is needed, and the test that pins it down
 (`the_number_of_draws_does_not_depend_on_the_seed`), both written *before* the births.
 
+**How it really went (phase 14, done).** The decision held in every part that mattered, and the trap
+above was the most valuable thing written in this entry: `Stream::below` and its test landed in a
+commit of their own, before a single birth existed, and only then was
+`different_seeds_give_different_hashes` switched back on. Four corrections.
+
+**The two draw sites became two, conditionally.** "One draw per flow per tick" is true only of a flow
+that has somebody eligible. A flow with none takes no jitter at all — it costs nothing to write and
+it keeps `draws` a readable function of the city rather than of the calendar. It is also what lets
+`commands.rs` go on asserting that an empty world touches no stream: the sentence is unchanged since
+phase 04 and is now true for a reason instead of by absence.
+
+**The test named above could not be written as named.** `the_number_of_draws_does_not_depend_on_the_seed`
+describes something false: the choice of house is one draw *per event*, and how many events mature
+depends on the jitter, i.e. on the seed. The property splits in two — `below` costs exactly one draw
+whatever its argument, and a city whose rates are zero draws the same number of values under every
+seed — and only together do they make the re-enabled hash test mean anything.
+
+**The accumulator does not hold thousandths.** Dividing into thousandths once a tick truncates up to
+a thousandth per flow per tick, which over five years is a systematic *downward* drift of a couple of
+events: small, invisible, and precisely what the jitter test would otherwise have been blind to. It
+holds the undivided numerator, and the modulo keeps it under the divisor.
+
+**"Aggregated" turned out to have a second meaning.** The entry justified aggregation by cost and by
+D5. The stronger reason emerged in the tests: with a rate counted against the **eligible** residents,
+a city whose houses are full has nobody eligible and stops growing *by construction*. Counted against
+the population it would also have stopped, because `max_residents` clamps every birth — but for a
+reason no reader could point at. The plateau is a property of the rule, not an artefact of a clamp.
+
 ---
 
 ## A15 — Attractiveness: two terms, plus the tax rate one phase later
@@ -651,6 +679,40 @@ M1.
 - `I` — step 6 alone, which separates the demographic work from the recomputation it triggers.
 - `J` — the fraction of ticks in which the population moved, over a whole game. It is the real
   multiplier: A12's cost is `J × G`, not `G`. In a full city `J` is low.
+
+### The measurement, taken in phase 14
+
+`cargo xtask bench --reps 100`, with and without `--zero-demographics`, on one machine in one
+sitting. At the reference scale (200×200, 15,000 residents):
+
+| | | |
+|---|---|---|
+| `H` — empty tick, demographics off | **324 µs** | |
+| `A` — empty tick, real rates | **3.600 ms** | |
+| `G` — `compute_from_scratch` alone | **3.251 ms** | 2,667 ns per provider |
+| `J` — ticks in which the population moved | **100%** | 502 recomputations in 502 ticks |
+| `I` — step 6 alone, derived as `(A − H) − J × G` | **~25 µs** | |
+
+**Two of the three expectations above were wrong, and that is the useful part.**
+
+**`J` is not low. It is one.** The sentence "in a full city `J` is low" was the hope that A12's cost
+would be amortised over the ticks where nobody moves. At the reference scale the population moves on
+*every* tick — 502 out of 502, and 97% at the mid-game scale — because a city of 15,000 residents
+has enough houses that at least one birth or death matures every single tick. A12's cost is
+therefore `G`, not `J × G`, and no countermeasure that relies on `J` being small is worth building.
+The multiplier was the discount this decision was quietly counting on, and it does not exist.
+
+**`H` moved: 324 µs against the ~280 µs the same machine measures at the end of phase 13.** Step 6
+now scans every house three times even with the rates at zero — twice to split the residents between
+the served and the unserved, once more for the average satisfaction — and that scan is a fixed cost
+the recomputation has nothing to do with. It is small next to `G` and it is real, and by the rule
+written above it is *a different thing to optimise*: it lives in `demographics.rs`, not in step 3.
+
+**What `I` says.** ~25 µs, against `G`'s 3.25 ms. The demographic work itself is not the problem by
+two orders of magnitude: **essentially the whole of A12's price is the coverage recomputation it
+triggers**, which is what the countermeasures below already assume. The derivation is arithmetic over
+four measured terms, not a guess — but with `J` at 1 the subtraction is `A − H − G`, a difference of
+large numbers, so ~25 µs should be read as "small" and not as a figure to three digits.
 
 **The candidate countermeasures, in order of payoff-to-risk.**
 
@@ -731,6 +793,25 @@ houses eats or drinks. When migration lands, every one of them becomes a real cl
 sized for four, and the question stops being about satisfaction alone. Settle it before phase 15
 moves the recordings rather than after: the same change is one line now and a regeneration to
 attribute later.
+
+> **Amended while planning phase 14 (2026-08-12), and the amendment is the interesting part.**
+> Everything above was written about `hard`, the profile where a house is **born** empty. Deaths
+> make zero residents reachable on **every** profile, `easy` included — which is to say inside the
+> two committed recordings. Two things follow, and the decision taken was to defer anyway:
+>
+> - the sentence "it moves no recording today" expires with phase 14. Closing A18 before the
+>   demographics land costs nothing and can be proved with `regen-expected --check`; closing it
+>   afterwards is a regeneration somebody has to attribute. That cost was accepted knowingly, which
+>   is the only way it is worth paying.
+> - an emptied house keeps its coverage, so its satisfaction climbs with nobody in it and it can be
+>   promoted at the monthly review. Harmless while it lasts — a promotion grants permission and not
+>   people (A12) — but it is exactly the state phase 15's immigration will fill, so whichever answer
+>   wins has to be checked against a house that is empty, served and at a level it never earned by
+>   housing anyone.
+>
+> Phase 14 leaves a test stating the behaviour as it stands, written to **change its outcome** rather
+> than break when this is closed ([14, test 15](14-births-deaths.md)). It is the third use of that
+> device, and it is what keeps a deferred decision visible in the suite and not only here.
 
 **And something to measure it with, which does not exist.** Nothing in the property suite exercises
 `hard` at all — every proptest builds its world with the bare `world()`, i.e. `easy`. Worse,

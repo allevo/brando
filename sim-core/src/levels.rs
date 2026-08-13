@@ -28,35 +28,6 @@ use crate::ids::Level;
 use crate::tick::StepReport;
 use crate::world::{House, World};
 
-/// Running totals for the population.
-///
-/// Diagnostic like [`FoodTotals`]: they influence no game decision and do not
-/// enter the state hash. `u64` because they are running totals over a whole
-/// game, not a quantity the state holds.
-///
-/// [`FoodTotals`]: crate::production::FoodTotals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct PopulationTotals {
-    /// Residents sent away because decay shrank the house below its occupancy.
-    ///
-    /// It is not bookkeeping pedantry: it is a **flow of population**, and
-    /// phase 14 counts it among the departures. Without it that phase's
-    /// conservation would be an inequality — the same reason
-    /// [`FoodTotals::lost_to_demolition`] exists.
-    ///
-    /// **It cannot move yet, and that is provable rather than hopeful.**
-    /// Residents only ever arrive at construction, capped at
-    /// `max_residents(1)`, and [`Inconsistency::CapacityNotIncreasing`] keeps
-    /// the levels from ever shrinking, so the capacity a house falls back to is
-    /// never below the number it was born with. Phase 14 is what makes this
-    /// counter live; the code and its test are here so the term is pinned down
-    /// before anything depends on it.
-    ///
-    /// [`FoodTotals::lost_to_demolition`]: crate::production::FoodTotals::lost_to_demolition
-    /// [`Inconsistency::CapacityNotIncreasing`]: crate::data::Inconsistency::CapacityNotIncreasing
-    pub evicted: u64,
-}
-
 /// Step 6.2 — the monthly review: decay, then levelling up.
 ///
 /// **One pass over the houses, at most one jump each.** The plan described two
@@ -191,7 +162,7 @@ fn rises(house: &House, rules: &Rules, top: Option<Level>) -> bool {
 mod tests {
     use super::*;
     use crate::data::HouseLevelDef;
-    use crate::data::SatisfactionRules;
+    use crate::data::{DemographicsRules, SatisfactionRules};
     use crate::ids::TilePos;
     use crate::service::{ServiceFlags, ServiceKind};
     use crate::units::{Coins, Milli};
@@ -212,6 +183,14 @@ mod tests {
             starting_treasury: Coins::ZERO,
             house_levels: vec![def(4, 0, 0), def(8, 50, 25), def(12, 90, 60)],
             food_per_resident: Milli::ZERO,
+            demographics: DemographicsRules {
+                births_per_thousand_per_month: 1,
+                deaths_per_thousand_per_month: 0,
+                deaths_per_thousand_per_month_when_unserved: 1,
+                unserved_threshold: 25,
+                birth_threshold: 60,
+                jitter_per_thousand: 0,
+            },
             satisfaction: SatisfactionRules {
                 max: 100,
                 step_up: 4,

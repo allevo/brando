@@ -104,6 +104,36 @@ That number is not a failure: it is A12's declared price, decided in full knowle
 the input to [A17](open-decisions.md), the open task to close **before M2**, and in this phase it has
 to be written down without rounding it downwards.
 
+> **Taken early, in phase 14** (2026-08-12, Apple M-series laptop, `--reps 100`, one sitting). The
+> numbers are in [A17](open-decisions.md); this file has to re-take them at the end of M1, when
+> migration and taxes have added their own work to step 6, and compare.
+>
+> | | 100×100, 3,000 res. | 200×200, 15,000 res. |
+> |---|---|---|
+> | `H` empty tick, demographics off | 43 µs | **324 µs** |
+> | `A` empty tick, real rates | 700 µs | **3.600 ms** |
+> | `G` `compute_from_scratch` alone | 618 µs | **3.251 ms** |
+> | `J` ticks where the population moved | 97% | **100%** |
+> | `I` step 6 alone, derived | ~51 µs | **~25 µs** |
+>
+> Two of the three expectations written above turned out wrong, and the corrections belong here
+> because this file is what re-measures them.
+>
+> **`J` is 1, not "low".** The sentence above — *in a full or empty city `J` is low and nothing is
+> paid* — describes a city that does not exist at this scale: with 3,750 houses at least one birth
+> or death matures on every tick, so the population moves on all 502 of them. A12's cost is `G` and
+> not `J × G`. The multiplier this decision was counting on as a discount is not there.
+>
+> **`H` did not match M0's `A`**: 324 µs against ~280 µs on the same machine at the end of phase 13.
+> By the rule stated three lines above, that makes it *another item to remove*, and a separate one —
+> step 6 scans the houses three times even with the rates at zero, and that scan is nothing to do
+> with the recomputation.
+>
+> **`I` was measured after all, by subtraction, and it is ~25 µs against `G`'s 3.25 ms.** The
+> demographic work is not the cost by two orders of magnitude. With `J` at 1 the derivation is
+> `A − H − G`, a difference of large numbers, so it is worth reading as "small" rather than as three
+> significant figures.
+
 Three corrections to the bench, which the phases have accumulated:
 
 1. `Layout::new` sizes the city on the residents there will actually be: with

@@ -83,8 +83,17 @@ fn food_per_house(w: &World) -> Milli {
 }
 
 /// A farm at (2,2) facing a horizontal road, plus `n` houses.
+/// On the fixture with the demographics **switched off**.
+///
+/// Every test built on this one counts houses against a capacity in residents,
+/// and each of them is stated in houses only because a house here holds exactly
+/// `RESIDENTS_PER_HOUSE`. From phase 14 a living city changes that number on
+/// nearly every tick, and the arithmetic these tests are made of — "capacity 20
+/// is five houses" — stops holding for a reason that has nothing to do with
+/// what they check. They are phase 07's tests about capacity and coverage, and
+/// a still population is their premise, not an oversight.
 fn farm_scenario(n: u8) -> World {
-    let mut w = world();
+    let mut w = world_without_demographics();
     let cells: Vec<(u8, u8)> = (1..=20).map(|x| (x, 4)).collect();
     roads(&mut w, &cells);
     build(&mut w, FARM, 2, 2); // takes (2,2)..(3,3), touches row 4

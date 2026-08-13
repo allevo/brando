@@ -241,14 +241,26 @@ fn easy_fills_a_house_the_way_m0_did() {
         let w = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
 
         assert!(w.house_count() > 0, "scenario {name} builds no houses");
+
+        // **Asked of the inflow, not of the standing population.** Until phase
+        // 14 the two were the same sentence: nothing moved a resident after
+        // construction, so "every house is full" and "every house arrived full"
+        // were indistinguishable. Births and deaths separate them, and the one
+        // this test is about is A13's knob — how full a house is *born* — which
+        // `settled_on_construction` states exactly and which the demographics
+        // cannot disturb.
+        let totals = w.population_totals();
         assert_eq!(
-            w.population(),
-            w.house_count() as u32 * u32::from(max),
-            "scenario {name}: at easy every house is full"
+            totals.lost_to_demolition, 0,
+            "scenario {name} demolishes a house, so the count of houses standing \
+             is no longer the count that was built and the equality below would \
+             be comparing two different things"
         );
-        for (_, h) in w.houses() {
-            assert_eq!(h.residents, max, "scenario {name}");
-        }
+        assert_eq!(
+            totals.settled_on_construction,
+            w.house_count() as u64 * u64::from(max),
+            "scenario {name}: at easy every house arrives full"
+        );
     }
 }
 
@@ -350,6 +362,12 @@ fn the_hash_covers_the_whole_state() {
         // That is exactly why it was missing — and why `every_field` could not
         // help, since `walkers: _` was already written into it.
         ("a walker", |w| w.push_walker(TilePos::new(3, 4))),
+        // Like the walkers, this cannot arise from replaying anything: the
+        // accumulator is moved by births and deaths, and driving it with real
+        // ones would make the test depend on the balancing.
+        ("the demographics", |w| {
+            w.nudge_demographics(sim_core::Flow::Births);
+        }),
         ("the treasury", |w| {
             w.economy_mut().treasury = w.economy().treasury.saturating_add(Coins::new(1));
         }),
@@ -410,8 +428,15 @@ fn the_derived_structures_stay_out_of_the_hash() {
 /// the test is expected to fail, and it is written now because now is when you
 /// can see why it is needed. To be re-enabled with migration (M1, phase 2),
 /// which is the first real use of `RngKind::Migration`.
+/// **Re-enabled in phase 14**, and from here it can never be `#[ignore]`d
+/// again: the demographics are the first system to draw, so a different seed
+/// really does produce a different game.
+///
+/// It is only worth something because `below` costs a fixed number of draws.
+/// With rejection sampling the count would vary with the seed all by itself,
+/// and this test would pass while the demographics did nothing at all — which
+/// is why test 6a had to be written before this one was switched on.
 #[test]
-#[ignore = "in M0 no system uses the RNG: re-enable with migration (M1)"]
 fn different_seeds_give_different_hashes() {
     let data = data();
     let rec = recording("minimal");

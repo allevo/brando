@@ -132,7 +132,7 @@ M1, A18 out of the bug hunt after phase 13. For each one, alongside the recommen
 **how it really went** — which is almost always the more useful information, because it diverges.
 
 ## Implemented till
-Everything is implemented till 13 included, plus the bug hunt that follows it and the vocabulary
+Everything is implemented till 14 included, plus the bug hunt that follows 13 and the vocabulary
 review after that ([naming-review-2026-08-12.md](naming-review-2026-08-12.md), which produced
 [A19](open-decisions.md) and the naming rule in `CLAUDE.md`). The review renamed identifiers only and
 moved no hash: it is the one batch so far whose correctness proof is that nothing changed.

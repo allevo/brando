@@ -16,6 +16,18 @@ pub struct RawRules {
     pub house_levels: Vec<RawHouseLevelDef>,
     pub food_per_resident: i32,
     pub satisfaction: RawSatisfaction,
+    pub demographics: RawDemographics,
+}
+
+/// The demographic rates (phase 14), per month and per thousand residents.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawDemographics {
+    pub births_per_thousand_per_month: u16,
+    pub deaths_per_thousand_per_month: u16,
+    pub deaths_per_thousand_per_month_when_unserved: u16,
+    pub unserved_threshold: u8,
+    pub birth_threshold: u8,
+    pub jitter_per_thousand: u16,
 }
 
 /// One entry of the house levels table (phase 13).

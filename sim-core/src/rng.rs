@@ -19,12 +19,22 @@ pub enum RngKind {
     Events,
     Migration,
     Production,
+    /// Births and deaths (phase 14) — the first kind any system actually draws
+    /// from. Migration keeps its own so that phase 15 does not knock this one's
+    /// sequence out of phase: that separation is the whole reason `RngKind`
+    /// exists, and in four phases of M0 it had never come up.
+    Demographics,
 }
 
 impl RngKind {
     /// Every variant, in declaration order. The order matters only for the
     /// state hash (phase 08), not for deriving the seeds.
-    pub const ALL: [RngKind; 3] = [RngKind::Events, RngKind::Migration, RngKind::Production];
+    pub const ALL: [RngKind; 4] = [
+        RngKind::Events,
+        RngKind::Migration,
+        RngKind::Production,
+        RngKind::Demographics,
+    ];
 
     pub const COUNT: usize = Self::ALL.len();
 
@@ -37,6 +47,7 @@ impl RngKind {
             Self::Events => "brando/rng/v1/events",
             Self::Migration => "brando/rng/v1/migration",
             Self::Production => "brando/rng/v1/production",
+            Self::Demographics => "brando/rng/v1/demographics",
         }
     }
 
@@ -50,6 +61,10 @@ impl RngKind {
             Self::Events => 0,
             Self::Migration => 1,
             Self::Production => 2,
+            // The new slot goes at the **end**: that is what keeps the three
+            // streams above exactly where they were, which
+            // `sequences_are_reproducible_with_the_expected_values` checks.
+            Self::Demographics => 3,
         }
     }
 
@@ -60,6 +75,7 @@ impl RngKind {
             0 => Some(Self::Events),
             1 => Some(Self::Migration),
             2 => Some(Self::Production),
+            3 => Some(Self::Demographics),
             _ => None,
         }
     }
@@ -95,6 +111,30 @@ impl Stream {
     /// How many draws this stream has made.
     pub const fn draws(&self) -> u64 {
         self.draws
+    }
+
+    /// A whole number in `0..n`, at a cost of **exactly one draw**, always.
+    ///
+    /// Widening multiplication instead of the rejection sampling
+    /// `rand::Rng::random_range` uses. Rejection consumes a count of values
+    /// that depends on the values themselves, and therefore on the seed — and
+    /// then [`draws`](Self::draws) stops being a function of the game state,
+    /// which is the whole reason phase 02 put it in the state hash. The second
+    /// consequence is the worse one: `different_seeds_give_different_hashes`
+    /// would pass even if the demographics did nothing at all, and a green test
+    /// that checks nothing is worse than a red one.
+    ///
+    /// The bias is 2^-64 relative — irrelevant, and in any case preferable to a
+    /// cost that varies in a core which has to be deterministic in the number
+    /// of draws as well as in the values.
+    ///
+    /// `n == 0` returns 0 and still draws. The multiplication already yields 0
+    /// there, so an early return would buy nothing except the one thing this
+    /// method exists to refuse: a cost that depends on the argument.
+    pub fn below(&mut self, n: u64) -> u64 {
+        let v = u128::from(self.next_u64()) * u128::from(n);
+        // The high 64 bits: `v >> 64` is below `n` by construction.
+        (v >> 64) as u64
     }
 
     const fn count_draws(&mut self, n: u64) {
@@ -362,5 +402,50 @@ mod tests {
             s.get(RngKind::Events).fill_bytes(&mut vec![0u8; bytes]);
             assert_eq!(s.draws(RngKind::Events), expected, "{bytes} bytes");
         }
+    }
+
+    /// Phase 14, test 6a — `below(n)` costs exactly one draw, for every `n` and
+    /// every seed.
+    ///
+    /// The guard against rejection sampling, asked of `Stream` directly instead
+    /// of inferred from a game. If this ever fails, `draws()` has stopped being
+    /// a function of the state and the state hash has gone blind on the RNG in
+    /// the one field phase 02 put there to make a divergence attributable.
+    #[test]
+    fn below_costs_exactly_one_draw() {
+        for seed in [0, 1, 42, u64::MAX] {
+            for n in [0, 1, 2, 3, 7, 1_000, u64::MAX] {
+                let mut set = RngSet::from_seed(seed);
+                let before = set.draws(RngKind::Events);
+                let v = set.get(RngKind::Events).below(n);
+
+                assert_eq!(
+                    set.draws(RngKind::Events) - before,
+                    1,
+                    "seed {seed}, n {n}: the cost has to be one draw whatever the argument"
+                );
+                assert!(
+                    v < n.max(1),
+                    "seed {seed}: {v} is not below {n}, and n == 0 has to give 0"
+                );
+            }
+        }
+    }
+
+    /// And the values really are spread over the range.
+    ///
+    /// Without this, a `below` that returned a constant would satisfy test 6a
+    /// perfectly: the draw count is the property that matters for the hash, but
+    /// it is not the property that makes the number useful. Six faces, enough
+    /// rolls that missing one is not bad luck.
+    #[test]
+    fn below_covers_its_range() {
+        let mut set = RngSet::from_seed(3);
+        let mut seen = [false; 6];
+        for _ in 0..200 {
+            let v = set.get(RngKind::Events).below(6);
+            seen[usize::try_from(v).expect("below 6")] = true;
+        }
+        assert_eq!(seen, [true; 6], "every face of a six-sided die has to come up");
     }
 }
