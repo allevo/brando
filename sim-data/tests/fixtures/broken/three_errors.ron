@@ -2,12 +2,13 @@
 // producer with no stock. All three have to show up in the report.
 (
     buildings: [
-        (id: "", size: (0, 1), cost: 10, levels: 1, service: None, required_services: []),
+        (id: "", size: (0, 1), cost: 10, levels: 1, role: "house", service: None, required_services: []),
         (
             id: "farm",
             size: (2, 2),
             cost: 40,
             levels: 1,
+            role: "provider",
             service: Some((kind: "food", range_per_level: [10], capacity_per_level: [6])),
             required_services: [],
             output_per_tick: Some(400),

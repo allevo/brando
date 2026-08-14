@@ -27,8 +27,8 @@ pub mod world;
 pub use command::{Command, CommandError};
 pub use coverage::Coverage;
 pub use data::{
-    BuildingDef, DataSet, DemographicsRules, DifficultyDef, DifficultyId, HouseLevelDef,
-    Inconsistency, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, DifficultyId,
+    HouseLevelDef, Inconsistency, Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
 };
 pub use demographics::{Demographics, Flow, PopulationTotals};
 pub use event::Event;

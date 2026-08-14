@@ -48,7 +48,7 @@ fn stocks_in_range(w: &World) -> Result<(), String> {
         let Some(def) = w.data().def(b.kind) else {
             continue;
         };
-        let Some(max) = def.max_stock else {
+        let Some(max) = def.production.as_ref().map(|p| p.max_stock) else {
             continue;
         };
         if b.stock.is_negative() {
@@ -113,8 +113,8 @@ fn with_no_houses_the_stock_grows_to_the_maximum_and_stops() {
         .data()
         .def(w.building(id).expect("alive").kind)
         .expect("def");
-    let max = def.max_stock.expect("maximum stock");
-    let per_tick = def.output_per_tick.expect("output");
+    let p = def.production.as_ref().expect("the farm produces");
+    let (max, per_tick) = (p.max_stock, p.output_per_tick);
 
     // The ticks still needed to fill the granary, computed from the data and
     // the current stock: the farm already produces on the tick it is born, so
@@ -163,7 +163,11 @@ fn houses_beyond_the_capacity_stay_uncovered_and_the_others_eat() {
         .data()
         .def(w.building(id).expect("alive").kind)
         .expect("def");
-    let per_tick = def.output_per_tick.expect("output");
+    let per_tick = def
+        .production
+        .as_ref()
+        .expect("the farm produces")
+        .output_per_tick;
     let per_house = food_per_house(&w);
 
     let demand = per_house

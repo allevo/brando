@@ -372,7 +372,7 @@ impl Layout {
         let mut small = Vec::new();
         let mut large = Vec::new();
         for (i, def) in data.buildings.iter().enumerate() {
-            let Some(service) = def.service.as_ref() else {
+            let Some(service) = def.service() else {
                 continue;
             };
             let kind = u16::try_from(i)
@@ -387,8 +387,8 @@ impl Layout {
                 return Err(format!("'{}' has capacity 0", def.id));
             }
             let mut how_many = population.div_ceil(capacity);
-            if let Some(output) = def.output_per_tick {
-                let per_provider = i64::from(output.to_millis()) / per_resident.max(1);
+            if let Some(p) = def.production.as_ref() {
+                let per_provider = i64::from(p.output_per_tick.to_millis()) / per_resident.max(1);
                 if per_provider > 0 {
                     let sustainable = u32::try_from(per_provider).unwrap_or(u32::MAX);
                     how_many = how_many.max(population.div_ceil(sustainable));

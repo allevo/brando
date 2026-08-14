@@ -94,12 +94,12 @@ fn the_production_tables_load() {
     assert!(house.is_house());
     assert!(!house.is_producer());
     assert_eq!(
-        house.required_services,
+        house.required_services(),
         [ServiceKind::Water, ServiceKind::Food]
     );
 
     let well = d.def(well).expect("the well's def");
-    let s = well.service.as_ref().expect("the well provides a service");
+    let s = well.service().expect("the well provides a service");
     assert_eq!(s.kind, ServiceKind::Water);
     assert_eq!(s.range(Level::FIRST), Some(12));
     assert_eq!(
@@ -112,8 +112,12 @@ fn the_production_tables_load() {
     let farm = d.def(farm).expect("the farm's def");
     assert!(farm.is_producer());
     assert_eq!(farm.tile_count(), 4);
-    assert_eq!(farm.output_per_tick, Some(Milli::from_millis(400)));
-    assert!(farm.max_stock > Some(Milli::ZERO));
+    // The farm is the one row that is a provider **and** a producer, which is
+    // why production is a field of its own and not a role.
+    assert!(farm.service().is_some_and(|s| s.kind == ServiceKind::Food));
+    let p = farm.production.as_ref().expect("the farm produces");
+    assert_eq!(p.output_per_tick, Milli::from_millis(400));
+    assert!(p.max_stock > Milli::ZERO);
 }
 
 /// The farm's capacity is **exactly** what its output sustains: no more, or the
@@ -126,7 +130,7 @@ fn the_production_tables_load() {
 fn the_farms_capacity_is_what_its_output_sustains() {
     let d = sim_data::load_default().expect("valid tables");
     let f = d.def(d.kind_by_id("farm").expect("the farm")).expect("def");
-    let s = f.service.as_ref().expect("service");
+    let s = f.service().expect("service");
 
     let residents = i32::from(d.rules.max_residents(Level::FIRST).expect("level 1"));
     let per_house = d
@@ -140,7 +144,11 @@ fn the_farms_capacity_is_what_its_output_sustains() {
         .food_per_resident
         .checked_mul_int(capacity)
         .expect("maximum demand");
-    let output = f.output_per_tick.expect("output");
+    let output = f
+        .production
+        .as_ref()
+        .expect("the farm produces")
+        .output_per_tick;
 
     assert!(
         output > per_house,
@@ -373,12 +381,18 @@ fn negative_cost() {
     );
 }
 
+/// An unknown service name is reported against the field holding it, whichever
+/// of the two fields that is.
+///
+/// The two live on **different rows** since phase 14.4: a provider that also
+/// required services would now be `RequirementsOnAProvider`, so the fixture says
+/// the same thing with a provider and a house instead of one row being both.
 #[test]
 fn unknown_service() {
     let e = errors(&broken_fixture("unknown_service.ron"));
     assert_eq!(e.len(), 2, "the service kind and the required service");
     assert_eq!(e[0].0, "buildings[0].service.kind");
-    assert_eq!(e[1].0, "buildings[0].required_services[0]");
+    assert_eq!(e[1].0, "buildings[1].required_services[0]");
 }
 
 /// The check that crosses `rules` and `buildings`: a food provider's capacity
@@ -515,16 +529,19 @@ fn a_mood_band_at_zero_is_refused() {
 // vector is what makes them worth something — it says not only that the check
 // fires, but that nothing else does.
 
-/// The one that guards `is_house()`. Empty the building's list and the house
-/// stops being classified as one: from that moment nothing levels up, nothing
-/// is taxed and nothing says why.
+/// A table with no house at all: nothing levels up, nothing is taxed, and
+/// nothing says why.
+///
+/// **A fixture file rather than a replacement, since phase 14.4.** It used to be
+/// one word — emptying the building's `required_services` stopped it being
+/// recognised as a house, because recognition was a heuristic over two absences.
+/// A row declares its role now, so the only way to a house-less table is one
+/// whose every row is a *valid provider*, which no single replacement produces.
+/// That the mistake got harder to make by accident is the point; the check stays
+/// because the table can still be written that way on purpose.
 #[test]
 fn a_buildings_table_without_a_house() {
-    let e = errors_of(with_buildings(&replaced(
-        &valid_buildings(),
-        r#"required_services: ["water", "food"],"#,
-        "required_services: [],",
-    )));
+    let e = errors(&broken_fixture("no_house.ron"));
     assert_eq!(
         e,
         [(

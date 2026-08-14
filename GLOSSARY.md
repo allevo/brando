@@ -30,6 +30,7 @@ The rule is **plain words over jargon**.
 | **range** | How far a well or a farm reaches, counted in tiles **walked along roads**, never in a straight line. One value per level (`range_per_level`), read with the building's own level. |
 | **capacity** | A ceiling on residents, and it names **two** of them. A provider's capacity is how many residents it can serve at once (`capacity_per_level`) — not how many houses. A house's capacity is how many residents it can hold at its level (`max_residents`). Which one is meant is always clear from what it belongs to, and no third meaning exists. |
 | **provider** | A building that supplies a service to nearby houses — the well provides water, the farm provides food. |
+| **role** | What part a building plays: a **house**, which needs services, or a **provider**, which supplies one. Every building declares its role in the table, and has exactly one. It is not the same as its **kind**, which is *which* building it is — `house`, `well`, `farm` — and stays data the tables are free to add to. Producing is neither: the farm is a provider that also produces, so what it grows is declared beside its role. |
 | **stock** | How much food a farm currently holds. A granary that fills up and stops. |
 | **granary** | A store of food that has a lid: once it is full, what would go in is lost rather than queued. It is where `stock` lives and what `max_stock` bounds. |
 | **entrance** | A road tile touching a building. A building with no entrance is cut off from the network and serves nobody. |

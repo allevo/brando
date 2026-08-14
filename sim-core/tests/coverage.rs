@@ -446,7 +446,7 @@ proptest! {
                     let b = w.building(p);
                     prop_assert!(b.is_some(), "dead provider for {h:?}");
                     let def = w.data().def(b.expect("alive").kind).expect("known kind");
-                    let s = def.service.as_ref().expect("a provider has a service");
+                    let s = def.service().expect("a provider has a service");
                     prop_assert_eq!(s.kind, k, "provider of the wrong service");
                 }
             }

@@ -1,0 +1,34 @@
+// A table of nothing but providers: every row is well-formed on its own, and
+// between them they leave the game with no house at all. `Inconsistency::NoHouse`
+// is the only thing wrong with it.
+//
+// **Why this is a file and not a one-word replacement.** Until phase 14.4 it
+// was one: emptying the house's `required_services` was enough, because that
+// was how a house was recognised. A row now declares its role, so producing a
+// house-less table takes a row that is a *valid provider* instead — which is
+// the check becoming harder to trip by accident, and the reason it is worth
+// keeping rather than a reason to delete it. The house levels in `rules.ron`
+// still describe three levels of a house nobody builds, and that is exactly
+// the silence `NoHouse` exists to break.
+(
+    buildings: [
+        (
+            id: "well",
+            size: (1, 1),
+            cost: 12,
+            levels: 1,
+            role: "provider",
+            service: Some((kind: "water", range_per_level: [12], capacity_per_level: [32])),
+        ),
+        (
+            id: "farm",
+            size: (2, 2),
+            cost: 40,
+            levels: 1,
+            role: "provider",
+            service: Some((kind: "food", range_per_level: [10], capacity_per_level: [20])),
+            output_per_tick: Some(400),
+            max_stock: Some(20000),
+        ),
+    ],
+)

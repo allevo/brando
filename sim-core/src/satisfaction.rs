@@ -10,8 +10,6 @@
 //! of it — levelling up, decay, migration, births — is phases 13 to 15, just as
 //! phase 06 recorded who was served without drawing consequences.
 
-use std::sync::Arc;
-
 use crate::data::{Rules, SatisfactionRules};
 use crate::world::{House, World};
 
@@ -99,9 +97,11 @@ pub fn mood_of(house: &House, rules: &Rules) -> Mood {
 /// anyway was not a lie. Which services are **read** is a separate question,
 /// and the answer there is per level: see [`mood_of`] and `levels::review`.
 pub(crate) fn update(world: &mut World) {
-    // A refcount bump, not a copy of the dataset: it lets the tables be read
-    // while the houses are mutated.
-    let data = Arc::clone(&world.data);
+    // The fields are named separately so the tables can be read while the
+    // houses are written: they are disjoint fields of the same `World`, and the
+    // borrow checker only sees that if the destructuring says so. It replaces a
+    // refcount bump that was there for the same reason and cost an atomic.
+    let World { data, houses, .. } = world;
     let rules = &data.rules.satisfaction;
     // Resolved **once per tick**, not once per house: it is a scan over the
     // building definitions, irrelevant when it happens once and wrong when it
@@ -112,8 +112,8 @@ pub(crate) fn update(world: &mut World) {
         return;
     };
 
-    for (_, h) in world.houses.iter_mut() {
-        for k in &def.required_services {
+    for (_, h) in houses.iter_mut() {
+        for k in def.required_services() {
             let current = h.satisfaction[k.index()];
             // **The saturation is game semantics**, not a shortcut against
             // overflow — the same distinction as the full granary in phase 07.

@@ -144,7 +144,17 @@ impl DirtyFlags {
 }
 
 /// The complete state of a game.
-#[derive(Debug, Clone)]
+///
+/// **`Clone` only under `test-util`, because a game has one world at a time.**
+/// Nothing in the production path ever copies a world: a save is
+/// `seed + Vec<Command>` and never a dump of the state (D4), so a second world
+/// is not a thing the game can want. What does want one is the pair of tests
+/// that assert a rejected command mutates nothing, and they compare a `before`
+/// against the state after the tick. Gating the derive puts that where the
+/// direct-mutation hooks below already live: available to the tests, absent
+/// from the API the rest of the code sees.
+#[derive(Debug)]
+#[cfg_attr(feature = "test-util", derive(Clone))]
 pub struct World {
     pub(crate) tick: u32,
     pub(crate) grid: Grid,

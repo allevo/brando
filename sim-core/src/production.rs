@@ -8,8 +8,6 @@
 //! be removed: coverage stays valid, what changes in M3 is only *where* the
 //! goods come from.
 
-use std::sync::Arc;
-
 use crate::ids::{BuildingId, HouseId};
 use crate::service::ServiceKind;
 use crate::units::Milli;
@@ -59,29 +57,41 @@ impl FoodTotals {
 }
 
 pub(crate) fn production(world: &mut World) {
-    // The Arc is cloned so the tables can be read while the buildings are
-    // mutated: it is a refcount bump, not a copy of the dataset.
-    let data = Arc::clone(&world.data);
-
     // --- 1. the farms produce ---
-    for (_, b) in world.buildings.iter_mut() {
-        let Some(def) = data.def(b.kind) else {
-            continue;
-        };
-        let (Some(output), Some(max)) = (def.output_per_tick, def.max_stock) else {
-            continue;
-        };
+    // The fields are named separately so the tables can be read while the
+    // buildings and the totals are written: they are disjoint fields of the
+    // same `World`, and the borrow checker only sees that if the destructuring
+    // says so. It replaces a refcount bump that was there for the same reason
+    // and cost an atomic. Scoped to this step, because step 2 below calls
+    // functions that want the whole `&mut World`.
+    {
+        let World {
+            data,
+            buildings,
+            food,
+            ..
+        } = &mut *world;
 
-        let gross = b.stock.saturating_add(output);
-        // Saturating at the maximum stock is **game semantics**: the granary is
-        // full and the rest is lost. The `lost` term exists precisely because
-        // without it conservation would not be an equality.
-        let capped = gross.min(max);
-        let lost = i64::from(gross.to_millis()) - i64::from(capped.to_millis());
+        for (_, b) in buildings.iter_mut() {
+            let Some(def) = data.def(b.kind) else {
+                continue;
+            };
+            let Some(p) = def.production.as_ref() else {
+                continue;
+            };
+            let (output, max) = (p.output_per_tick, p.max_stock);
 
-        world.food.produced += i64::from(output.to_millis());
-        world.food.lost_to_full_stock += lost;
-        b.stock = capped;
+            let gross = b.stock.saturating_add(output);
+            // Saturating at the maximum stock is **game semantics**: the granary
+            // is full and the rest is lost. The `lost` term exists precisely
+            // because without it conservation would not be an equality.
+            let capped = gross.min(max);
+            let lost = i64::from(gross.to_millis()) - i64::from(capped.to_millis());
+
+            food.produced += i64::from(output.to_millis());
+            food.lost_to_full_stock += lost;
+            b.stock = capped;
+        }
     }
 
     // --- 2. the houses eat ---
@@ -94,6 +104,11 @@ pub(crate) fn production(world: &mut World) {
     // bit was the trap A9 announced, and satisfaction is the first system to
     // read it. What used to be said by rewriting the bit is now said by
     // `covered_but_unfed`, which has to stay at zero.
+    // Copied out before the loop rather than read through `world` inside it:
+    // `take_from_stock` wants the whole `&mut World`, so no borrow of the
+    // tables can be held across it. A `Milli` is four bytes and `Copy`, which
+    // is why this needs no refcount bump of the dataset.
+    let food_per_resident = world.data.rules.food_per_resident;
     let houses: Vec<HouseId> = world.houses.keys().collect();
     for h in houses {
         let Some(house) = world.houses.get(h) else {
@@ -104,9 +119,7 @@ pub(crate) fn production(world: &mut World) {
             continue;
         };
 
-        let needed = data
-            .rules
-            .food_per_resident
+        let needed = food_per_resident
             .checked_mul_int(residents)
             .unwrap_or(Milli::ZERO);
         if !take_from_stock(world, provider, needed) {

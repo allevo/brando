@@ -4,11 +4,12 @@
 the **only** place that states how far the tree has got. If another document tells you what is
 implemented, that document is wrong and should be pointed here instead.
 
-> ## Implemented through phase 14
+> ## Implemented through phase 14.4
 >
 > Everything up to and including [phase 14](plan/14-births-deaths.md) — births and deaths — plus the
-> bug hunt that follows phase 13 and the vocabulary review after that. **M0 is complete; M1 is in
-> progress.**
+> bug hunt that follows phase 13, the vocabulary review after that, and
+> [phase 14.4](plan/14.4-building-kind.md), in which a building started declaring its role.
+> **M0 is complete; M1 is in progress.**
 
 What runs today: a grid with roads and connected components, aggregate service coverage over walked
 distance, food production and consumption, difficulty profiles, house satisfaction, house levels with
@@ -32,44 +33,7 @@ as prose in a register is an open decision nobody sees until it bites — which 
 happened to A17 and A18, both of which stayed invisible while four phases were planned on top of
 them.
 
-## Next — a building says what it is
-
-| # | What | Verified by | Blocks |
-|---|---|---|---|
-| **14.4** | [A building says what it is](plan/14.4-building-kind.md) | the dataset hash moves once, every checkpoint of every recording moves with it, and no rule of the game changes | |
-
-A building is currently classified as a house by a heuristic — it requires services and provides
-none — and three validation checks exist to stop that heuristic quietly becoming false. The building
-kind is stated outright instead, and two of the three checks go with it.
-
-**It goes first because it depends on nothing and blocks nothing.** Not the map, not migration, not
-the treasury, and nothing below is waiting on it. It changes the shape of a definition rather than a
-rule of the game, so it can be pulled to the front without moving anything else. In particular the
-half numbers below keep their order relative to phase 15, which is the only thing their argument ever
-claimed: migration is what fills empty houses and multiplies huts, and this phase does neither, so the
-window in which A18 and A20 are cheap to close does not shut any further while it runs.
-
-**Its number is a half one for that same reason.** A whole number says *this phase reads the state the
-one before it introduced*, and this one reads nothing. It was 22 while it sat after the map work, and
-carrying that number to the front would have made the number a lie about where the work runs — and
-made `doc-check` say so, since it reads how far the tree has got off the phase files' own names.
-
-**It must own its commit.** It moves the dataset hash, which the state hash includes, so every
-checkpoint of every recording moves with it. That is a regeneration nobody can attribute if anything
-else lands beside it. It is also the one phase whose regeneration can be predicted exactly before it
-is run — divergence from the **first** checkpoint onwards, in both recordings, and nowhere else —
-because it changes no behaviour. A diff of any other shape means a second cause that has to be found
-before committing.
-
-**What running it first costs, and it is a real cost.** One of its open questions — whether
-`required_services` survives on the building once it no longer classifies — is a smaller question
-once [A20](DECISIONS.md#a20--a-house-is-covered-by-services-its-level-does-not-require) has said what
-that union of services is *for*. In this order it is answered with less information, so the
-conservative answer wins by default unless something beats it: keep the field declared, and keep
-`InconsistentRequirements`, the check that keeps it honest. A20 itself must not ride along in the
-commit — that is two reasons to regenerate in one commit, which the protocol forbids.
-
-## The rest of M1 — a minimal game loop
+## Next — the rest of M1, a minimal game loop
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|

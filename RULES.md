@@ -59,19 +59,26 @@ refused.
 
 ## Buildings
 
-A kind of building declares its `size` in tiles, its `cost`, how many `levels` it has, and the
-`required_services` it needs. A building that supplies a service declares that `service`: its `kind`,
-its `range_per_level` and its `capacity_per_level`, one value per level. A building that produces
-goods declares its `output_per_tick` and its `max_stock`.
+A kind of building declares its `size` in tiles, its `cost`, how many `levels` it has, and its
+`role`. A building that produces goods also declares its `output_per_tick` and its `max_stock`.
 
-**A building that requires services and provides none is a `house`.** A `house`'s
-`required_services` is the union of what its levels require. Three kinds of building exist:
+**A building says what it is: its `role` is declared, not worked out from what it leaves blank.**
+There are two roles, and a building has exactly one. A building whose role is `house` declares the
+`required_services` it needs. A building whose role is `provider` declares the `service` it supplies:
+its `kind`, its `range_per_level` and its `capacity_per_level`, one value per level. Declaring a
+service on a house, or none on a provider, is refused when the tables are loaded.
 
-| Kind | What it needs | What it gives |
-|---|---|---|
-| `house` | water and food, and nothing else | nothing — which is what makes it a house |
-| `well` | nothing | water |
-| `farm` | nothing | food, and it produces that food into a stock of its own |
+A `house`'s `required_services` is the union of what its levels require. Three kinds of building
+exist:
+
+| Kind | Role | What it needs | What it gives |
+|---|---|---|---|
+| `house` | `house` | water and food, and nothing else | nothing |
+| `well` | `provider` | nothing | water |
+| `farm` | `provider` | nothing | food, and it produces that food into a stock of its own |
+
+**Producing is not a role.** The `farm` is a `provider` that also produces, so what it grows is
+declared beside its role rather than instead of it.
 
 Which kinds exist is data, not code: this list is what the tables declare today, and a table that
 adds a kind adds it to the game.
@@ -291,9 +298,10 @@ report, not a subtle misbehaviour at run time.
 
 | The relation | What breaking it would do |
 |---|---|
-| Some building is a house | no house levels up, eats or is taxed, and nothing says so |
+| Some building declares the `house` role | no house levels up, eats or is taxed, and nothing says so |
 | A house declares as many `levels` as `house_levels` has entries | the two tables describe different houses |
-| A house's `required_services` is the union of what its levels require | the building stops being read as a house |
+| A house's `required_services` is the union of what its levels require | a level asking for a service missing from the union is unreachable: nothing ever lifts that accumulator off zero |
+| A `provider` declares a `service`, and a `house` declares none | a building that says one thing and is built as another |
 | A level requires at least one service | the level is reached for free |
 | `max_residents` grows with the level | levelling up shrinks the house |
 | `decay_threshold` strictly below `level_up_threshold` — the gap | a house on the boundary flips at every review |
@@ -357,8 +365,9 @@ in [DECISIONS.md](DECISIONS.md) — not an edit.
 | `size` | the rectangle of tiles the building stands on |
 | `cost` | what placing it takes out of the treasury |
 | `levels` | how many levels it has |
-| `required_services` | what it needs; a building that needs something and provides nothing is a house |
-| `service` | the service it supplies, if it supplies one |
+| `role` | what part it plays: `house` or `provider` |
+| `required_services` | what a house needs — the union of what its levels require |
+| `service` | the service a provider supplies |
 | `kind` | which service that is |
 | `range_per_level` | how far it reaches, walked along the roads — one value per level |
 | `capacity_per_level` | how many residents it serves at once — one value per level |

@@ -1,6 +1,12 @@
 // The three buildings of M0. The house has three levels since phase 13; the
 // providers still have one each, and their ranges and capacities stay
 // one-element vectors until a phase gives them levels of their own.
+//
+// Every row says what part it plays. "house" needs services, "provider"
+// supplies one, and nothing is worked out from what a row leaves blank: until
+// phase 14.4 a building was a house because it had no service and asked for
+// some, which is why declaring a service on a house, or none on a provider, is
+// now a validation error instead of a silent change of meaning.
 (
     buildings: [
         (
@@ -12,12 +18,14 @@
             // their neighbours' tiles are a whole mechanic (Zeus has it) and
             // they are M3.
             levels: 3,
-            service: None,
+            role: "house",
             // The **union** of what the three levels of rules.house_levels ask
-            // for, and it has to stay that: `is_house()` classifies a building
-            // as a house by this list being non-empty, so a house whose
-            // requirements moved entirely into the levels would stop being read
-            // as one. Checked, not commented:
+            // for, and it has to stay that — not because anything classifies
+            // the house by it any more, but because it is the list whose
+            // accumulators move (sim-core `satisfaction::update`). A level
+            // asking for a service missing from here would be unreachable:
+            // nothing would ever lift that accumulator off zero, so its
+            // threshold could never be met. Checked, not commented:
             // `Inconsistency::InconsistentRequirements`.
             required_services: ["water", "food"],
         ),
@@ -26,6 +34,7 @@
             size: (1, 1),
             cost: 12,
             levels: 1,
+            role: "provider",
             service: Some((
                 kind: "water",
                 // One value per level. Range in tiles walked along the road
@@ -36,13 +45,17 @@
                 // is eight houses of four.
                 capacity_per_level: [32],
             )),
-            required_services: [],
         ),
         (
             id: "farm",
             size: (2, 2),
             cost: 40,
             levels: 1,
+            // The one row that is a provider **and** a producer. That is why
+            // production is a field of its own rather than a role: no single
+            // role could hold both, and a role per kind of building would put
+            // the roster in the code, which D6 forbids.
+            role: "provider",
             // A5: in M0 the farm covers just like a well, consuming from a
             // local stock. In M3 the goods will arrive from a warehouse via
             // real logistics walkers and these two fields will change: the
@@ -60,7 +73,6 @@
                 // `DataSet::inconsistencies`.
                 capacity_per_level: [20],
             )),
-            required_services: [],
             output_per_tick: Some(400),
             max_stock: Some(20000),
         ),

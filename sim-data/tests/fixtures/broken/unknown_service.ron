@@ -1,3 +1,14 @@
+// An unknown service name has two ways into a table, and both have to be
+// reported against the field that holds them: the `kind` a provider supplies,
+// and an entry of the `required_services` a house asks for.
+//
+// **Why this is two rows and used to be one.** Until phase 14.4 a single
+// "temple" carried both — it declared a service *and* required some — because
+// nothing stopped it: the shape was flat and the classification was inferred
+// from what was missing. A row now says which of the two it is, and a provider
+// that also requires services is `RequirementsOnAProvider`. Keeping the one-row
+// version would have made this fixture report a third error it is not about, so
+// it says the same thing with one row each.
 (
     buildings: [
         (
@@ -5,7 +16,15 @@
             size: (1, 1),
             cost: 30,
             levels: 1,
+            role: "provider",
             service: Some((kind: "astral_transport", range_per_level: [5], capacity_per_level: [5])),
+        ),
+        (
+            id: "house",
+            size: (1, 1),
+            cost: 10,
+            levels: 1,
+            role: "house",
             required_services: ["ambrosia"],
         ),
     ],
