@@ -4,12 +4,13 @@
 the **only** place that states how far the tree has got. If another document tells you what is
 implemented, that document is wrong and should be pointed here instead.
 
-> ## Implemented through phase 14.4
+> ## Implemented through phase 14.7
 >
 > Everything up to and including [phase 14](plan/14-births-deaths.md) — births and deaths — plus the
 > bug hunt that follows phase 13, the vocabulary review after that,
-> [phase 14.4](plan/14.4-building-kind.md), in which a building started declaring its role, and the
-> batch of 2026-08-14 that took `Clone` off `World` ([A22](DECISIONS.md)).
+> [phase 14.4](plan/14.4-building-kind.md), in which a building started declaring its role, the
+> batch of 2026-08-14 that took `Clone` off `World` ([A22](DECISIONS.md)), and
+> [phase 14.7](plan/14.7-half-numbers.md), which made this line's own number readable.
 > **M0 is complete; M1 is in progress.**
 
 What runs today: a grid with roads and connected components, aggregate service coverage over walked
@@ -33,6 +34,11 @@ A half number is not optional work you may skip. It exists because an open decis
 as prose in a register is an open decision nobody sees until it bites — which is exactly what
 happened to A17 and A18, both of which stayed invisible while four phases were planned on top of
 them.
+
+`doc-check` reads a half number **as a number**, comparing the parts one at a time, so `14.10`
+follows `14.9` and the slots between two whole phases never run out. Until
+[phase 14.7](plan/14.7-half-numbers.md) it stopped reading at the dot, and the "implemented through"
+line above could name a phase nobody had built without anything failing.
 
 ## Next — the rest of M1, a minimal game loop
 

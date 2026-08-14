@@ -69,6 +69,60 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
     Ok(f)
 }
 
+// --- the number a phase carries -------------------------------------------
+
+/// A phase number: `14`, or `14.4` for work that falls between two whole
+/// phases and claims nothing about the state before it.
+///
+/// A23: the components are compared one at a time as whole numbers, so `14.10`
+/// comes after `14.9` and a whole phase always comes before its own half
+/// numbers. Read as a decimal fraction instead, `14.10` would fall before
+/// `14.2` and the slots between two phases would run out at nine. The number is
+/// an ordering device and never a quantity: nothing is added to it or averaged
+/// with it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PhaseNumber(Vec<u32>);
+
+impl PhaseNumber {
+    /// The number `s` opens with, so one piece of code reads a file name
+    /// (`14.4-building-kind.md`) and a run of prose (`14.4, in which ...`).
+    ///
+    /// `None` when `s` does not open with a digit, which is how the dated
+    /// documents and `README.md` stay out of the count, and `None` when a
+    /// component is missing, as in `14..4`.
+    fn leading(s: &str) -> Option<Self> {
+        let head: String = s
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        // A trailing dot ends a sentence; it does not open an empty component.
+        let parts = head
+            .trim_end_matches('.')
+            .split('.')
+            .map(|p| p.parse::<u32>())
+            .collect::<Result<Vec<u32>, _>>()
+            .ok()?;
+        Some(Self(parts))
+    }
+
+    /// True for a half number: work that falls between two whole phases.
+    fn is_fractional(&self) -> bool {
+        self.0.len() > 1
+    }
+}
+
+impl std::fmt::Display for PhaseNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, part) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(".")?;
+            }
+            write!(f, "{part}")?;
+        }
+        Ok(())
+    }
+}
+
 // --- 1. the code never cites a document path ------------------------------
 
 /// Paths rot when a file moves; ids do not. A comment cites `A12` and states
@@ -205,7 +259,7 @@ fn open_decisions_are_scheduled(root: &Path) -> Result<Vec<Finding>, String> {
             .get(1)
             .map(|c| c.trim().trim_matches('*'))
             .unwrap_or("");
-        if !slot.contains('.') {
+        if !PhaseNumber::leading(slot).is_some_and(|n| n.is_fractional()) {
             out.push(Finding {
                 check: "open-decision",
                 at: "ROADMAP.md".to_string(),
@@ -579,10 +633,20 @@ fn plan_files_have_a_status(root: &Path) -> Result<Vec<Finding>, String> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "md"))
         .collect();
-    files.sort();
+    // Numbered files first and in the order the numbers really run: byte order
+    // would put `14.10-...` before `14.4-...`.
+    files.sort_by_key(|p| {
+        let name = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let number = PhaseNumber::leading(&name);
+        (number.is_none(), number, name)
+    });
 
     let mut out = Vec::new();
-    let mut highest_implemented = 0_u32;
+    let mut highest_implemented: Option<PhaseNumber> = None;
     for path in &files {
         let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let head: Vec<&str> = text.lines().take(12).collect();
@@ -617,10 +681,9 @@ fn plan_files_have_a_status(root: &Path) -> Result<Vec<Finding>, String> {
         if label.starts_with("implemented")
             && let Some(name) = path.file_name().and_then(|n| n.to_str())
         {
-            let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
-            if let Ok(n) = digits.parse::<u32>() {
-                highest_implemented = highest_implemented.max(n);
-            }
+            // `None` orders below every `Some`, so an unnumbered file — a dated
+            // batch, the index — never becomes the highest.
+            highest_implemented = highest_implemented.max(PhaseNumber::leading(name));
         }
     }
 
@@ -630,24 +693,26 @@ fn plan_files_have_a_status(root: &Path) -> Result<Vec<Finding>, String> {
     let claimed = roadmap
         .lines()
         .find_map(|l| l.split("Implemented through phase ").nth(1))
-        .and_then(|rest| {
-            let d: String = rest.chars().take_while(char::is_ascii_digit).collect();
-            d.parse::<u32>().ok()
-        });
-    match claimed {
-        None => out.push(Finding {
+        .and_then(PhaseNumber::leading);
+    match (claimed, &highest_implemented) {
+        (None, _) => out.push(Finding {
             check: "plan-status",
             at: "ROADMAP.md".to_string(),
             what: "no \"Implemented through phase N\" line".to_string(),
         }),
-        Some(n) if n != highest_implemented => out.push(Finding {
+        (Some(n), None) => out.push(Finding {
+            check: "plan-status",
+            at: "ROADMAP.md".to_string(),
+            what: format!("says phase {n}, but no phase file is marked implemented"),
+        }),
+        (Some(n), Some(highest)) if n != *highest => out.push(Finding {
             check: "plan-status",
             at: "ROADMAP.md".to_string(),
             what: format!(
-                "says phase {n}, but the highest phase file marked implemented is {highest_implemented}"
+                "says phase {n}, but the highest phase file marked implemented is {highest}"
             ),
         }),
-        Some(_) => {}
+        (Some(_), Some(_)) => {}
     }
     Ok(out)
 }
@@ -826,6 +891,24 @@ mod tests {
         );
         // Not a citation: part of a word, or a hex literal.
         assert!(cited_ids("SHA1 and 0xD4 and DATA1").is_empty());
+    }
+
+    #[test]
+    fn half_numbers_are_read_as_numbers() {
+        let p = |s: &str| PhaseNumber::leading(s).expect("parses");
+        assert!(p("14-births-deaths.md") < p("14.4-building-kind.md"));
+        assert!(p("14.4") < p("15-migration.md"));
+        assert!(p("09-invariants-closeout.md") < p("10-beyond-m0.md"));
+        // Component-wise and not decimal: the tenth slot follows the ninth.
+        assert!(p("14.9") < p("14.10"));
+        assert_eq!(p("14.4-building-kind.md").to_string(), "14.4");
+        // A sentence's full stop is not part of the number.
+        assert_eq!(p("14. Everything up to"), p("14"));
+        assert!(p("14.5").is_fractional() && !p("15").is_fractional());
+        // Not numbered at all, and so never the highest.
+        assert!(PhaseNumber::leading("bug-hunt-2026-08-11.md").is_none());
+        assert!(PhaseNumber::leading("README.md").is_none());
+        assert!(PhaseNumber::leading("14..4").is_none());
     }
 
     #[test]

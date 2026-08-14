@@ -81,20 +81,22 @@ touch what the recordings see, and each of the two phases after 13 makes one of 
 The one to read is the first, because its lesson is A5's in a new place — the check that guarantees
 *a house covered by food always eats* had a hole in the guard itself.
 
-## The phase that depends on nothing
+## The phases that depend on nothing
 
 | #  | Phase | A verifiable goal in one line | Size |
 |----|-------|-------------------------------|------|
 | 14.4 | [A building says what it is](14.4-building-kind.md) | A building declares its kind instead of being classified by what it lacks; the dataset hash moves once and no rule of the game changes | S |
+| 14.7 | [A half number is read, not cut short](14.7-half-numbers.md) | `doc-check` reads a half number as a number, so the line stating how far the tree has got can no longer be wrong in silence; no hash moves at all | S |
 
-It came out of the review of the documents on 2026-08-13 and is the only phase in this index that
-depends on no other — not even the map. [ROADMAP.md](../ROADMAP.md) runs it next, and says why.
+Both came out of reviews of the documents rather than out of the game, and they are the only phases
+in this index that depend on no other — not even the map.
 
-Its number is a half one for the same reason it can run next: every whole-numbered phase reads the
-state the one before it introduced, and this one reads nothing, so it sits between two of them rather
-than in their chain. It was numbered 22 while it was parked after the map work.
+Their numbers are half ones for the same reason they can run at any time: every whole-numbered phase
+reads the state the one before it introduced, and these two read nothing, so they sit between two of
+them rather than in their chain. 14.4 was numbered 22 while it was parked after the map work.
 
-Its file is a sketch, like 20 and 21, and says so in its own header.
+14.4's file is a sketch, like 20 and 21, and says so in its own header. 14.7's is not a sketch — it
+was written when the phase was designed, which is the difference the headers record.
 
 ## The phase between M1 and M2
 
