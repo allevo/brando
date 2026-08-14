@@ -17,14 +17,57 @@ see [ARCHITECTURE.md](ARCHITECTURE.md) for which, and [RULES.md](RULES.md) for w
 
 ## How to read the numbering
 
-Phases are whole numbers and come from [plan/README.md](plan/README.md). **Half numbers are decisions
-that have to be closed before the next whole phase can start.** They are marked `TO_BE_DECIDED` and
-each one names its entry in [DECISIONS.md](DECISIONS.md).
+Phases are whole numbers and come from [plan/README.md](plan/README.md), and a whole number carries a
+claim: **this phase reads the state the one before it introduced.** **A half number is work that falls
+between two whole phases and makes no such claim.**
+
+Almost always that work is a **decision that has to be closed before the next whole phase can start**.
+Those are marked `TO_BE_DECIDED`, each one names its entry in [DECISIONS.md](DECISIONS.md), and
+`cargo xtask doc-check` enforces the direction that matters: every decision left open in
+`DECISIONS.md` holds a half-numbered slot here. The converse does not hold — a phase that depends on
+nothing has no place in the whole-numbered chain either, and takes a half number too.
 
 A half number is not optional work you may skip. It exists because an open decision that lives only
 as prose in a register is an open decision nobody sees until it bites — which is exactly what
 happened to A17 and A18, both of which stayed invisible while four phases were planned on top of
 them.
+
+## Next — a building says what it is
+
+| # | What | Verified by | Blocks |
+|---|---|---|---|
+| **14.4** | [A building says what it is](plan/14.4-building-kind.md) | the dataset hash moves once, every checkpoint of every recording moves with it, and no rule of the game changes | |
+
+A building is currently classified as a house by a heuristic — it requires services and provides
+none — and three validation checks exist to stop that heuristic quietly becoming false. The building
+kind is stated outright instead, and two of the three checks go with it.
+
+**It goes first because it depends on nothing and blocks nothing.** Not the map, not migration, not
+the treasury, and nothing below is waiting on it. It changes the shape of a definition rather than a
+rule of the game, so it can be pulled to the front without moving anything else. In particular the
+half numbers below keep their order relative to phase 15, which is the only thing their argument ever
+claimed: migration is what fills empty houses and multiplies huts, and this phase does neither, so the
+window in which A18 and A20 are cheap to close does not shut any further while it runs.
+
+**Its number is a half one for that same reason.** A whole number says *this phase reads the state the
+one before it introduced*, and this one reads nothing. It was 22 while it sat after the map work, and
+carrying that number to the front would have made the number a lie about where the work runs — and
+made `doc-check` say so, since it reads how far the tree has got off the phase files' own names.
+
+**It must own its commit.** It moves the dataset hash, which the state hash includes, so every
+checkpoint of every recording moves with it. That is a regeneration nobody can attribute if anything
+else lands beside it. It is also the one phase whose regeneration can be predicted exactly before it
+is run — divergence from the **first** checkpoint onwards, in both recordings, and nowhere else —
+because it changes no behaviour. A diff of any other shape means a second cause that has to be found
+before committing.
+
+**What running it first costs, and it is a real cost.** One of its open questions — whether
+`required_services` survives on the building once it no longer classifies — is a smaller question
+once [A20](DECISIONS.md#a20--a-house-is-covered-by-services-its-level-does-not-require) has said what
+that union of services is *for*. In this order it is answered with less information, so the
+conservative answer wins by default unless something beats it: keep the field declared, and keep
+`InconsistentRequirements`, the check that keeps it honest. A20 itself must not ride along in the
+commit — that is two reasons to regenerate in one commit, which the protocol forbids.
 
 ## The rest of M1 — a minimal game loop
 
@@ -38,8 +81,8 @@ them.
 | 18 | [Invariants and closing M1](plan/18-invariants-closeout-m1.md) | the new invariants are green property tests, and A12's cost is measured and attributed | |
 | **18.5** | **TO_BE_DECIDED — [A17](DECISIONS.md#a17--the-per-tick-recomputation-cost):** what to do about the per-tick recomputation cost | a decision written into A17, and a measurement that survives it | M2 |
 
-Why 14.5 comes first: A18 is one line to change **now** and a regeneration somebody has to attribute
-**later**. Phase 14 made zero residents reachable on every difficulty profile, including inside the
+Why 14.5 leads the rest: A18 is one line to change **now** and a regeneration somebody has to
+attribute **later**. Phase 14 made zero residents reachable on every difficulty profile, including inside the
 two committed recordings, so the window in which closing it is free has already begun to shut.
 
 Why 14.6 sits next to it: it is the same question asked about a different house. Both are about who
@@ -76,25 +119,6 @@ whether a map is an asset or a seed, are the two decisions the phase turns on. *
 They are closed *inside* phase 19 and written into [DECISIONS.md](DECISIONS.md) then, which is why
 neither holds a half-numbered slot here: nothing is planned on top of them, so neither can go
 invisible the way A17 and A18 did.
-
-## Before M2 — a building says what it is
-
-| # | What | Verified by | Blocks |
-|---|---|---|---|
-| 22 | [A building says what it is](plan/22-building-kind.md) | the dataset hash moves once, every checkpoint of every recording moves with it, and no rule of the game changes | M2 |
-
-A building is currently classified as a house by a heuristic — it requires services and provides
-none — and three validation checks exist to stop that heuristic quietly becoming false. The building
-kind is stated outright instead, and two of the three checks go with it.
-
-It blocks nothing in M1 and depends on nothing, including the map. It is placed before M2 because M2's
-renderer and M3's second civilisation are the first things that genuinely have to tell one kind of
-building from another, and a heuristic is a poor thing to build either on. It is placed *after* the
-map work only because that work is already sequenced, not because it needs it.
-
-**It must own its commit.** It moves the dataset hash, which the state hash includes, so every
-checkpoint of every recording moves with it. That is a regeneration nobody can attribute if anything
-else lands beside it.
 
 ## Waiting on the map — added, not scheduled
 

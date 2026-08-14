@@ -81,6 +81,21 @@ touch what the recordings see, and each of the two phases after 13 makes one of 
 The one to read is the first, because its lesson is A5's in a new place — the check that guarantees
 *a house covered by food always eats* had a hole in the guard itself.
 
+## The phase that depends on nothing
+
+| #  | Phase | A verifiable goal in one line | Size |
+|----|-------|-------------------------------|------|
+| 14.4 | [A building says what it is](14.4-building-kind.md) | A building declares its kind instead of being classified by what it lacks; the dataset hash moves once and no rule of the game changes | S |
+
+It came out of the review of the documents on 2026-08-13 and is the only phase in this index that
+depends on no other — not even the map. [ROADMAP.md](../ROADMAP.md) runs it next, and says why.
+
+Its number is a half one for the same reason it can run next: every whole-numbered phase reads the
+state the one before it introduced, and this one reads nothing, so it sits between two of them rather
+than in their chain. It was numbered 22 while it was parked after the map work.
+
+Its file is a sketch, like 20 and 21, and says so in its own header.
+
 ## The phase between M1 and M2
 
 | #  | Phase | A verifiable goal in one line | Size |
@@ -108,16 +123,6 @@ Their files are **sketches, and say so in their own headers**. They were written
 added, not when the phases were designed, and they hold the goal and the open questions rather than a
 design. That is the same rule that kept M1 unplanned while M0 was open, applied one phase at a time:
 the detail is written after there is a real map to look at, not before.
-
-## The phase that depends on nothing
-
-| #  | Phase | A verifiable goal in one line | Size |
-|----|-------|-------------------------------|------|
-| 22 | [A building says what it is](22-building-kind.md) | A building declares its kind instead of being classified by what it lacks; the dataset hash moves once and no rule of the game changes | S |
-
-It came out of the review of the documents on 2026-08-13 and is the only phase in this index that
-depends on no other — not even the map. [ROADMAP.md](../ROADMAP.md) places it before M2 and says why.
-Its file is a sketch, like 20 and 21, and says so in its own header.
 
 ## What gets built and what does not
 
