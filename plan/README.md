@@ -174,3 +174,9 @@ What belongs here, because it is about the record and not about the tree: the bu
 ([naming-review-2026-08-12.md](naming-review-2026-08-12.md), which produced [A19](../DECISIONS.md)
 and the naming rule in `CLAUDE.md`). The review renamed identifiers only and moved no hash: it is the
 one batch so far whose correctness proof is that nothing changed.
+
+A third batch with no phase file follows 14.4, on 2026-08-14: `World` stopped being `Clone`
+([A22](../DECISIONS.md)), and the six tests that copied a world now play a second one instead. Its
+correctness proof is the vocabulary review's — no recording moved — and it was run without a phase
+file **by explicit exception**, not by the rule. The rule is still that work of this size gets a
+half-numbered file here.

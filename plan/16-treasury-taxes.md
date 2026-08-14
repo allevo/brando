@@ -170,6 +170,17 @@ Variable construction costs, subsidies, loans, trade. Trade is M3 with the carav
    than the original — *the state after `step(w, cmds)` with every command rejected matches the one
    after `step(w.clone(), &[])`* — and it catches more: today it would not notice a rejection that
    consumes an RNG draw, with the new form it would.
+
+   > **Amended 2026-08-14.** The statement above survives word for word; the technique in it does
+   > not. `World` is no longer `Clone` ([A22](../DECISIONS.md)), so the second world is built and
+   > played rather than copied — and the reformulation this phase was going to make has already been
+   > made, for its own reasons. **This phase inherits it and has nothing to do here.** The RNG draw
+   > named above is covered, and so is more than was asked: the comparison is exhaustive over the
+   > state and over the derived structures too.
+   >
+   > It stopped being a change phase 16 had to make and became simply how the test is written, which
+   > is the better outcome — the phase no longer has to reason about a test's shape while it is
+   > reasoning about taxes.
 6. **The treasury does not go negative**: `charge` keeps rejecting for insufficient funds, and there
    are no recurring outgoings. The test already exists in `no_panic_on_ten_thousand_commands`, and
    should be extended to the fact that `remainder` is never negative.

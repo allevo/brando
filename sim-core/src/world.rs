@@ -145,16 +145,24 @@ impl DirtyFlags {
 
 /// The complete state of a game.
 ///
-/// **`Clone` only under `test-util`, because a game has one world at a time.**
-/// Nothing in the production path ever copies a world: a save is
-/// `seed + Vec<Command>` and never a dump of the state (D4), so a second world
-/// is not a thing the game can want. What does want one is the pair of tests
-/// that assert a rejected command mutates nothing, and they compare a `before`
-/// against the state after the tick. Gating the derive puts that where the
-/// direct-mutation hooks below already live: available to the tests, absent
-/// from the API the rest of the code sees.
+/// **`World` is not `Clone`, in any configuration (A22).** A world is obtained
+/// by playing a game: a save is `seed + Vec<Command>` and never a dump of the
+/// state (D4), so the way to a second world holding a given state is to play
+/// the same game again. A copy would be a second way to reach a state, and the
+/// determinism story rests on there being one.
+///
+/// A test that wants a `before` to compare against therefore builds a second
+/// world and steps it — `twins` in `sim-core/tests/common`, a second `replay`
+/// in `sim-replay`. That comparison says **more** than the copy it replaces:
+/// two worlds that were both played once can be compared on the derived
+/// structures as well, so a rejected command that dirties a flag which step 2
+/// or step 3 then consumes inside the same tick shows up. Against a copy it did
+/// not — those counters legitimately move during a tick.
+/// [`World::first_difference`] is that comparison.
+///
+/// The rule is a check and not a comment, because the derive is one word and
+/// its absence is invisible: [`not_clone`] refuses it at compile time.
 #[derive(Debug)]
-#[cfg_attr(feature = "test-util", derive(Clone))]
 pub struct World {
     pub(crate) tick: u32,
     pub(crate) grid: Grid,
@@ -204,6 +212,59 @@ pub struct World {
     /// the simulation, so it is **state** — it goes into the hash and it
     /// travels in the replay's header (A13).
     pub(crate) difficulty: DifficultyId,
+}
+
+/// A **compile-time** refusal of `Clone` on [`World`] (A22).
+///
+/// A world is `seed + Vec<Command>` played out (D4), never a copy of another
+/// world. The rule is written as a check rather than a comment for the reason
+/// CLAUDE.md gives generally: `#[derive(Clone)]` is one word, nothing else in
+/// the tree would fail if it came back, and a test that copies a world instead
+/// of playing one asserts something weaker without ever going red.
+///
+/// **How it decides.** An inherent associated constant is chosen ahead of a
+/// trait's of the same name, and the inherent `IS_CLONE` below exists only
+/// where `T: Clone` holds. So `Probe<T>::IS_CLONE` reads `true` for a type that
+/// implements `Clone` and falls back to the trait's `false` for one that does
+/// not. It answers for a hand-written `impl Clone for World` as well as for the
+/// derive: it asks the compiler the real question rather than reading the
+/// source for a spelling.
+///
+/// `Cloneable` is the positive control, and it is not decoration: without it a
+/// change that broke the resolution above would leave the guard answering
+/// `false` to everything, which is green for the wrong reason. It is the same
+/// lesson as `dataset_with_a_farm_that_grows_nothing` — give the check
+/// something it has to catch.
+mod not_clone {
+    use core::marker::PhantomData;
+
+    use super::World;
+
+    struct Probe<T>(PhantomData<T>);
+
+    trait NotClone {
+        const IS_CLONE: bool = false;
+    }
+    impl<T> NotClone for Probe<T> {}
+
+    impl<T: Clone> Probe<T> {
+        const IS_CLONE: bool = true;
+    }
+
+    #[derive(Clone)]
+    struct Cloneable;
+
+    const _: () = assert!(
+        <Probe<Cloneable>>::IS_CLONE,
+        "the guard below has stopped seeing Clone, so it would now pass on anything"
+    );
+
+    const _: () = assert!(
+        !<Probe<World>>::IS_CLONE,
+        "World is Clone again. A save is seed + Vec<Command> (D4): a test that wants \
+         a second world plays the same game twice — `twins` in tests/common — and the \
+         production path never wanted one at all (A22)."
+    );
 }
 
 impl World {
@@ -537,6 +598,111 @@ impl World {
     /// else" once the byte is hashed from tick 0.
     pub const fn set_difficulty(&mut self, difficulty: DifficultyId) {
         self.difficulty = difficulty;
+    }
+
+    /// The name of the first field on which two worlds differ, or `None` if
+    /// they are the same game (A22).
+    ///
+    /// [`World`] is not `Clone`, so a test that wants to say *nothing changed*
+    /// plays the same game twice and compares the two worlds. That comparison
+    /// covers **everything**, which the copy it replaces could not: `roads` and
+    /// `coverage` carry their rebuild and recompute counters, so two worlds
+    /// that were each played once disagree here even over a dirty flag that
+    /// step 2 or step 3 consumed inside the tick that set it — a mutation which
+    /// leaves no trace in the final state. `hash_world` cannot answer this
+    /// question either: it leaves the derived and diagnostic structures out on
+    /// purpose.
+    ///
+    /// **The tick comes first**, and that order is the point rather than a
+    /// detail: every comparison below is meaningless if the two worlds have not
+    /// been played the same number of times, and a twin somebody forgot to step
+    /// is the one way a test written this way goes quietly vacuous — an unplayed
+    /// world agrees about an empty grid and an untouched treasury for ever.
+    ///
+    /// Exhaustive like [`World::every_field`] and for the same reason: a field
+    /// added to the state stops this compiling, so "the whole state" stays true
+    /// because the compiler says so and not because somebody remembered.
+    ///
+    /// It is a **read-only** member of `test-util`, unlike the mutation hooks
+    /// above it.
+    pub fn first_difference(&self, other: &Self) -> Option<&'static str> {
+        let Self {
+            tick,
+            grid,
+            buildings,
+            houses,
+            walkers,
+            economy,
+            demographics,
+            rng,
+            dirty,
+            roads,
+            coverage,
+            food,
+            population,
+            buildings_by_origin,
+            houses_by_origin,
+            data,
+            difficulty,
+        } = self;
+
+        if *tick != other.tick {
+            return Some("tick");
+        }
+        if *grid != other.grid {
+            return Some("grid");
+        }
+        // `SlotMap` is not `PartialEq`, so the slots are walked in order —
+        // which is the same order the state hash relies on (D4).
+        if !buildings.iter().eq(other.buildings.iter()) {
+            return Some("buildings");
+        }
+        if !houses.iter().eq(other.houses.iter()) {
+            return Some("houses");
+        }
+        if *walkers != other.walkers {
+            return Some("walkers");
+        }
+        if *economy != other.economy {
+            return Some("economy");
+        }
+        if *demographics != other.demographics {
+            return Some("demographics");
+        }
+        if *rng != other.rng {
+            return Some("rng");
+        }
+        if *dirty != other.dirty {
+            return Some("dirty");
+        }
+        if *roads != other.roads {
+            return Some("roads");
+        }
+        if *coverage != other.coverage {
+            return Some("coverage");
+        }
+        if *food != other.food {
+            return Some("food");
+        }
+        if *population != other.population {
+            return Some("population");
+        }
+        if *buildings_by_origin != other.buildings_by_origin {
+            return Some("buildings_by_origin");
+        }
+        if *houses_by_origin != other.houses_by_origin {
+            return Some("houses_by_origin");
+        }
+        // The dataset's identity is its hash, which is what the state hash
+        // itself uses (A2) — two datasets loaded separately from the same
+        // tables are the same tables.
+        if data.hash != other.data.hash {
+            return Some("data");
+        }
+        if *difficulty != other.difficulty {
+            return Some("difficulty");
+        }
+        None
     }
 
     /// A **compile-time** reminder for the state hash (A3).
