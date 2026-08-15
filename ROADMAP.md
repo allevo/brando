@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 14.10.** M0 is complete; M1 is in progress.
+> **Implemented through phase 14.9.6.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -23,7 +23,8 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | — | Decisions review — the register was cut down to the decisions actually taken, one task before it was removed altogether | 2026-08-15 |
 | 14.8 | [Every task says what it is](plan/14.8-every-task-says-what-it-is.md) — front matter, checked; the four unnumbered documents leave | 2026-08-15 |
 | 14.9 | [The decisions live where they are cited](plan/14.9-decisions-live-where-they-are-cited.md) — the register is gone; every rule is stated where it binds | 2026-08-15 |
-| 14.10 | [Writing a task is a procedure](plan/14.10-writing-a-task-is-a-procedure.md) — the task mechanics leave `CLAUDE.md` for a skill, whose template is checked against the code | 2026-08-15 |
+| 14.9.5 | [Writing a task is a procedure](plan/14.9.5-writing-a-task-is-a-procedure.md) — the task mechanics leave `CLAUDE.md` for a skill, whose template is checked against the code | 2026-08-15 |
+| 14.9.6 | [An id sorts the same way everywhere](plan/14.9.6-an-id-sorts-the-same-way-everywhere.md) — a number after the first is a single digit, so a listing runs the way the numbers do | 2026-08-15 |
 
 ## To do — the rest of M1
 

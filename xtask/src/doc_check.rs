@@ -70,6 +70,7 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
     f.extend(rules_have_no_values(root)?);
     f.extend(architecture_matches_the_tick(root)?);
     f.extend(tasks_agree_with_their_names(&tasks));
+    f.extend(task_names_sort_the_way_the_numbers_run(&tasks));
     f.extend(open_questions_are_scheduled(root, &tasks)?);
     f.extend(roadmap_agrees_with_the_tasks(root, &tasks)?);
     f.extend(frozen_orders_match_the_code(root, &sources)?);
@@ -82,12 +83,17 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
 /// A phase number: `14`, or `14.4` for work that falls between two whole
 /// phases and claims nothing about the state before it.
 ///
-/// The components are compared one at a time as whole numbers, so `14.10`
-/// comes after `14.9` and a whole phase always comes before its own half
-/// numbers. Read as a decimal fraction instead, `14.10` would fall before
-/// `14.2` and the slots between two phases would run out at nine. The number is
-/// an ordering device and never a quantity: nothing is added to it or averaged
-/// with it.
+/// The components are compared one at a time as whole numbers, so a whole phase
+/// always comes before its own half numbers and `14.5.5` sits between `14.5`
+/// and `14.6`. Read as a decimal fraction instead, a half number could only ever
+/// be one digit deep and `14.5.5` would not be a number at all. The number is an
+/// ordering device and never a quantity: nothing is added to it or averaged with
+/// it.
+///
+/// Comparing the components as numbers is only half of it, because nothing
+/// outside this checker does: a listing compares bytes. The names are written so
+/// that the two orders agree — see
+/// [`task_names_sort_the_way_the_numbers_run`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PhaseNumber(Vec<u32>);
 
@@ -99,14 +105,8 @@ impl PhaseNumber {
     /// is missing, as in `14..4`. Nothing in the plan directory is unnumbered
     /// any more, so the first case is now only reached by prose.
     fn leading(s: &str) -> Option<Self> {
-        let head: String = s
-            .chars()
-            .take_while(|c| c.is_ascii_digit() || *c == '.')
-            .collect();
-        // A trailing dot ends a sentence; it does not open an empty component.
-        let parts = head
-            .trim_end_matches('.')
-            .split('.')
+        let parts = leading_components(s)
+            .iter()
             .map(|p| p.parse::<u32>())
             .collect::<Result<Vec<u32>, _>>()
             .ok()?;
@@ -129,6 +129,25 @@ impl std::fmt::Display for PhaseNumber {
         }
         Ok(())
     }
+}
+
+/// The number `s` opens with, split into its components and still as text, so
+/// that a check can see how many digits each one was written with — which is
+/// what decides where a file name lands in a listing, and which parsing throws
+/// away.
+///
+/// Empty components survive rather than being skipped: `14..4` comes back with
+/// an empty one in the middle, and every caller treats that as "not a number".
+fn leading_components(s: &str) -> Vec<String> {
+    let head: String = s
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    // A trailing dot ends a sentence; it does not open an empty component.
+    head.trim_end_matches('.')
+        .split('.')
+        .map(str::to_string)
+        .collect()
 }
 
 // --- 1. the code never cites a document path ------------------------------
@@ -890,8 +909,11 @@ fn read_tasks(root: &Path) -> Result<(Vec<Task>, Vec<Finding>), String> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "md"))
         .collect();
-    // In the order the numbers really run: byte order would put `14.10-...`
-    // before `14.4-...`.
+    // In the order the numbers really run. The names are written so that byte
+    // order agrees with that, but this sort deliberately does not lean on it:
+    // it compares the numbers, so a name that breaks the rule is still read in
+    // its real place and reported for what it is rather than for what it made
+    // the ordering do.
     files.sort_by_key(|p| {
         let name = file_name(p);
         (PhaseNumber::leading(&name), name)
@@ -947,6 +969,62 @@ fn tasks_agree_with_their_names(tasks: &[Task]) -> Vec<Finding> {
                     task.id
                 ),
             }),
+        }
+    }
+    out
+}
+
+/// A task's name is written so that byte order and the order the numbers really
+/// run are the same order: the first number with two digits, every number after
+/// it with one.
+///
+/// This checker compares the components as numbers and would order `14.10`
+/// after `14.9` quite happily. Nothing else would. A shell listing, an editor's
+/// sidebar and a file list on the web all compare bytes, and under byte
+/// comparison `14.10-...` lands before `14.4-...` — so a rule kept privately
+/// here would be contradicted publicly by every listing a reader ever opens, and
+/// the tree grew exactly one such file before this check existed. Held to, the
+/// two orders agree: `-` sorts before `.`, so a whole phase precedes its own
+/// half numbers, and the slot above `.9` descends a level (`14.9.5`) instead of
+/// reaching a second digit. The slots between two phases never run out; they run
+/// deeper rather than wider.
+///
+/// It is the **name** that a listing sorts, so it is the name that is checked.
+/// The id in the front matter arrives here parsed and no longer knows how many
+/// digits it was written with, and the check that the two agree is a separate
+/// one.
+fn task_names_sort_the_way_the_numbers_run(tasks: &[Task]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for task in tasks {
+        let parts = leading_components(&task.file);
+        let head = parts.join(".");
+        // A name that opens with no number at all is already reported as itself
+        // by the check that a task agrees with its name.
+        if parts.iter().any(|p| p.is_empty()) {
+            continue;
+        }
+        if parts[0].len() != 2 {
+            out.push(Finding {
+                check: "id-shape",
+                at: task.file.clone(),
+                what: format!(
+                    "`{head}` does not open with two digits. The first number is written with \
+                     two — `09`, not `9` — so that a listing, which compares bytes, runs in the \
+                     same order as the numbers do."
+                ),
+            });
+        }
+        if parts[1..].iter().any(|p| p.len() != 1) {
+            out.push(Finding {
+                check: "id-shape",
+                at: task.file.clone(),
+                what: format!(
+                    "`{head}` writes a number after the first with more than one digit, and a \
+                     listing compares bytes: `14.10` lands before `14.4`. A number after the \
+                     first is a single digit — descend a level instead, the way `14.9.5` sits \
+                     above `14.9`."
+                ),
+            });
         }
     }
     out
@@ -1382,9 +1460,14 @@ mod tests {
         let p = |s: &str| PhaseNumber::leading(s).expect("parses");
         assert!(p("14-births-deaths.md") < p("14.4-building-kind.md"));
         assert!(p("14.4") < p("15-migration.md"));
+        // Component-wise and not decimal, which is the whole reason the numbers
+        // are parsed rather than compared as text: a whole phase carries no
+        // padding beyond its two digits, and a half number can run deeper than
+        // one component.
         assert!(p("09-invariants-closeout.md") < p("10-beyond-m0.md"));
-        // Component-wise and not decimal: the tenth slot follows the ninth.
-        assert!(p("14.9") < p("14.10"));
+        assert!(p("14.9") < p("14.9.5"));
+        assert!(p("14.9.5") < p("15"));
+        assert!(p("14.5") < p("14.5.5") && p("14.5.5") < p("14.6"));
         assert_eq!(p("14.4-building-kind.md").to_string(), "14.4");
         // A sentence's full stop is not part of the number.
         assert_eq!(p("14. Everything up to"), p("14"));
@@ -1393,6 +1476,56 @@ mod tests {
         assert!(PhaseNumber::leading("bug-hunt-2026-08-11.md").is_none());
         assert!(PhaseNumber::leading("README.md").is_none());
         assert!(PhaseNumber::leading("14..4").is_none());
+    }
+
+    #[test]
+    fn a_name_sorts_the_way_its_number_runs() {
+        let task = |file: &str| Task {
+            file: file.to_string(),
+            id: PhaseNumber::leading(file).expect("parses"),
+            kind: "phase".to_string(),
+            status: "implemented".to_string(),
+            closed: Some("2026-08-15".to_string()),
+        };
+        let complaints = |name: &str| task_names_sort_the_way_the_numbers_run(&[task(name)]).len();
+
+        // Two digits at the front, one in every number after it.
+        assert_eq!(complaints("09-invariants-closeout.md"), 0);
+        assert_eq!(complaints("14.4-building-kind.md"), 0);
+        assert_eq!(complaints("14.5.5-the-constitution.md"), 0);
+        assert_eq!(complaints("14.9.5-writing-a-task-is-a-procedure.md"), 0);
+        // A second digit after the first: byte order puts it before `14.4`.
+        assert_eq!(complaints("14.10-writing-a-task-is-a-procedure.md"), 1);
+        // One digit at the front: byte order puts it after `10`.
+        assert_eq!(complaints("9-invariants-closeout.md"), 1);
+    }
+
+    #[test]
+    fn a_name_that_keeps_the_shape_sorts_the_same_by_bytes_and_by_number() {
+        // This is what the shape rule buys, and the reason it is worth a check:
+        // `ls` and an editor's sidebar never parse a number, and they are what a
+        // reader actually looks at.
+        let in_the_order_the_numbers_run = [
+            "09-invariants-closeout.md",
+            "10-beyond-m0.md",
+            "14-births-deaths.md",
+            "14.4-building-kind.md",
+            "14.5-an-empty-house-consumes-no-capacity.md",
+            "14.5.5-the-constitution.md",
+            "14.6-a-house-is-covered-by-services.md",
+            "14.9-decisions-live-where-they-are-cited.md",
+            "14.9.5-writing-a-task-is-a-procedure.md",
+            "14.9.6-an-id-sorts-the-same-way-everywhere.md",
+            "15-migration.md",
+        ];
+
+        let mut by_number = in_the_order_the_numbers_run.to_vec();
+        by_number.sort_by_key(|n| PhaseNumber::leading(n).expect("parses"));
+        assert_eq!(by_number, in_the_order_the_numbers_run);
+
+        let mut by_bytes = in_the_order_the_numbers_run.to_vec();
+        by_bytes.sort_unstable();
+        assert_eq!(by_bytes, in_the_order_the_numbers_run);
     }
 
     #[test]

@@ -34,9 +34,17 @@ the free numbers are visible.
 - A **half number** for work that falls between two whole phases and claims nothing about the state
   before it — a fix, a piece of tooling, an open question.
 
-Numbers compare one component at a time as whole numbers, never as decimals. So `14.10` comes *after*
-`14.9`, the slots between two phases do not run out at nine, and `14.5.5` is legal. Nothing is ever
-added to an id or averaged with it: it is an ordering device, not a quantity.
+Numbers compare one component at a time as whole numbers, never as decimals, so `14.5.5` is legal
+and sits between `14.5` and `14.6`. Nothing is ever added to an id or averaged with it: it is an
+ordering device, not a quantity.
+
+**Write the first number with two digits and every number after it with one** — `09` and not `9`,
+`14.9.5` and never `14.10`. Byte order then runs the same way the numbers do, which matters because
+nothing a reader looks at parses a number: `ls`, the editor's sidebar and the file list on the web
+all compare bytes, and `14.10-...` lands before `14.4-...` in every one of them. So when the slot
+you want sits above `.9`, **descend a level rather than reach a second digit**. The slots between
+two phases never run out; they run deeper. `doc-check` refuses the second digit, so this is not a
+rule to carry around either.
 
 ### 2. Name the file
 
