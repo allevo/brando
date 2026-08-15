@@ -446,6 +446,9 @@ mod tests {
             let v = set.get(RngKind::Events).below(6);
             seen[usize::try_from(v).expect("below 6")] = true;
         }
-        assert_eq!(seen, [true; 6], "every face of a six-sided die has to come up");
+        assert_eq!(
+            seen, [true; 6],
+            "every face of a six-sided die has to come up"
+        );
     }
 }

@@ -97,5 +97,7 @@ pub enum Event {
     /// regeneration.
     ///
     /// [`StepReport::summary`]: crate::tick::StepReport::summary
-    HouseAbandoned { house: HouseId },
+    HouseAbandoned {
+        house: HouseId,
+    },
 }

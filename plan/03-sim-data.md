@@ -1,5 +1,11 @@
 # Phase 03 — sim-data: validated RON tables
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** a valid table loads; a broken one produces a report with **every** error, not just the
 first; the dataset has a stable hash.
 **Depends on:** 01 (it uses `Milli`, `Coins`). Can run in parallel with 02.
@@ -22,6 +28,13 @@ rules.ron       global constants: ticks_per_month, starting_treasury, residents_
 terrain.ron     for each Terrain: buildable, road_cost, walkable
 buildings.ron   the three buildings of M0
 ```
+
+> **Amended by the documentation audit (2026-08-13).** There are **four** tables now: phase 11 added
+> `difficulty.ron`, the profiles of A13. `rules.ron` also grew well past "global constants" — it
+> carries the `house_levels` ladder (phase 13, where `residents_per_house_level` ended up), the
+> `satisfaction` curve (phase 12) and the `demographics` rates (phase 14). Its comments carry the
+> derivations and are the closest thing the project has to a balancing reference; what each parameter
+> *does*, without the values, is in [RULES.md](../RULES.md).
 
 `buildings.ron`, the table that carries the weight:
 
@@ -99,7 +112,7 @@ The minimum checks:
 
 `hash` is `blake3` over the dataset's **normalised** content (the validated values, not the files'
 bytes: that way a reformatting or a comment in the RON does not invalidate the recordings, while a
-changed number does). It feeds the state hash (see [A2](open-decisions.md)).
+changed number does). It feeds the state hash (see [A2](../DECISIONS.md)).
 
 Loading is I/O and lives in `sim-data`, never inside `sim-core` (D4: no I/O in the core).
 

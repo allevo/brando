@@ -1,6 +1,11 @@
 # Vocabulary review — brando, 2026-08-12
 
-The decision this produced is [A19](open-decisions.md#a19--plain-words-and-which-hard-words-earn-their-place),
+> **Status: closed.**
+>
+> A dated vocabulary audit. It produced [A19](../DECISIONS.md) and the naming rule now in
+> `CLAUDE.md`.
+
+The decision this produced is [A19](../DECISIONS.md#a19--plain-words-and-which-hard-words-earn-their-place),
 and the rule it produced lives in `CLAUDE.md`'s code conventions. Neither of those is repeated here.
 What is here is the **inventory**: every word that was looked at, what was decided, and — the part
 worth keeping — the work-list the review deliberately did not do.

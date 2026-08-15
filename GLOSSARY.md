@@ -14,7 +14,7 @@ Four sections:
    touching it would break something.
 
 The rule that decides which words get in at all is **A19** in
-[plan/open-decisions.md](plan/open-decisions.md): a hard word earns its place when it is the domain's
+[DECISIONS.md](DECISIONS.md): a hard word earns its place when it is the domain's
 own word, and then it is defined here. A hard word that is merely a synonym choice does not.
 
 ---
@@ -59,10 +59,13 @@ The rule is **plain words over jargon**.
 | **flow** | One of the four ways the population moves — births, deaths, immigration, emigration. Each keeps its own running total, and the four together are what makes conservation an exact equality. |
 | **jitter** | A small random wobble added to a rate, so two games with different seeds do not play out identically. Symmetric, so it does not move the average. |
 | **eligible** | Whoever a rate is counted against. Births are counted against the residents of houses with room to spare and a satisfaction above the threshold — *not* against the whole population, which is what makes a full city stop growing on its own. |
+| **ground height** | How high the ground is on one tile, counted in **steps** rather than in any unit of length. The grid's own `height` is its size in tiles, which is a different thing — hence the longer name. A step is a unit of gameplay: the renderer multiplies it by a scale of its own to get pixels. |
+| **slope** | The difference between the highest and the lowest ground height across the tiles a building sits on. Zero means level ground. It is worked out when it is needed and never stored, so it cannot disagree with the heights it comes from. |
 
-One word is defined here but does not exist in the code yet, because the phase that introduces it is
-not written: **attractiveness** (one number saying how much the city draws new people in). It arrives
-with phase 15. Until then, finding it in `plan/` and not in a `.rs` is expected, not a stale entry.
+Three words are defined here but do not exist in the code yet, because the phases that introduce them
+are not written: **attractiveness** (one number saying how much the city draws new people in), which
+arrives with phase 15, and **ground height** and **slope**, which arrive with phase 19. Until then,
+finding them in `plan/` and not in a `.rs` is expected, not a stale entry.
 **jitter** was in this note until phase 14, and is now in the table above because it is in
 `demographics.rs`.
 
@@ -98,9 +101,10 @@ under `plan/`, which are a record of decisions as they were taken and are not re
 | **perturbation** | A test's deliberate change to one field of the state. | *change* |
 | **desperate** / **thriving** | The bottom and top bands of a house's mood. | `Mood::Awful`, `Mood::Great` |
 
-The phase documents also name a few types by their old spelling — `RngDomain` (17 times),
-`InsufficientFunds`, `OutOfBounds`, `UnsuitableTerrain`. A19 lists every rename with its replacement,
-and nothing but the name changed in any of them.
+The phase documents also name a few types by their old spelling — `RngDomain`, `InsufficientFunds`,
+`OutOfBounds`, `UnsuitableTerrain`. A19 lists every rename with its replacement, and nothing but the
+name changed in any of them. Those documents are frozen records and are not corrected, so the old
+spellings stay: where one would mislead, an amendment says so under the sentence that uses it.
 
 ---
 
@@ -122,6 +126,6 @@ history and breaks the recorded replays.
 | Difficulty ids in `difficulty.ron` | `"easy"`, `"normal"`, `"hard"` | Hashed the same way as the building ids, and the recording's header stores the id by name. |
 | `FORMAT_VERSION` | `2` | The shape of a save file. It went to `2` in phase 11, when the header started carrying the difficulty. It goes up when the shape changes, not when a name does. |
 | `CHECKPOINT_EVERY` | `30` | How far apart the committed checkpoints are. |
-| Benchmark labels `A.`–`G.` | — | `plan/09-invariants-closeout.md` records timings against those letters. `plan/18-invariants-closeout-m1.md` proposes three more, `H`–`J`, which `bench.rs` does not have yet. |
-| Design codes `D1`–`D7` | — | Defined in `CLAUDE.md` and cited 48 times from the `.rs` sources. |
-| Decision codes `A1`–`A19`, phase numbers `00`–`18` | — | The `A` codes alone are cited 69 times from the `.rs` sources, before counting `plan/`. |
+| Benchmark labels `A.`–`G.` | — | `plan/09-invariants-closeout.md` records the end-of-M0 timings against those letters, and `xtask/src/bench.rs` carries them as its reference figures. `H`–`J` were added by phase 14 and are measured with `--zero-demographics`. |
+| Design codes `D1`–`D7` | — | Defined in `CLAUDE.md`, cited by id from the `.rs` sources. `doc-check` fails on a citation whose decision does not exist. |
+| Decision codes `A1`–`A19`, phase numbers `00`–`18` | — | Defined in `DECISIONS.md`, cited by id and **never by path**, so that moving a file breaks nothing. `doc-check` enforces both halves of that. |

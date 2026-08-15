@@ -250,11 +250,10 @@ fn the_capacity_runs_out_in_residents() {
 /// Defensible on its own terms: an empty house genuinely consumes nothing. But
 /// coverage feeds satisfaction, so on the profile meant to be the hard one a
 /// single small well carries a whole district to the top level for
-/// free. It is a decision and not a bug, it is open as
-/// [A18](../../plan/open-decisions.md), and this test is here to pin what the
-/// game does today so the decision has something concrete to overturn: when
-/// A18 is closed in any direction but "accept it", this goes red, and that is
-/// the point of it.
+/// free. It is a decision and not a bug, it is open as A18, and this test is
+/// here to pin what the game does today so the decision has something concrete
+/// to overturn: when A18 is closed in any direction but "accept it", this goes
+/// red, and that is the point of it.
 ///
 /// It is also the only test in the suite that runs on `hard` other than the
 /// one in `commands.rs` that checks the knob itself.

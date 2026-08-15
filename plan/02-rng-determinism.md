@@ -1,5 +1,11 @@
 # Phase 02 — One RNG per domain
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** the same seed ⇒ the same sequence for every domain, and **adding a new domain does not
 knock the existing domains out of phase**.
 **Depends on:** 00 (01 is not needed).
@@ -23,6 +29,7 @@ domain to test.
 /// domain's *name*, not from its position in the enum.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RngDomain { Events, Migration, Production }
+// Amended: today this is `RngKind`, and it has four variants. See below.
 
 impl RngDomain {
     /// A stable salt. Do not rename a variant without regenerating the recordings:
@@ -54,6 +61,16 @@ Two details that look like pedantry and are not:
 - **`get` takes `&mut self`**: one domain lent out at a time. Do not expose the fields: if two
   systems can draw from the same stream in the same tick, the draw order becomes an implicit
   contract.
+> **Amended by the documentation audit (2026-08-13).** Two things moved. The type is called
+> **`RngKind`** — the vocabulary review ([A19](../DECISIONS.md)) retired `domain` as a hard word that
+> bought nothing — and it has a **fourth** variant, `Demographics`, added in phase 14. That fourth
+> one is the first kind any system actually draws from: for the whole of M0 the separation this phase
+> built was never exercised, and phase 14 is where it paid, because `Migration` keeps its own stream
+> so that phase 15 will not knock the demographics' sequence out of phase.
+>
+> **The declaration order is frozen**, and so are the salt strings: the salt is derived from the
+> variant's *name*, so renaming one silently changes every sequence it produces.
+
 - **The stream's position goes into the state hash** (phase 08). A state in which the `Events` RNG
   has consumed 5 values is not the same state as one in which it has consumed 6, even if
   everything else matches: if it does not go into the hash, a divergence shows up many ticks

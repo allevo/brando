@@ -47,11 +47,25 @@ use sim_core::{
 ///
 /// Chosen **explicitly**, never taken as the first in the table or as a
 /// default: if rebalancing the default moved these numbers, the tripwire would
-/// stop being comparable with the ones recorded in
-/// `plan/09-invariants-closeout.md`. `easy` and not another because it fills a
-/// new house up to its level-1 capacity, which is the population the recorded
-/// load was measured on; at `hard` the synthetic city would have zero residents
-/// and would be measuring something else.
+/// stop being comparable with the reference figures below. `easy` and not
+/// another because it fills a new house up to its level-1 capacity, which is the
+/// population the recorded load was measured on; at `hard` the synthetic city
+/// would have zero residents and would be measuring something else.
+///
+/// **The reference figures**, measured at the end of M0 at 200×200 with 15,000
+/// residents, *after* the step-3 optimisation that gave 6.5×:
+///
+/// | | |
+/// |---|---|
+/// | `A` empty tick, nothing dirty | 248 µs |
+/// | `C` tick, 10,000 rejected commands | 274 µs — 2 ns/command |
+/// | `D` tick, 1 accepted command | 3.35 ms |
+/// | `G` `compute_from_scratch` alone | 3.05 ms — 2.5 µs/provider |
+///
+/// `A` is the number to watch: it is paid on **every** tick, while `D` is paid
+/// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
+/// making the coverage recompute almost every tick (A12), which is the whole
+/// subject of A17.
 const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are
@@ -312,7 +326,7 @@ const RING_SLOTS: u32 = 5;
 ///
 /// Going from 51 to 52 does not change the lattice — `52.div_ceil(5)` and
 /// `51.div_ceil(5)` both give 11 blocks — so the measures stay comparable with
-/// those recorded in `plan/09-invariants-closeout.md`.
+/// the reference figures on [`BENCH_DIFFICULTY`].
 const TEST_SLOTS: u32 = 52;
 /// How many invalid commands measure C sends.
 const REJECT_BATCH: usize = 10_000;
@@ -625,7 +639,9 @@ fn without_demographics(real: &DataSet) -> DataSet {
         rules.starting_treasury = Coins::new(i32::MAX / 2);
         rules.demographics.births_per_thousand_per_month = 0;
         rules.demographics.deaths_per_thousand_per_month = 0;
-        rules.demographics.deaths_per_thousand_per_month_when_unserved = 0;
+        rules
+            .demographics
+            .deaths_per_thousand_per_month_when_unserved = 0;
     })
 }
 

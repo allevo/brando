@@ -405,13 +405,7 @@ pub fn world_seeded_without_demographics(seed: u64) -> World {
     world_seeded_with(dataset_without_demographics(), 32, 32, EASY, seed)
 }
 
-pub fn world_seeded_with(
-    data: Arc<DataSet>,
-    w: u16,
-    h: u16,
-    profile: &str,
-    seed: u64,
-) -> World {
+pub fn world_seeded_with(data: Arc<DataSet>, w: u16, h: u16, profile: &str, seed: u64) -> World {
     let grid = Grid::new(w, h, Terrain::Plain).expect("valid dimensions");
     let difficulty = difficulty(&data, profile);
     World::new(grid, data, seed, difficulty)

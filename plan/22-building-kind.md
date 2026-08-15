@@ -1,0 +1,124 @@
+# Phase 22 — A building says what it is
+
+> **Status: not yet built.**
+>
+> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
+> work is really done — see [ROADMAP.md](../ROADMAP.md).
+>
+> It is also, deliberately, a **sketch rather than a full plan**: it was written when the task was
+> added to the tree, out of the review of the documents on 2026-08-13, not when the phase was
+> designed. What follows is the goal and the shape of the problem.
+
+**Goal:** a building declares what kind of thing it is, instead of being classified by what it does
+not have. `is_house()` stops being a heuristic and becomes a field, and the checks that existed only
+to keep the heuristic true go away with it.
+**Depends on:** nothing. Not the map, not migration, not the treasury.
+**Size:** S (guessed, not estimated) — but with one regeneration attached, which is what really costs.
+
+## Why it exists
+
+Today:
+
+```rust
+pub fn is_house(&self) -> bool {
+    self.service.is_none() && !self.required_services.is_empty()
+}
+```
+
+A building is a house because of two absences. It works, and the price of making it keep working is
+three validation checks and a warning comment in `buildings.ron`: `NoHouse` (at least one building
+has to come out of the heuristic as a house), `LevelCountMismatch`, and
+`InconsistentRequirements` (the building's `required_services` has to stay the exact union of what
+its levels ask for, or the house stops being read as a house at all).
+
+That last one is the tell. `required_services` on the building is doing two unrelated jobs — it says
+*which satisfaction accumulators move* (`satisfaction::update` reads the union, and has to) and it
+says *this is a house*. The second job is why the field cannot be simplified, and the check exists to
+notice if anyone tries. Split the jobs and the field is free.
+
+It is worth saying plainly what this phase is **not**: it changes no rule of the game. Nothing about
+what a house does, costs, holds or requires moves. It is the removal of an inference.
+
+## The shape it will take
+
+The pipeline is the usual one and every stage has to be touched in order:
+
+- `sim-data/src/raw.rs` — the field as it appears in the table.
+- `sim-data/src/validate.rs` — an unknown value names its row, like every other refusal.
+- `sim-core/src/data.rs` — `BuildingDef`, `is_house()`, and the two or three `Inconsistency`
+  variants that survive.
+- `sim-core/src/data_hash.rs` — the new field is hashed. **This is the whole cost of the phase.**
+- `sim-data/data/buildings.ron` and the fixtures under `sim-data/tests/fixtures/broken/`.
+
+Callers barely move: `is_house()` keeps its name and its signature, and `world.rs`, `tick.rs` and
+`grid.rs` go on asking the same question. That is the point of it having been a function all along.
+
+## What the regeneration has to look like
+
+`hash_world` feeds `w.data().hash` into the state hash, so a dataset hash that moves moves **every
+checkpoint of every recording**, plus the `dataset_hash` in both `.ron` headers.
+
+The protocol in [CLAUDE.md](../CLAUDE.md) applies, and its step 5 — *look at the first diverging
+tick* — has an unusually sharp expectation here:
+
+> Divergence must start at the **first** checkpoint and cover all of them, in both recordings. A diff
+> that starts anywhere later means the dataset hash is not the only thing that moved, and the second
+> cause has to be found before committing.
+
+That expectation is worth more than the usual reading of the diff, because this phase changes no
+behaviour: it is the one case where the shape of the regeneration is known in advance and can be
+predicted exactly.
+
+## The decisions it will produce, none of them taken
+
+- **What the kind is spelled as.** An enum in Rust, or a string in the table validated against a
+  fixed list. D6 cuts both ways: building kinds *are* data, and this is a classification rather than
+  a quantity. Whichever wins, the reasoning belongs in the entry this phase writes.
+- **Whether `required_services` survives on the building.** Once it no longer classifies, it means
+  only "the accumulators that move", and that set is derivable from `house_levels`. Deriving it
+  deletes a field and a check; keeping it declared keeps the union readable in one place next to the
+  building it belongs to. Note that **[A20](../DECISIONS.md) is the entry that decides what that
+  union is for**, so closing A20 first makes this a smaller question.
+- **Which of the three checks survive.** `LevelCountMismatch` is about the levels and stays whatever
+  happens. `NoHouse` becomes trivial to state and probably stays, as a table with no house at all is
+  still a mistake. `InconsistentRequirements` exists only to protect the heuristic and probably goes
+  — unless the field is kept declared, in which case it is exactly the check that keeps it honest.
+- **Whether providers gain a kind of their own** at the same time, or whether "not a house" is enough
+  for now. The second is smaller and the first is the speculative widening D6 warns about with one
+  civilisation in the tree.
+
+Names: nothing sketched in this file is an approved spelling. Every balancing number lives in
+`sim-data`, never in a `.rs`, and this phase adds no number at all.
+
+## Out of scope
+
+- **Kinds of house.** More than one house kind is a real feature with a table shape behind it, and it
+  is not this.
+- **Levels for providers.** `range_per_level` and `capacity_per_level` stay one-element vectors until
+  a phase gives providers levels for a reason.
+- **Any change to what a house requires, is covered by, or eats.** That is A20, and it must not ride
+  along in this commit: two reasons to regenerate in one commit is exactly what the protocol forbids.
+
+## What its tests will have to prove
+
+1. **The behaviour is unchanged.** Every existing test passes untouched, and that is the primary
+   evidence. A phase that removes an inference and changes a rule at the same time has failed.
+2. **The regeneration is the predicted one** — first checkpoint onwards, both recordings, nothing
+   else.
+3. **A table that declares no house is still refused**, and a table that declares the kind wrongly
+   names the row that is wrong.
+4. **`fixtures/broken/` still reports what it reported.** The fixtures that fail on shape never reach
+   the cross-table checks, so they must not move at all; the ones that do reach them move only where
+   a check was removed.
+
+## Verification
+
+The protocol in [CLAUDE.md](../CLAUDE.md) applies unchanged, and the *before* has to be captured
+before the first line is written:
+
+```sh
+cargo xtask regen-expected --check   # green before anything is touched
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask doc-check
+```

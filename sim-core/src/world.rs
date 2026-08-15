@@ -11,9 +11,9 @@ use slotmap::SlotMap;
 
 use crate::coverage::Coverage;
 use crate::data::{DataSet, DifficultyId};
+use crate::demographics::{Demographics, PopulationTotals};
 use crate::grid::Grid;
 use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
-use crate::demographics::{Demographics, PopulationTotals};
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
@@ -34,8 +34,10 @@ pub struct Building {
 
 /// A house: the unit of population simulation (D5).
 ///
-/// Individuals are not simulated. In M0 the residents are a fixed value from
-/// the `rules` and the house does not level up: migration and levelling are M1.
+/// Individuals are not simulated. A newly-built house starts with the residents
+/// its difficulty profile gives it (A13); from there births and deaths move the
+/// number on their own (phase 14), and the monthly review moves the level
+/// (phase 13). Immigration and emigration are phase 15.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct House {
     pub origin: TilePos,

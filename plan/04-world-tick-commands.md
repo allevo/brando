@@ -1,5 +1,11 @@
 # Phase 04 — World, tick, commands
 
+> **Status: implemented — M0.**
+>
+> It records how the phase was planned and how it went, frozen as it was written. It is
+> **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
+> and [RULES.md](../RULES.md).
+
 **Goal:** `step()` advances the tick, applies the valid commands, rejects the invalid ones with a
 structured error, and does not panic on 10,000 random commands.
 **Depends on:** 01, 02, 03.
@@ -96,6 +102,25 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
 **All ten functions exist from the start**, empty ones included, each with a comment saying which
 phase fills it in. The order is game semantics: if the functions come into being one at a time,
 the order becomes an accident of the development timeline.
+
+> **Amended by the documentation audit (2026-08-13).** The ten-step order above held exactly and is
+> still the order today. Everything else in this section has moved on, and the sketches above should
+> be read as what phase 04 planned, not as the shapes that exist:
+>
+> - **`World` has seventeen fields, not nine.** M1 added `demographics`, `difficulty`, the derived
+>   `roads` and `coverage`, the diagnostic `food` and `population`, and the two `*_by_origin`
+>   indexes. Which of them enter the state hash is the part that matters, and it is in
+>   [ARCHITECTURE.md](../ARCHITECTURE.md).
+> - **`House` gained `satisfaction`** in phase 12, and `level` is a `Level` newtype rather than a
+>   `u8`. The sentence "in M0 the residents are a fixed value from the `rules`" expired twice over:
+>   the starting value now comes from the difficulty profile (A13), and from phase 14 the population
+>   moves on its own.
+> - **`StepReport` has a third field, `summary`** — the tick's aggregates, which are a snapshot and
+>   not delta events.
+> - **Three `CommandError` variants were renamed** by the vocabulary review ([A19](../DECISIONS.md)):
+>   `OutOfBounds` → `OutsideMap`, `UnsuitableTerrain` → `WrongTerrain`, and — the one the rule was
+>   written for — `InsufficientFunds` → `NotEnoughMoney`.
+> - `world.tick += 1` is a `saturating_add`.
 
 `StepReport { rejected: Vec<(usize, CommandError)>, events: Vec<Event> }`. An invalid command does
 **not** interrupt the tick and is not an `Err` of the tick: it is discarded and recorded with the

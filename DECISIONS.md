@@ -1,18 +1,32 @@
-# Open decisions
+# Decisions
 
-Choices needed to implement M0 that `CLAUDE.md` does not fix. For each one: the recommendation the
-phases assume, and what changes if it is decided otherwise.
+**This file answers one question: why is it this way?** It is the project's decision register and
+the target of every `A<n>` tag in the code. Whoever is looking for "why does the code do it this way
+and not that way" finds the answer here.
 
-From A7 onwards the file carries on past M0: these are decisions taken after it was closed, in the
-same form. Whoever is looking for "why does the code do it this way and not that way" finds the
-answer here.
+For each decision: the recommendation the phases assumed, the reasoning, what it would cost to decide
+otherwise, and — added after implementation — how it really went. That last part is almost always the
+more useful information, because it diverges.
 
-> **Genuinely open, right now, there are two:**
-> [A17 — the per-tick recomputation cost](#a17--the-per-tick-recomputation-cost--open-to-close-before-m2),
-> to be closed before M2 — it is the debt [A12](#a12--the-services-chase-the-population) opens on
-> purpose — and
-> [A18 — an empty house consumes no capacity](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15),
-> to be closed before phase 15.
+**This file is append-only.** A decision is never rewritten to match what the code does now: that
+would destroy the only record of why the code changed. It is *amended* with a dated block, or
+superseded by a later decision that names the one it replaces.
+
+**And it holds only decisions already taken.** An entry is never written ahead of the work that
+settles it — not for a phase that is planned and unbuilt, not to stop something being forgotten. Being
+append-only is what makes this strict: an early entry cannot be withdrawn, only amended, so the
+cheapest repair costs more than never having written it. Numbers are not reserved ahead of time
+either. Until the work is done the argument belongs in that phase's file under `plan/`, which says on
+its face that it is a prediction. The rule and the two cases that look like exceptions are in
+[CLAUDE.md](CLAUDE.md).
+
+The architectural decisions `D1`–`D7` are the project's constitution and live in
+[CLAUDE.md](CLAUDE.md). The `A` codes here are implementation decisions, taken as the work went on.
+Code cites both by id and never by path — an id survives any reorganisation of these files.
+
+> **Two decisions are open**, and neither is left here as prose to be forgotten. Each holds a
+> numbered slot in [ROADMAP.md](ROADMAP.md) at the point where it has to be closed:
+> **A18** at **14.5**, before phase 15, and **A17** at **18.5**, before M2.
 
 ## The state at the end of M0
 
@@ -52,23 +66,24 @@ useful story: the starting hypothesis was wrong, and the measurement said so bef
 | A14 | **Taken**, phase 14 — **done** | four-flow demographics, aggregated; a base rate with jitter from a seeded RNG |
 | A15 | **Taken**, phases 15–16 | attractiveness = average satisfaction + free places, and the tax rate **only** from phase 16 |
 | A16 | **Taken**, phase 17 | the objectives live in the `World`, `sim-scenario` builds them |
-| A17 | **Open**, to close **before M2** | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
+| A17 | **TO_BE_DECIDED** — [ROADMAP 18.5](ROADMAP.md), before M2 | the cost of recomputing the coverage every tick, which is A12's price — **measured in phase 14**, and two of its three expectations were wrong |
 
 A12 is the one to read: it is a *gameplay* choice paid for in computation time and in test coverage,
 and it was taken in full knowledge. A17 is the first genuinely open decision of the project since the
 end of M0, and that is no accident: it is the debt A12 opens.
 
-A12–A16 are still **predictions**. When M1 closes (phase 18) they have to be rewritten with how they
-really went — which for A2, A5 and A11 has been the most useful information in the document.
+Of these, only A14 has been written up with how it really went. A12 and A13 are implemented but not
+yet reviewed; A15 and A16 are still **predictions**. When M1 closes (phase 18) each gains the same
+treatment — which for A2, A5 and A11 has been the most useful information in the document.
 
 ## Decisions from the bug hunt after phase 13
 
 | # | Outcome | Note |
 |---|---|---|
-| A18 | **Open**, to close **before phase 15** | an empty house consumes no provider capacity, so on `hard` one well serves unboundedly many |
+| A18 | **TO_BE_DECIDED** — [ROADMAP 14.5](ROADMAP.md), before phase 15 | an empty house consumes no provider capacity, so on `hard` one well serves unboundedly many |
 
 It came out of a review of the whole tree on 2026-08-11 (see
-[the report](bug-hunt-2026-08-11.md)), which turned up six things. Five were bugs and were fixed
+[the report](plan/bug-hunt-2026-08-11.md)), which turned up six things. Five were bugs and were fixed
 in the same batch; this one is not a bug, it is a question nobody had been asked, and it is the
 second entry in this file to be genuinely open at the same time as another.
 
@@ -319,6 +334,16 @@ paper — but it is a trap for whoever reads that field in M1.
 > pins the behaviour down. It becomes a real decision in phase 13, when levels stop requiring the
 > same things.
 
+> **Amended 2026-08-13, reviewing the documents.** The gap now has an entry of its own,
+> [A20](#a20--a-house-is-covered-by-services-its-level-does-not-require), and a slot in the roadmap.
+> Phase 13 arrived and the prediction above held exactly: with the first rung asking for water only,
+> the unrequired assignment stopped being harmless — a hut is fed, and it takes places on the farm.
+> What the prediction got wrong is that phase 13 did not turn it into "a real decision", because
+> nobody was looking at it while the levels were being built. It took a reader asking *does the food
+> a house needs really depend on its residents* to find it, four phases later. A gap named inside a
+> closed entry is a gap nobody is scheduled to close: that is why it is now an entry with a status
+> and a number, which is the mechanism A17 and A18 already proved was needed.
+
 ---
 
 ## A10 — House satisfaction is an accumulator of time, not a resource level
@@ -340,7 +365,7 @@ today, because coverage does get lost (demolish a farm, break a road).
 
 > **Amended while planning M1.** The type is `[u8; ServiceKind::COUNT]`, not `[i16; …]`: the
 > accumulator is clamped to `0..=max` and never needs the sign or the range, and that way `House`
-> stays small. The rest of the decision holds unchanged, and [phase 12](12-satisfaction.md)
+> stays small. The rest of the decision holds unchanged, and [phase 12](plan/12-satisfaction.md)
 > implements it to the letter — with one addition it did not foresee, the `covered_but_unfed`
 > counter that A9 above explains.
 
@@ -375,7 +400,7 @@ nothing.
 **It was not the right hypothesis.** The cost was not the number of BFS runs, it was what each one
 dragged along with it: three `BTreeMap`s in the inner loop and a scratch buffer the size of the grid
 allocated per provider. Removing them gave **6.5×** without adding a byte of state
-([09-invariants-closeout.md](09-invariants-closeout.md) for the numbers).
+([09-invariants-closeout.md](plan/09-invariants-closeout.md) for the numbers).
 
 **Decision:** with `G` at 3.05 ms and 2.5 µs per provider, the cache is not being built now.
 
@@ -452,7 +477,7 @@ balancing from a minute and a half to twenty minutes. Requirement 2 of `CLAUDE.m
 drivable by an AI that runs many games — is the one that pays.
 
 It does not get optimised inside M1: the cost has to be **measured and attributed** (phases 14 and 18)
-and the countermeasures are [A17](#a17--the-per-tick-recomputation-cost--open-to-close-before-m2), to
+and the countermeasures are [A17](#a17--the-per-tick-recomputation-cost), to
 be closed before M2. It is A11's lesson applied beforehand instead of afterwards: the obvious
 hypothesis about where the cost lies has already been wrong once.
 
@@ -532,7 +557,7 @@ its own without touching the code. The header gets the textual id and not the in
 recorded `.ron` saying `difficulty: 1` cannot be read and reordering the table would silently change
 the meaning of every save file already written.
 
-**It has to be done early** — [phase 11](11-difficulty.md), right after A12 — for the same argument as
+**It has to be done early** — [phase 11](plan/11-difficulty.md), right after A12 — for the same argument as
 the `DirtyFlags`: it touches `World::new`, the `Header` and `hash_world`, i.e. the three things that
 regenerate the recordings, and doing it late regenerates them twice. It is born with **one knob only**
 (`starting_residents_per_house`) and phases 14, 15 and 17 hang theirs off it without touching the
@@ -654,11 +679,13 @@ declared in D4 and leaves their state outside the hash, i.e. outside the recordi
 
 ---
 
-## A17 — The per-tick recomputation cost — **OPEN**, to close before M2
+## A17 — The per-tick recomputation cost
+
+**Status: TO_BE_DECIDED** — slot [18.5 in ROADMAP.md](ROADMAP.md), to close before M2.
 
 The first decision in this project to stay open, and that is no accident: it is the debt
 [A12](#a12--the-services-chase-the-population) opens on purpose. (It was the only one until
-[A18](#a18--an-empty-house-consumes-no-capacity--open-to-close-before-phase-15) joined it, which is
+[A18](#a18--an-empty-house-consumes-no-capacity) joined it, which is
 also A12's doing, from the other side.)
 
 With the services chasing the population, the coverage is recomputed almost every tick instead of only
@@ -740,7 +767,9 @@ of the tick. That would be the first job to do, before touching any performance.
 
 ---
 
-## A18 — An empty house consumes no capacity — **OPEN**, to close before phase 15
+## A18 — An empty house consumes no capacity
+
+**Status: TO_BE_DECIDED** — slot [14.5 in ROADMAP.md](ROADMAP.md), to close before phase 15.
 
 `pick_within_capacity` (`sim-core/src/coverage.rs`) walks the candidates in priority order and
 subtracts each one's residents from what is left:
@@ -810,7 +839,7 @@ attribute later.
 >   housing anyone.
 >
 > Phase 14 leaves a test stating the behaviour as it stands, written to **change its outcome** rather
-> than break when this is closed ([14, test 15](14-births-deaths.md)). It is the third use of that
+> than break when this is closed ([14, test 15](plan/14-births-deaths.md)). It is the third use of that
 > device, and it is what keeps a deferred decision visible in the suite and not only here.
 
 **And something to measure it with, which does not exist.** Nothing in the property suite exercises
@@ -908,3 +937,69 @@ of reading like stale entries.
 The general lesson, and it is A5's again in a third place: **a document that is checked by nobody
 drifts.** The glossary had no test. It still has none, but it now has a rule that says what belongs in
 it, which is the cheapest available substitute.
+
+---
+
+## A20 — A house is covered by services its level does not require
+
+**Status: TO_BE_DECIDED** — slot [14.6 in ROADMAP.md](ROADMAP.md), to close before phase 15.
+
+`compute_from_scratch` (`sim-core/src/coverage.rs`) offers **every** house within range as a
+candidate, whatever that house's level asks for; the level is never read there. `production` then
+feeds every house that came out of it with a food provider attached. So a house on the first rung —
+which since phase 13 is a hut requiring water only — is assigned to a farm, eats
+`food_per_resident` per resident per tick, and occupies places the farm counts against its capacity.
+
+This is [A9](#a9--water-is-coverage-not-a-resource)'s gap, named in M0, made observable by phase 12,
+and made to matter by phase 13. It reached this entry because a reviewer asked whether the food a
+house needs really scales with its residents; the answer is yes, and the interesting half is *for
+every house, at every level*.
+
+### Why it is a decision and not a bug
+
+Because the same assignment does two jobs at once, and only one of them is questionable.
+
+- **It feeds the hut**, which costs the farm stock and places it could have given to a house that
+  actually requires food. That is the part that looks wrong.
+- **It is also the only way the hut ever gets promoted.** Satisfaction moves on the union of what
+  every level requires, precisely so that a rung introducing a new service is reachable; and the rung
+  above the hut asks for food at `level_up_threshold`. Stop assigning food to the hut and its food
+  accumulator sits at zero for ever: nothing rises past the first level again.
+
+So "assign only what the level requires" is not a one-line fix, it is a change to how the ladder is
+climbed. That is what makes this a decision.
+
+### Why it has to close before phase 15
+
+The same reason [A18](#a18--an-empty-house-consumes-no-capacity) does, and it is the same function.
+Today the number of huts is bounded by how many houses the player builds. Migration fills them, and
+every one it fills becomes a real claim on a farm sized for the rungs above. Both questions are about
+who consumes a provider's places, both are answered inside `pick_within_capacity` and its caller, and
+answering them in one pass costs one regeneration instead of two.
+
+### The candidate answers
+
+1. **Leave it, and write it down as intended.** The hut eats because it is being brought up to the
+   rung above; a farm feeding the district it will serve is not a leak, it is the ramp. Costs
+   nothing, and it is defensible — but it should be chosen, not inherited.
+2. **Cover for satisfaction, consume only what the level requires.** Splits the assignment's two
+   jobs: the hut keeps building its food satisfaction and stops eating. It sounds like the best of
+   both and it has a real cost — the coverage stops being one relation and becomes two, and
+   *a house covered by food always eats* stops being true as stated, which is a sentence three
+   documents and one validation check rest on.
+3. **Assign only what the level requires, and make the next rung reachable another way** — a rung is
+   entered on the services *below* it plus a wait, or satisfaction starts at a value instead of zero
+   when a service first arrives. Honest about what it costs: it moves the level rules, not the
+   coverage.
+
+### What it will need
+
+A test that pins today's behaviour first, in the form that **changes its outcome** rather than breaks
+when this closes — the device phase 14 used for A18. And the numbers phase 15 produces: how much of a
+farm's capacity huts really take once migration is filling them is a measurement, not a guess, and it
+does not exist yet.
+
+*Watch out for the same thing A18 warns about.* Whichever answer wins lands in the function
+`CapacityBeyondOutput` depends on for *a house covered by food always eats*. Answer 2 in particular
+changes what that sentence means, so the check has to be re-argued rather than assumed — for the
+third time in that function's life.

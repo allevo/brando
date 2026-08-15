@@ -22,6 +22,7 @@ fn main() -> ExitCode {
         Some("record") => exit_code(record(&args[1..])),
         Some("regen-expected") => exit_code(regen_expected(&args[1..])),
         Some("bench") => exit_code(bench::bench(&args[1..])),
+        Some("doc-check") => exit_code(xtask::doc_check::main(&args[1..])),
         _ => {
             usage();
             ExitCode::FAILURE
@@ -48,6 +49,7 @@ fn usage() {
     eprintln!(
         "  bench [--side <n>] [--residents <n>] [--reps <n>] [--zero-demographics]   (use --release)"
     );
+    eprintln!("  doc-check                                    (also runs in cargo test)");
     eprintln!();
     eprintln!("scenarios: {}", scenario::NAMES.join(", "));
 }
