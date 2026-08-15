@@ -1190,3 +1190,60 @@ the RNG position and the derived counters — every handler in `tick.rs` validat
 first write, and `charge` writes the treasury only on success — so the strengthened test was green
 the first time it ran. That is the answer to a question nobody had asked before, and it is worth
 having as an answer rather than as an assumption.
+
+---
+
+## A23 — A phase number is an ordering device, and its parts are compared one at a time
+
+**Status: decided**, phase 14.7, 2026-08-14.
+
+A half number — `14.4`, `14.5` — is work that falls between two whole phases. `doc-check` used to
+read one with `take_while(char::is_ascii_digit)`, which stops at the dot, in both of the places that
+read one: the phase file's own name and `ROADMAP.md`'s "implemented through" line. Both truncated, so
+both said `14`, so the check was **green because it was blind**. `14`, `14.4` and `14.9` all compared
+equal, and the one line stating how far the tree has got could name a phase nobody had built.
+
+The number is now a `PhaseNumber(Vec<u32>)` and its parts are compared **one at a time**, so `14.10`
+follows `14.9`.
+
+### Why not read it as a decimal
+
+Because it is not a quantity. Nothing is ever added to a phase number, averaged with one, or scaled;
+the only thing ever asked of it is *which of these two comes first*. Read as a decimal, `14.10` is
+`14.1` and lands before `14.2`, so the slots between two whole phases run out at nine and the tenth
+has to be spelled some other way. Read part by part it behaves like a version number, never runs out,
+and gives `14.4.1` for nothing. The cost is that `14.10` does not read aloud the way it sorts, which
+is a real cost and the reason this is written down rather than assumed.
+
+It also keeps the type out of floating point, which the state is forbidden ([D4](CLAUDE.md)). That is
+not the reason — `doc-check` is not the state and no rule reaches it — but a project that has one
+rule about fractions is better off with one answer to them.
+
+### Where the number lives
+
+**In the file's name**, and `ROADMAP.md`'s line is a claim checked against it. That was already what
+the check assumed; it is written down now because the alternative is reasonable and was rejected: a
+number in the phase file's header would survive a rename, at the price of the name and the header
+being able to disagree. The name is the thing a reader sees first, so it is the thing that has to be
+right.
+
+### What it cost, and the shape of the proof
+
+Nothing moved. No crate the game runs was touched, no table, no recording — `regen-expected --check`
+was green before and after, which is the whole correctness proof, as it was for the vocabulary review
+and for A22.
+
+The proof that the *defect* was real had to be taken before the fix, because a defect whose symptom
+is that nothing fails cannot be demonstrated afterwards: with `ROADMAP.md` edited to claim phase
+`14.9` while the highest implemented file was `14.4`, `doc-check` **passed**. After the change the
+same edit reports `says phase 14.9, but the highest phase file marked implemented is 14.4`. That
+sequence — see it pass, then see it fail — is the only evidence that the check now guards anything,
+and it is A5's lesson again: give a check something it has to catch, or it is checking nothing.
+
+### What was deliberately not done
+
+`doc-check` still does not know what a row *means*. It does not tell a `TO_BE_DECIDED` slot from an
+ordinary phase, does not resolve `ROADMAP.md`'s links to the files they name, and does not check that
+a phase file's title agrees with its own name — which is the failure the 22 → 14.4 rename had to
+avoid by hand. Those are worth having and are a different phase; this one is about reading the
+number, and mixing the two would have made the commit undiffable.
