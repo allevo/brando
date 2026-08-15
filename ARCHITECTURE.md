@@ -80,7 +80,12 @@ Two non-obvious invariants worth knowing before you touch any of this:
   walker to exist move a recording.
 
 Adding a field to `World` breaks the build at `World::every_field` (`sim-core/src/world.rs`), an
-exhaustive destructure that exists to force the question *does this belong in the hash?*
+exhaustive destructure that exists to force the question *does this belong in the hash?* It breaks
+the build a second time at `World::first_difference`, the exhaustive comparison beside it.
+
+**`World` is not `Clone`, in any configuration**, and `not_clone` in the same file refuses the derive
+at compile time. A world is played, never copied: whoever wants a second one holding a given state
+builds it and steps it — `twins` in `sim-core/tests/common`, a second `replay` in `sim-replay`.
 
 ## The tick — the spine
 
@@ -175,6 +180,7 @@ Not by convention — by things that fail:
 | `disallowed-types` / `disallowed-methods` | `clippy.toml` | `HashMap`, `HashSet`, `thread_rng`, clock access |
 | `unsafe_code = "forbid"`, `float_arithmetic = "deny"` | `Cargo.toml` | floats and `unsafe` in the core |
 | `World::every_field` | `sim-core/src/world.rs` | a new field silently missing from the hash |
+| `not_clone` | `sim-core/src/world.rs` | `World` regaining `Clone`, i.e. a state reached by copying rather than by playing |
 | `the_hash_covers_the_whole_state` | `sim-replay/tests/expected.rs` | a field in the struct but not in the hash |
 | `DataSet::inconsistencies` | `sim-core/src/data.rs` | balancing numbers that must stand in a relation |
 | Recorded replays, checkpointed | `sim-replay/tests/expected/*.hashes` | **any** new source of non-determinism |

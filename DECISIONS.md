@@ -47,7 +47,7 @@ where they had been written.
 | # | Outcome | Note |
 |---|---|---|
 | A7 | **Closed**: the commands stay an enum | a trait would break `Copy`, serde and the recordings' format |
-| A8 | **Closed**: the `Arc<DataSet>` stays | it serves `World: Clone`, not the borrow checker |
+| A8 | **Closed**: the `Arc<DataSet>` stays | it serves `World: Clone`, not the borrow checker — **amended**, read the entry |
 | A9 | **Closed**: water is coverage, not a resource | but `required_services` is declarative data M1 has to start reading |
 | A10 | **Closed in principle**, to be implemented in M1 | satisfaction is an accumulator of time, not a resource level |
 | A11 | **Closed: not doing it**, with the condition for reopening it | targeted invalidation of the coverage; the cost was elsewhere, and removing it gave 6.5× with no new state |
@@ -297,6 +297,26 @@ the `Arc` for nothing. There it really is a way around the borrow checker: `take
 takes the whole `&mut World`, so a `&world.data` alive for the length of the function would be
 incompatible. It could be removed by passing `take_from_stock` only the fields it touches, but that
 costs an atomic increment per tick and would make the signature noisier. Left as it is, on purpose.
+
+> **Amended 2026-08-14, when `World` stopped being `Clone`
+> ([A22](#a22--world-is-not-clone-and-the-compiler-says-so)).** The first sentence of this entry —
+> *`World` is `Clone` and gets cloned a great deal* — was the whole of the answer, and it is now
+> false: the derive is gone in every configuration and both callers it named by name,
+> `rejected_commands_mutate_nothing` and `the_hash_covers_the_whole_state`, build a second world
+> instead of copying one.
+>
+> **The `Arc` stays, and the decision is not reversed — its load moves onto the parts of the
+> argument that survive.** They were already written above and were merely the smaller half:
+> `sim-replay` and `xtask` build several worlds from one dataset loaded once, and so, now, do the
+> tests — `twins` hands one `Arc` to two worlds precisely so that they run on the same tables and
+> not on equal ones. The alternatives are untouched by any of this: `World<'a>` still propagates a
+> lifetime into every replay signature, and `&DataSet` as a parameter of `step` was already refused
+> in A2. `Arc` and not `Rc` is likewise untouched — it buys `World: Send`, for the batched balancing
+> on xtask's roadmap.
+>
+> Worth keeping for the shape of it: an entry whose stated reason dies while its conclusion holds.
+> Had the reason been the only one, this would have been a reversal, and the way to tell the two
+> apart was to go back and read what the entry actually claimed.
 
 ---
 
@@ -1096,3 +1116,77 @@ unknown role a serde *"unknown variant"* error instead of a validation error nam
 which is the rule `raw.rs` opens with. Turning the flat row into the sum is what validation does, and
 the contradictions found on the way — a house declaring a service, a provider declaring none — are
 reported against the field to blame.
+
+---
+
+## A22 — `World` is not `Clone`, and the compiler says so
+
+**Status: decided**, 2026-08-14.
+
+Phase 14.4 put the derive behind `test-util` and wrote that the compiler enforced it now instead of
+a convention. It enforced half of it: the production path could not copy a world, and the tests
+still could. The derive is now gone in every configuration.
+
+**Why it is worth removing rather than tolerating.** A save is `seed + Vec<Command>` and never a
+dump of the state (D4). A copy of a world is therefore a *second way to reach a state*, and the
+whole determinism story rests on there being one. Every use it had was a test saying "nothing
+changed" by comparing a state against a photograph of itself — which is a weaker claim than it
+looks, and the six sites were all of that shape.
+
+### The replacement says more than the copy did
+
+A test that wants a `before` builds a **second world and plays it**: same tables, same grid, same
+seed, same commands, one of them taking the tick empty where the other took the rejected one. Two
+things follow that a copy could not give:
+
+- **The comparison can cover everything.** `World::first_difference` is an exhaustive destructure in
+  the manner of `every_field`, so a field added to the state stops it compiling. A `before`/`after`
+  pair could only ever compare the fields a tick is *forbidden* to move; two worlds each played once
+  can be compared on `roads`, `coverage`, `dirty`, `food` and `population` as well. That is not a
+  technicality: `Coverage` and `RoadNetwork` carry their recompute and rebuild counters, so a
+  rejected command that dirtied a flag which step 2 or step 3 then consumed **inside the same tick**
+  is now visible. It left no trace at all in the final state, so no `before`/`after` test could have
+  seen it.
+- **It is the formulation phase 16 had already asked for**, in its test 5: *the state after
+  `step(w, cmds)` with every command rejected matches the one after an empty tick*. It was written
+  there as a change phase 16 would have to make once taxes moved the economy every tick. It is
+  simply how the test is written now, and phase 16 inherits it.
+
+The comparison **checks the tick first**, and that ordering is the point rather than housekeeping.
+The one failure mode this technique has that a copy does not is a twin somebody forgets to play:
+two worlds out of step still agree about an empty grid and an untouched treasury, so the test would
+pass while comparing two unrelated games. Comparing the tick first turns that into a named failure.
+
+Nothing is asserted on the branch where a command was accepted. Two identical worlds given identical
+commands stay identical because `step` is a function, so an assertion there would be `x == x` — the
+trap `covered_means_fed` fell into in phase 12, recorded under A9.
+
+### Why a compile-time check and not a comment
+
+`#[derive(Clone)]` is one word, its absence is invisible, and nothing else in the tree would fail if
+it came back — the exact case CLAUDE.md's rule covers: if you are writing a comment to explain why
+two things must hold, write a check instead. `not_clone` in `world.rs` asks the compiler the real
+question, through an inherent associated constant being chosen ahead of a trait's of the same name.
+It therefore answers for a hand-written `impl Clone for World` too, which a check on the *spelling*
+of the derive — in `doc-check`, say — would walk straight past.
+
+It carries a **positive control**: a local type that does derive `Clone`, asserted to read as such.
+Without it a change that broke the resolution would leave the guard answering "not `Clone`" to
+everything, which is green for the wrong reason. That is A5's lesson in a third place, after
+`dataset_with_a_farm_that_grows_nothing`: give the check something it has to catch, or it will
+eventually be checking nothing.
+
+### What it cost
+
+Nothing measurable, and one API member traded for a much larger one. `test-util` loses `Clone` and
+gains `first_difference`, which is **read-only** — the feature's other members are mutation hooks.
+`sim-core`'s tests build a second world per case instead of a deep copy per tick, which is cheaper
+than what it replaces. `the_hash_covers_the_whole_state` replays the `minimal` recording seventeen
+times instead of cloning a baseline, and the `sim-replay` suite stayed at three hundredths of a
+second. No recording moved: nothing here touches a rule or a table.
+
+The one behaviour that could have changed did not. A rejected command was already a no-op down to
+the RNG position and the derived counters — every handler in `tick.rs` validates in full before its
+first write, and `charge` writes the treasury only on success — so the strengthened test was green
+the first time it ran. That is the answer to a question nobody had asked before, and it is worth
+having as an answer rather than as an assumption.

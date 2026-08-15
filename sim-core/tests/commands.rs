@@ -10,8 +10,9 @@ use sim_core::{Coins, Command, CommandError, Event, Occupant, Terrain, TileOccup
 
 #[test]
 fn an_empty_tick_only_advances_the_tick() {
-    let mut w = world();
-    let before = w.clone();
+    // The second world is never played: `World` is not `Clone` (A22), so the
+    // game as it stood before the tick is a world that has not taken it.
+    let (mut w, before) = twins();
 
     let r = tick(&mut w, &[]);
 
@@ -77,15 +78,14 @@ fn a_farm_takes_four_tiles_and_costs_money() {
 
 #[test]
 fn an_overlap_is_rejected_without_mutating_anything() {
-    let mut w = world();
-    tick(
-        &mut w,
-        &[Command::PlaceBuilding {
-            kind: FARM,
-            origin: pos(3, 3),
-        }],
-    );
-    let before = w.clone();
+    let (mut w, mut still) = twins();
+    let first_farm = [Command::PlaceBuilding {
+        kind: FARM,
+        origin: pos(3, 3),
+    }];
+    // The same game in both, up to here.
+    tick(&mut w, &first_farm);
+    tick(&mut still, &first_farm);
 
     // The second farm touches a single tile of the first.
     let r = tick(
@@ -95,26 +95,32 @@ fn an_overlap_is_rejected_without_mutating_anything() {
             origin: pos(4, 4),
         }],
     );
+    // The twin takes the tick with nothing in it, which is what the rejected
+    // tick has to be indistinguishable from.
+    tick(&mut still, &[]);
 
     assert_eq!(r.rejected.len(), 1);
     assert!(matches!(r.rejected[0].1, CommandError::TileOccupied { .. }));
-    assert_eq!(w.building_count(), before.building_count());
+    assert_eq!(w.building_count(), still.building_count());
     assert_eq!(
         w.economy(),
-        before.economy(),
+        still.economy(),
         "a rejected command costs nothing"
     );
     assert_eq!(
         w.grid(),
-        before.grid(),
+        still.grid(),
         "no partial occupation: validation comes before the mutations"
     );
+    // The three named above are phase 04's statement of the rule and are worth
+    // failing by name; this is the rest of the state, which only a second world
+    // can be compared against.
+    same_game(&w, &still).unwrap_or_else(|e| panic!("and nothing else moved either: {e}"));
 }
 
 #[test]
 fn a_building_cannot_stick_out_past_the_edge() {
-    let mut w = world_of(8, 8);
-    let before = w.clone();
+    let (mut w, mut still) = twins_of(8, 8);
 
     let r = tick(
         &mut w,
@@ -123,11 +129,13 @@ fn a_building_cannot_stick_out_past_the_edge() {
             origin: pos(7, 7),
         }],
     );
+    tick(&mut still, &[]);
 
     assert_eq!(r.rejected.len(), 1);
     assert!(matches!(r.rejected[0].1, CommandError::OutsideMap(_)));
-    assert_eq!(w.grid(), before.grid());
-    assert_eq!(w.economy(), before.economy());
+    assert_eq!(w.grid(), still.grid());
+    assert_eq!(w.economy(), still.economy());
+    same_game(&w, &still).unwrap_or_else(|e| panic!("and nothing else moved either: {e}"));
 }
 
 #[test]

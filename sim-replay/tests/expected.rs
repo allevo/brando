@@ -303,7 +303,12 @@ fn the_header_carries_the_profile_by_name() {
 fn the_hash_covers_the_whole_state() {
     let data = data();
     let rec = recording("minimal");
-    let base = sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");
+    // A fresh world per perturbation, and not a copy of one: `World` is not
+    // `Clone` (A22), and a world is `seed + Vec<Command>` played out (D4). That
+    // replaying it really does give back the same world is what
+    // `the_same_replay_twice_gives_the_same_hashes` says, one test above.
+    let again = || sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");
+    let base = again();
     let h0 = hash_world(&base);
 
     // The compile-time half of the same guard: this call does nothing at
@@ -381,7 +386,7 @@ fn the_hash_covers_the_whole_state() {
     ];
 
     for (what, change) in changes {
-        let mut w = base.clone();
+        let mut w = again();
         change(&mut w);
         assert_ne!(
             hash_hex(&hash_world(&w)),
@@ -392,7 +397,7 @@ fn the_hash_covers_the_whole_state() {
 
     // The position of every RNG stream, one kind at a time.
     for d in sim_core::RngKind::ALL {
-        let mut w = base.clone();
+        let mut w = again();
         w.consume_rng(d);
         assert_ne!(
             hash_hex(&hash_world(&w)),

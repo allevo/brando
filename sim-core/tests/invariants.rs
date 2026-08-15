@@ -417,19 +417,38 @@ proptest! {
         }
     }
 
-    /// A rejected command mutates nothing: the state after a tick made only of
-    /// rejected commands is the one from before, tick aside.
+    /// A rejected command mutates nothing: a tick in which every command was
+    /// rejected leaves the world where an empty tick would have left it.
+    ///
+    /// Two worlds play the same game. On a tick whose commands were **all**
+    /// rejected the second takes the tick empty, and afterwards the two have to
+    /// be indistinguishable; on any other tick it takes the same commands, so
+    /// the pair stays one game and is still a reference when the next
+    /// all-rejected tick arrives.
+    ///
+    /// Stronger than the `before`/`after` comparison against a copy that it
+    /// replaces (A22), and in two ways: it compares the **whole** state, so a
+    /// rejection that consumed an RNG draw is caught, and it compares the
+    /// derived structures, so a rejection that dirtied the coverage and had
+    /// step 3 consume the flag inside the same tick is caught too — that one
+    /// left no trace at all in a `before`/`after` pair.
+    ///
+    /// Nothing is compared on the other branch, on purpose: two identical
+    /// worlds given identical commands stay identical because `step` is a
+    /// function, so an assertion there would be `x == x` — the trap this file
+    /// has already fallen into twice.
     #[test]
     fn rejected_commands_mutate_nothing(p in a_game()) {
-        let mut w = world();
+        let (mut played, mut still) = twins();
         for cmds in &p {
-            let before = w.clone();
-            let r = tick(&mut w, cmds);
+            let r = tick(&mut played, cmds);
             if r.rejected.len() == cmds.len() {
-                prop_assert_eq!(w.grid(), before.grid());
-                prop_assert_eq!(w.economy(), before.economy());
-                prop_assert_eq!(w.building_count(), before.building_count());
-                prop_assert_eq!(w.house_count(), before.house_count());
+                tick(&mut still, &[]);
+                if let Err(e) = same_game(&played, &still) {
+                    return Err(TestCaseError::fail(e));
+                }
+            } else {
+                tick(&mut still, cmds);
             }
         }
     }

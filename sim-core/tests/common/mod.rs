@@ -414,6 +414,50 @@ pub fn world_seeded_with(data: Arc<DataSet>, w: u16, h: u16, profile: &str, seed
     World::new(grid, data, seed, difficulty)
 }
 
+/// Two worlds at the start of the same game: the same tables, the same grid,
+/// the same seed.
+///
+/// It is what a test uses in place of copying a world, which `World` does not
+/// allow (A22). A world is `seed + Vec<Command>` (D4), so the way to a second
+/// world holding a given state is to play the same game again — and the pair
+/// says something the copy could not: *a tick in which every command was
+/// rejected leaves the world where an empty tick would have left it*.
+///
+/// The two share one `Arc<DataSet>`, so the tables are the same tables and not
+/// merely equal ones. That is also the reason the field is an `Arc` at all
+/// (A8): the second world costs a refcount bump.
+pub fn twins() -> (World, World) {
+    twins_of(32, 32)
+}
+
+/// Like [`twins`], on a grid of your choosing.
+pub fn twins_of(w: u16, h: u16) -> (World, World) {
+    let data = dataset();
+    (
+        world_seeded_with(Arc::clone(&data), w, h, EASY, SEED),
+        world_seeded_with(data, w, h, EASY, SEED),
+    )
+}
+
+/// `Ok` when the two worlds are the same game, and which field parted them
+/// otherwise.
+///
+/// A thin reading of [`World::first_difference`], which is the exhaustive
+/// comparison: it covers the derived and diagnostic structures as well as the
+/// state, and it checks the tick before anything else, so two worlds that were
+/// not played the same number of times are reported as such instead of
+/// agreeing about an empty grid.
+pub fn same_game(a: &World, b: &World) -> Result<(), String> {
+    match a.first_difference(b) {
+        None => Ok(()),
+        Some(field) => Err(format!(
+            "the two worlds parted on `{field}`, at tick {} against {}",
+            a.tick(),
+            b.tick()
+        )),
+    }
+}
+
 /// Applies the commands in a single tick and returns the report.
 pub fn tick(world: &mut World, cmds: &[Command]) -> sim_core::StepReport {
     sim_core::step(world, cmds)
