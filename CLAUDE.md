@@ -27,7 +27,12 @@ can both answer the same question will eventually disagree, and then neither can
 | What is next, what is undecided? | [ROADMAP.md](ROADMAP.md) | the only statement of how far the tree has got |
 | What does this word mean? | [GLOSSARY.md](GLOSSARY.md) | edited in place |
 | How do I work here? | this file | edited in place — **no statements of current state** |
+| How do I open and close a task? | [the `task` skill](.claude/skills/task/SKILL.md) | edited in place |
 | What happened, in order? | [plan/](plan/) | **frozen history** |
+
+The last row but one is a **skill**, which is loaded when the job comes up rather than read every
+session. Opening and closing a task is a procedure followed at two particular moments, not a rule to
+carry around, and it answers that question in full — this file does not answer it at all.
 
 **`plan/` is a record of moments in the past and is never edited to match the present.** When a task
 document turns out to describe behaviour that later changed, you do **not** rewrite the sentence: you
@@ -51,30 +56,16 @@ link. `D<n>` still resolves, and always will.
 Every document under `plan/` is a task, and every task has **one goal only**, closed by a command you
 run that gives a yes-or-no answer. If a task ends and you cannot say whether it worked, the task was
 badly defined. One task is one commit, or one PR, and you do not start the next one with the last
-still red. Every task file closes with a **Verification** section saying which commands to run and
-what has to happen.
+still red.
 
 A task's id is the number its file name opens with, and the file states that id again in front
-matter, which is the first thing in it:
-
-```yaml
----
-id: 14.4
-kind: phase
-status: implemented
-opened: 2026-08-13
-closed: 2026-08-14
----
-```
-
-`kind` is `phase` or `open-question`. `status` is `implemented`, `not-yet-built` or `superseded`, and
-`closed` is present exactly when the status is one of the last two — work that is not finished cannot
-say when it finished. They are two fields rather than one because they answer two different questions,
-what the document is and how far the work got, and one field answering both is how a document ends up
-disagreeing with itself.
-
-`doc-check` reads all of it: the id against the file name, the dates against `ROADMAP.md`'s row, and
-an `open-question` against the roadmap slot that schedules it.
+matter — twice on purpose, once where a reader finds it and once where a link finds it. `kind` says
+what the document is, `status` says how far the work got, and they are two fields rather than one
+because they answer two different questions: one field answering both is how a document ends up
+disagreeing with itself. `doc-check` reads all of it, along with the dates against `ROADMAP.md`'s row
+and an open question against the roadmap slot that schedules it. Which fields exist, which values
+they take, and which shape the body takes are in the skill, whose template is itself checked against
+the code.
 
 One id namespace, cited by id and never by path: `D1`–`D7`, the **constitution**, taken before any
 code and binding on all of it. If an implementation seems to require breaking a `D`, stop and ask.
@@ -82,23 +73,17 @@ code and binding on all of it. If an implementation seems to require breaking a 
 
 ### The definition of done for a phase
 
-A phase is not finished until all of these are true:
+A phase is not finished until the tests are green, the recordings are accounted for, each of
+`ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has been updated or consciously
+declared unaffected — say which, explicitly, because "I did not think about it" is the failure this
+guards against — and the task file has its `## How it went`, including the ways the plan was wrong.
+That is seven items, and they are in the skill together with the edits that close a task, because
+they are read at the moment a phase closes and at no other.
 
-1. `cargo test --workspace` is green, and the new behaviour has the tests its task file promised.
-2. `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` are clean.
-3. `cargo xtask regen-expected --check` is green, **or** the recordings were regenerated on purpose
-   and the reason is written down. A hash that moves without the rules or tables changing is a
-   source of non-determinism: stop and find it.
-4. `cargo xtask doc-check` is green.
-5. Each of `ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has either been updated or
-   consciously declared unaffected. Say which, explicitly; "I did not think about it" is the failure
-   mode this list exists to prevent.
-6. The task file gets its `## How it went` section — including the ways the plan was wrong — and its
-   front matter is brought up to date: `status: implemented`, and the `closed` date, which
-   `ROADMAP.md`'s row for it has to match.
-7. Any decision taken along the way is written where it binds — see below. Any decision **deferred**
-   gets a half-numbered **open question** slot in `ROADMAP.md`, at the point where it has to be
-   answered, and a task of its own holding the argument.
+The one of them that reaches further than the task file: any decision taken along the way is written
+where it binds — see below — and any decision **deferred** gets a half-numbered **open question**
+slot in `ROADMAP.md`, at the point where it has to be answered, and a task of its own holding the
+argument.
 
 ### Recording a decision
 

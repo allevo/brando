@@ -73,6 +73,7 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
     f.extend(open_questions_are_scheduled(root, &tasks)?);
     f.extend(roadmap_agrees_with_the_tasks(root, &tasks)?);
     f.extend(frozen_orders_match_the_code(root, &sources)?);
+    f.extend(skill_matches_the_task_header(root)?);
     Ok(f)
 }
 
@@ -1169,6 +1170,99 @@ fn declared_order(sources: &[(PathBuf, String)], ty: &str) -> Option<Vec<String>
     None
 }
 
+// --- 10. the skill teaches the header the code accepts --------------------
+
+/// Where the procedure for opening and closing a task is written down.
+const TASK_SKILL: &str = ".claude/skills/task/SKILL.md";
+
+/// The skill carries a front matter template, and a template is a second copy
+/// of what [`read_task`] accepts.
+///
+/// A second copy of a rule that nothing keeps in agreement with the first is a
+/// fork waiting to be noticed, which is why the decision register was removed
+/// rather than kept up to date. The same argument applies here, so the
+/// agreement is a check: the template names the fields the code requires, and
+/// the two lines listing the kinds and the statuses name exactly the values the
+/// code allows. Drift one of the three and this fails, naming both sides.
+///
+/// It is a check and not a comment for the reason the balancing numbers taught:
+/// if you find yourself writing a comment explaining why two things must agree,
+/// write a check instead.
+fn skill_matches_the_task_header(root: &Path) -> Result<Vec<Finding>, String> {
+    let Ok(text) = fs::read_to_string(root.join(TASK_SKILL)) else {
+        return Ok(vec![Finding {
+            check: "skill-template",
+            at: TASK_SKILL.to_string(),
+            what: "is missing, so nothing states the header a task has to carry".to_string(),
+        }]);
+    };
+    Ok(skill_states_the_header(&text))
+}
+
+/// The three comparisons, on the text alone so that each of them can be shown
+/// failing without a file on disk to fail with.
+fn skill_states_the_header(text: &str) -> Vec<Finding> {
+    let mut out = Vec::new();
+
+    // The template is the first fenced block tagged `yaml`. It shows finished
+    // work, which is the only shape carrying every field at once.
+    let mut expected: Vec<&str> = TASK_FIELDS.to_vec();
+    expected.push("closed");
+    match fenced(text, "yaml").as_deref().map(front_matter) {
+        Some(Ok(fields)) => {
+            let named: Vec<&str> = fields.iter().map(|(k, _)| k.as_str()).collect();
+            if named != expected {
+                out.push(Finding {
+                    check: "skill-template",
+                    at: TASK_SKILL.to_string(),
+                    what: format!("shows a header of {named:?}, but a task carries {expected:?}"),
+                });
+            }
+        }
+        Some(Err(what)) => out.push(Finding {
+            check: "skill-template",
+            at: TASK_SKILL.to_string(),
+            what: format!("shows a header that does not read: {what}"),
+        }),
+        None => out.push(Finding {
+            check: "skill-template",
+            at: TASK_SKILL.to_string(),
+            what: "has no fenced `yaml` block, so it shows no header at all".to_string(),
+        }),
+    }
+
+    // Each of the two enums is listed on one line, in backticks, introduced by
+    // the field it belongs to. The prose after the list carries no backticks,
+    // so everything but the first span is a value.
+    for (field, allowed) in [
+        ("kind", TASK_KINDS.as_slice()),
+        ("status", TASK_STATUSES.as_slice()),
+    ] {
+        let opening = format!("- `{field}` is one of ");
+        let Some(line) = text.lines().find(|l| l.starts_with(&opening)) else {
+            out.push(Finding {
+                check: "skill-template",
+                at: TASK_SKILL.to_string(),
+                what: format!(
+                    "has no line opening \"{opening}\", so {allowed:?} is written nowhere"
+                ),
+            });
+            continue;
+        };
+        let listed: Vec<String> = backticked(line).into_iter().skip(1).collect();
+        if listed != allowed {
+            out.push(Finding {
+                check: "skill-template",
+                at: TASK_SKILL.to_string(),
+                what: format!(
+                    "says `{field}` is one of {listed:?}, but the code allows {allowed:?}"
+                ),
+            });
+        }
+    }
+    out
+}
+
 // --- shared helpers -------------------------------------------------------
 
 fn read(root: &Path, rel: &str) -> Result<String, String> {
@@ -1238,6 +1332,19 @@ fn backticked(line: &str) -> Vec<String> {
         rest = &rest[close + 1..];
     }
     out
+}
+
+/// The body of the first fenced block tagged `tag`, without its two fences.
+///
+/// `None` when the block is never opened, and `None` when it is opened and left
+/// empty — a block with nothing in it states nothing, and reporting it as
+/// missing says the same thing more usefully than an empty comparison would.
+fn fenced(text: &str, tag: &str) -> Option<String> {
+    let opening = format!("```{tag}");
+    let mut lines = text.lines().skip_while(|l| l.trim_end() != opening);
+    lines.next()?;
+    let body: Vec<&str> = lines.take_while(|l| !l.starts_with("```")).collect();
+    (!body.is_empty()).then(|| body.join("\n"))
 }
 
 /// Identifiers that begin with a capital, in order of appearance.
@@ -1411,5 +1518,63 @@ mod tests {
     fn backticks_and_capitals() {
         assert_eq!(backticked("a `b` c `d`"), vec!["b", "d"]);
         assert_eq!(capitalised("Births, Deaths"), vec!["Births", "Deaths"]);
+    }
+
+    #[test]
+    fn a_fenced_block_is_read_without_its_fences() {
+        let text = "before\n```yaml\nid: 1\n```\nafter\n```yaml\nsecond\n```\n";
+        assert_eq!(fenced(text, "yaml").as_deref(), Some("id: 1"));
+        // A tag that is never opened, and one opened over nothing.
+        assert!(fenced(text, "sh").is_none());
+        assert!(fenced("```yaml\n```\n", "yaml").is_none());
+    }
+
+    /// A skill that states the header correctly, built from its three moving
+    /// parts so that each case below differs from a passing file in exactly one
+    /// way.
+    fn skill(fields: &[&str], kinds: &[&str], statuses: &[&str]) -> String {
+        let list = |values: &[&str]| {
+            values
+                .iter()
+                .map(|v| format!("`{v}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let header = fields
+            .iter()
+            .map(|f| format!("{f}: x\n"))
+            .collect::<String>();
+        format!(
+            "# Task\n\n```yaml\n---\n{header}---\n```\n\n\
+             - `kind` is one of {}. It says what the document is.\n\
+             - `status` is one of {}. It says how far the work got.\n",
+            list(kinds),
+            list(statuses),
+        )
+    }
+
+    /// The header the skill teaches and the header the code accepts are the
+    /// same header, or one of them is a fork nobody is keeping in agreement.
+    #[test]
+    fn the_skill_and_the_code_state_the_same_header() {
+        let every_field = [TASK_FIELDS.as_slice(), &["closed"]].concat();
+        let good = skill(&every_field, &TASK_KINDS, &TASK_STATUSES);
+        assert!(skill_states_the_header(&good).is_empty());
+
+        // One drift per case, and each names both sides in its message.
+        let missing = skill(&TASK_FIELDS, &TASK_KINDS, &TASK_STATUSES);
+        let found = skill_states_the_header(&missing);
+        assert!(found[0].what.contains("closed"), "{}", found[0]);
+
+        let stale = skill(&every_field, &["phase", "open-question"], &TASK_STATUSES);
+        let found = skill_states_the_header(&stale);
+        assert!(found[0].what.contains("constitution"), "{}", found[0]);
+
+        let stale = skill(&every_field, &TASK_KINDS, &["implemented", "closed"]);
+        let found = skill_states_the_header(&stale);
+        assert!(found[0].what.contains("not-yet-built"), "{}", found[0]);
+
+        // A skill that shows no header at all, and one whose lists are gone.
+        assert_eq!(skill_states_the_header("# Task\n").len(), 3);
     }
 }
