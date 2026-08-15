@@ -117,14 +117,14 @@ impl Demographics {
 /// [`FoodTotals`]: crate::production::FoodTotals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PopulationTotals {
-    /// Residents who arrived with a newly-built house ([A13]: how full a house
-    /// is born is the difficulty's one knob).
+    /// Residents who arrived with a newly-built house. How full a house is born
+    /// is the difficulty's one knob, in [`DifficultyDef`].
     ///
     /// The inflow mirror of `lost_to_demolition`, and the third time this shape
     /// has been needed — the first two were a demolished farm's stock (phase
     /// 07) and a demolished house's residents.
     ///
-    /// [A13]: crate::data::DifficultyDef
+    /// [`DifficultyDef`]: crate::data::DifficultyDef
     pub settled_on_construction: u64,
     pub born: u64,
     pub died: u64,
@@ -159,7 +159,7 @@ impl PopulationTotals {
 /// Steps 6.3 and 6.5. Returns whether anybody moved.
 ///
 /// The caller invalidates the coverage on `true` and only on `true`: capacity
-/// is counted on the residents present ([A12]), so an assignment made at step 3
+/// is counted on the residents present, so an assignment made at step 3
 /// with yesterday's population is stale the moment anyone is born or dies —
 /// but in a full or empty city nobody moves, no recomputation is needed, and
 /// the tick goes back to costing what it did before this phase.
@@ -168,8 +168,6 @@ impl PopulationTotals {
 /// still have to invalidate: the coverage is decided by the residents of each
 /// house, not by the city's total. That is why this returns a flag instead of
 /// the caller comparing populations.
-///
-/// [A12]: crate::coverage
 pub(crate) fn run(world: &mut World, r: &mut StepReportEvents<'_>) -> bool {
     let divisor = divisor(&world.data.rules);
     if divisor == 0 {
@@ -309,9 +307,9 @@ fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool
 /// `residents > 0` (you need people to make people), room under
 /// `max_residents(level)`, and the house's own worst required service above
 /// `birth_threshold`. The base rate is then scaled by the city's
-/// residents-weighted average satisfaction: that is the "tied to overall
-/// wellbeing" half of A14 — a city that is struggling does not have children,
-/// even in the houses that are doing well.
+/// residents-weighted average satisfaction: births are tied to the city's
+/// overall wellbeing, so a city that is struggling does not have children, even
+/// in the houses that are doing well.
 ///
 /// **The rate is counted against the eligible residents, not the population**,
 /// and that is what makes the plateau structural rather than a consequence of

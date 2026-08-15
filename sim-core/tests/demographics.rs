@@ -346,7 +346,7 @@ mod demographics {
         assert_eq!(w.population_totals().lost_to_demolition - before, residents);
     }
 
-    // --- 12. the invalidation contract (A12) --------------------------------
+    // --- 12. the invalidation contract --------------------------------
 
     /// If anybody moved, the coverage is dirty at the end of the tick — and if
     /// nobody moved, it is not.
@@ -354,7 +354,7 @@ mod demographics {
     /// The converse is the half that matters: it is what says the invalidation
     /// is conditional and not an unconditional `mark_all_providers_dirty`
     /// dressed up as one. Without it, a tick that recomputed the coverage
-    /// unconditionally would pass just as well, and A12's price would be paid
+    /// unconditionally would pass just as well, and the coverage's price would be paid
     /// on every tick of every game instead of only on the ticks that need it.
     #[test]
     fn demographics_invalidate_the_coverage_and_only_then() {
@@ -398,17 +398,18 @@ mod demographics {
     /// A house that grows past what the provider can serve falls out of the
     /// coverage on the next tick, and *covered ⇒ eats* stays true.
     ///
-    /// A12's game loop observed at its smallest: the services chase the
+    /// The game loop observed at its smallest: the services chase the
     /// population, so the city can outgrow them, and the player's signal to
     /// build is that somebody has stopped being served.
     #[test]
     fn the_coverage_follows_a_city_that_outgrows_it() {
         // Counted in **residents**, not in houses. Houses would be the wrong
-        // unit twice over: the capacity is in residents (A12), and an emptied
-        // house weighs nothing and goes on being served for free (A18), so the
-        // count of served houses can go *up* while the city outgrows its farm.
-        // That is not a bug in the coverage, it is the thing A18 is about, and
-        // measuring in houses here would have quietly hidden it.
+        // unit twice over: the capacity is in residents, and an emptied
+        // house weighs nothing and goes on being served for free, so the count
+        // of served houses can go *up* while the city outgrows its farm. That
+        // is not a bug in the coverage, it is the thing the open question at
+        // slot 14.5 is about, and measuring in houses here would have quietly
+        // hidden it.
         fn residents_served(w: &World) -> u16 {
             w.houses()
                 .filter(|(_, h)| h.served.get(ServiceKind::Food))
@@ -440,18 +441,18 @@ mod demographics {
         );
     }
 
-    // --- 15. what this phase hands to A18 -----------------------------------
+    // --- 15. what this phase hands to slot 14.5 -----------------------------
 
     /// A house emptied by deaths keeps its coverage and goes on consuming no
     /// capacity.
     ///
-    /// **Written to change its outcome, not to break.** A18 — an empty house
-    /// consumes no provider capacity — was recorded about `hard`, where a house
-    /// is *born* empty. Deaths make zero residents reachable on every profile,
-    /// `easy` included, so the behaviour is now inside the committed
-    /// recordings. This states it as it is today; when phase 15 closes A18, the
-    /// assertion below is what has to be flipped, deliberately, rather than
-    /// discovered.
+    /// **Written to change its outcome, not to break.** The open question at
+    /// slot 14.5 — does an empty house consume provider capacity? — was first
+    /// noticed on `hard`, where a house is *born* empty. Deaths make zero
+    /// residents reachable on every profile, `easy` included, so the behaviour
+    /// is now inside the committed recordings. This states it as it is today;
+    /// when phase 15 answers 14.5, the assertion below is what has to be
+    /// flipped, deliberately, rather than discovered.
     #[test]
     fn an_emptied_house_still_consumes_no_capacity() {
         let mut w = world_of(16, 16);
@@ -474,7 +475,7 @@ mod demographics {
         assert!(
             w.coverage().houses_served_by(small_well).contains(&victim),
             "an emptied house keeps its coverage, and weighs nothing while it \
-             has it — that is exactly what A18 is about"
+             has it — that is exactly what the question at 14.5 is about"
         );
     }
 }

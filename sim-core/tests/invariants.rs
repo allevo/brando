@@ -1,4 +1,5 @@
-//! The core's invariants (CLAUDE.md, Testing point 1).
+//! The core's invariants, as property tests — the first and most valuable of the
+//! four kinds of test this project asks for.
 //!
 //! Each of these has found or will find a real bug; none of them is to be
 //! silenced to make CI pass. This is where you read *what the project
@@ -32,7 +33,7 @@
 //!
 //! **Known debt.** There is no real `cargo-fuzz` target
 //! (`fuzz/fuzz_targets/commands.rs`): `proptest` with many cases plus the
-//! deterministic fuzz below already cover point 3 of `CLAUDE.md`, and a
+//! deterministic fuzz below already cover the command fuzzing asked for, and a
 //! half-finished target would be worse than none. To be done when a new
 //! mechanic widens the command space.
 
@@ -46,8 +47,8 @@ use sim_core::{Coins, Command, CommandError, Occupant, TilePos, World};
 const SIDE: u8 = 32;
 /// The generated coordinates deliberately run past the edge.
 const GEN_SIDE: u8 = SIDE + 2;
-/// The generated `kind`s go beyond the three in the table: the LLM will produce
-/// ones that do not exist (CLAUDE.md, AI interface).
+/// The generated `kind`s go beyond the three in the table: the LLM driving the
+/// game (D7) will produce ones that do not exist.
 const GEN_KINDS: u16 = 5;
 
 // --- the invariants, as reusable functions ----------------------------------
@@ -127,7 +128,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
 /// that one it is an exact equality, and like that one its job is to find the
 /// flow somebody forgot to count — starting with the two this equation was
 /// itself missing when phase 14 was planned: a house is born with residents
-/// already in it (A13) and is demolished with residents still in it, and
+/// already in it and is demolished with residents still in it, and
 /// neither is a birth or a death.
 ///
 /// **It replaces `population_stays_consistent`**, which asserted
@@ -142,7 +143,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
 /// `residents_stay_within_the_house_capacity`, and has been since phase 13.
 ///
 /// It is also **profile-agnostic by construction**: it reads the flows and
-/// never `house_count × 4`, which is what A18 asks phase 14 for. From here the
+/// never `house_count × 4`, which is what slot 14.5 asks phase 14 for. From here the
 /// property suite can be pointed at `hard`.
 fn population_is_conserved(w: &World) -> Result<(), String> {
     let alive = i64::from(w.population());
@@ -180,7 +181,7 @@ fn population_is_conserved(w: &World) -> Result<(), String> {
 /// bit was written by step 4 and meant "it ate", so comparing it against the
 /// coverage — which means "a farm reaches it" — was a real question with two
 /// independent sources. Phase 12 made both bits mean "covered" and both written
-/// by step 3 (A9), and that comparison became `x == x`. What replaces it is
+/// by step 3, and that comparison became `x == x`. What replaces it is
 /// step 4's own counter, and it is the better question: it holds over the whole
 /// history, not just at the moment somebody looks.
 fn covered_houses_are_fed(w: &World) -> Result<(), String> {
@@ -427,7 +428,7 @@ proptest! {
     /// all-rejected tick arrives.
     ///
     /// Stronger than the `before`/`after` comparison against a copy that it
-    /// replaces (A22), and in two ways: it compares the **whole** state, so a
+    /// replaces, and in two ways: it compares the **whole** state, so a
     /// rejection that consumed an RNG draw is caught, and it compares the
     /// derived structures, so a rejection that dirtied the coverage and had
     /// step 3 consume the flag inside the same tick is caught too — that one
@@ -454,7 +455,7 @@ proptest! {
     }
 }
 
-// --- fuzzing the commands (CLAUDE.md, Testing point 3) ----------------------
+// --- fuzzing the commands: a malformed one never panics ---------------------
 
 /// A PRNG local to the test: deterministic and with no extra dependencies.
 /// Deliberately not `RngSet` — this test must not depend on the game's

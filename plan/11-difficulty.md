@@ -1,7 +1,13 @@
+---
+id: 11
+kind: phase
+status: implemented
+opened: 2026-08-09
+closed: 2026-08-10
+---
+
 # Phase 11 — Game difficulty
 
-> **Status: implemented — phase 11.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -11,7 +17,7 @@ difficulty travels in the replay's header, and a file recorded at one difficulty
 another.
 **Depends on:** 09 (M0 closed).
 **Size:** S — it is the first phase of M1.
-**Decisions involved:** [A13](../DECISIONS.md), A2, A3, D6.
+**Decisions involved:** A13, A2, A3, D6.
 
 ## Why now
 
@@ -171,7 +177,7 @@ content as with everything else.
 
 ### The compile-time canary — the most important thing in the phase
 
-M1 adds seven fields to the state across six phases, and [A3](../DECISIONS.md) says each one has
+M1 adds seven fields to the state across six phases, and A3 says each one has
 to be added to `hash_world` by hand. The safety net is `the_hash_covers_the_whole_state`, but that
 test **does not fail on its own** when a new field arrives: it fails only if someone also writes the
 matching perturbation. That is, the net is only there if someone remembers to string it.

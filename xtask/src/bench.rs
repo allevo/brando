@@ -64,8 +64,8 @@ use sim_core::{
 ///
 /// `A` is the number to watch: it is paid on **every** tick, while `D` is paid
 /// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
-/// making the coverage recompute almost every tick (A12), which is the whole
-/// subject of A17.
+/// making the coverage recompute almost every tick, which is the whole
+/// subject of the open question at slot 18.5.
 const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are
@@ -159,7 +159,7 @@ fn preset(
     //    milliseconds with zero recomputations is a completely different fault
     //    from one costing the same with a recomputation on every tick. It is
     //    also how `J` — the fraction of ticks in which the population moved —
-    //    is read off directly instead of estimated (A17).
+    //    is read off directly instead of estimated (slot 18.5).
     let ticks_a = reps * 5;
     let recomputes_before = w.coverage().recomputes();
     let a = measure(ticks_a, |_| {
@@ -347,7 +347,7 @@ impl Layout {
             .ok_or("the dataset contains no house")?;
 
         // The residents a house is really born with, which is the difficulty's
-        // knob and not `rules.house_levels` (A13). At the profile
+        // knob and not `rules.house_levels`. At the profile
         // the benchmark measures on the two coincide; reading the profile is
         // what keeps the load honest if that ever stops being true.
         let per_house = u32::from(
@@ -628,12 +628,14 @@ fn with_unlimited_treasury(real: &DataSet) -> DataSet {
 
 /// The same dataset with the demographics **switched off**.
 ///
-/// What `--zero-demographics` measures on, and it is the term A17 needs: `A`
-/// with the rates at zero is `H`, the tick that pays for step 6 but not for the
-/// coverage recomputation step 6 triggers. Without `H` the cost of A12 cannot
-/// be told apart from the cost of the demographics themselves, and "optimise
-/// the recomputation" would be a guess — which is exactly the mistake A11 is
-/// the story of.
+/// What `--zero-demographics` measures on, and it is the term slot 18.5 needs:
+/// `A` with the rates at zero is `H`, the tick that pays for step 6 but not for the
+/// coverage recomputation step 6 triggers. Without `H` the cost of the coverage
+/// chasing the population cannot be told apart from the cost of the demographics
+/// themselves, and "optimise the recomputation" would be a guess — which is
+/// exactly the mistake this project has already made twice: the obvious
+/// hypothesis about where the cost lay was wrong both times, and only the
+/// measurement said so.
 fn without_demographics(real: &DataSet) -> DataSet {
     rebuilt(real, |rules| {
         rules.starting_treasury = Coins::new(i32::MAX / 2);

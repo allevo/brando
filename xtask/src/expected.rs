@@ -8,14 +8,14 @@ use sim_replay::{CHECKPOINT_EVERY, GridSpec, Header, Recording, checkpoints};
 
 use crate::scenario::{self, Scenario};
 
-/// How many ticks each recording covers: one game year (A6).
+/// How many ticks each recording covers: one game year.
 pub fn expected_ticks(data: &DataSet) -> u32 {
     data.rules.ticks_per_year()
 }
 
 pub fn record(sc: &Scenario, data: &DataSet) -> Recording {
     // The textual id and not the index: reordering the table must not silently
-    // change the meaning of a recording already written (A13).
+    // change the meaning of a recording already written.
     let difficulty = data
         .difficulty(sc.difficulty)
         .map(|d| d.id.clone())

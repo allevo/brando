@@ -1,7 +1,8 @@
 //! Delta events sent to the renderer.
 //!
-//! Bevy gets one full snapshot on the first frame and then only these events
-//! (CLAUDE.md, core/renderer boundary): rebuilding 40,000 entities every tick
+//! Bevy gets one full snapshot on the first frame and then only these events —
+//! it is only a rendering client, reading snapshots and emitting commands (D1).
+//! Rebuilding 40,000 entities every tick
 //! is unacceptable. An event is emitted on a **change of state**, never every
 //! tick: the wrong choice here costs 40,000 events per tick.
 
@@ -59,7 +60,7 @@ pub enum Event {
     /// in step 10 like the mood: the site knows `from` and `to` exactly, and a
     /// delta computed afterwards could only guess at them.
     ///
-    /// A house that levels up **brings nobody in** (A12): the renderer is being
+    /// A house that levels up **brings nobody in**: the renderer is being
     /// told the building has changed, not that the city has grown.
     HouseEvolved {
         house: HouseId,

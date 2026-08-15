@@ -1,7 +1,8 @@
 //! The simulation tick.
 //!
 //! The order of the ten steps is **game semantics**, not an implementation
-//! detail (CLAUDE.md, tick order). All ten functions exist from the start, even
+//! detail: reordering them changes the game and moves every recorded replay.
+//! All ten functions exist from the start, even
 //! the empty ones: if they came into being one at a time, the order would end
 //! up an accident of the development timeline.
 //!
@@ -166,7 +167,7 @@ fn place_building(
     let size = def.size;
     let cost = def.cost;
     let is_a_house = def.is_house();
-    // How full a new house is born is the difficulty's one knob (A13): at
+    // How full a new house is born is the difficulty's one knob: at
     // `hard` it is zero and the house only fills up by migration.
     let residents = if is_a_house {
         world
@@ -386,7 +387,7 @@ fn houses_and_migration(world: &mut World, r: &mut StepReport) {
         },
     );
 
-    // The coverage is counted on the residents present (A12): if anyone has
+    // The coverage is counted on the residents present: if anyone has
     // moved, yesterday's assignment no longer holds and the next tick's step 3
     // has to redo it. Without this line the houses that grew would consume more
     // than the provider set aside, and *covered => eats* falls over.
@@ -574,7 +575,7 @@ fn clear_tiles(world: &mut World, origin: TilePos, size: (u8, u8)) {
 }
 
 /// In M0 recomputing coverage is naive: when the topology changes, every
-/// provider goes dirty again. `CLAUDE.md` licenses that, as long as the flags
+/// provider goes dirty again. A naive step 3 is allowed as long as the flags
 /// exist — and they do.
 ///
 /// "Everything dirty" is said with the global flag, not by listing the

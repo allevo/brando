@@ -4,16 +4,16 @@
 //! the first system that reads it. A house that has been served long enough
 //! rises a level; one that has lost a service it depends on comes back down.
 //!
-//! **Why the review is monthly and not every tick.** Not for the cost — with
-//! A12 levelling up does not touch the coverage, so it is cheap. It is because
+//! **Why the review is monthly and not every tick.** Not for the cost —
+//! levelling up does not touch the coverage, so it is cheap. It is because
 //! a gap on its own only protects against oscillation if the thresholds
 //! are far apart, whereas an infrequent cadence makes it **structural**: thirty
 //! ticks pass between two decisions, and a house cannot go up and down more
 //! than twelve times a year by construction. Satisfaction keeps accumulating
 //! every tick (step 6.1): it is only the *decision* that is monthly.
 //!
-//! **What does not happen here, because of A12.** Levelling up does not touch
-//! the coverage and needs no gate. A provider's capacity is consumed by the
+//! **What does not happen here, and why the coverage is not touched.** Levelling
+//! up needs no gate. A provider's capacity is consumed by the
 //! **residents present**, and going up a level brings nobody in — it brings
 //! permission to hold more of them, which is a different thing. The pressure
 //! arrives when the demographics fill the space (phase 14): then demand grows,
@@ -80,7 +80,7 @@ pub(crate) fn review(world: &mut World, r: &mut StepReport) {
             // **Decay evicts.** The house has shrunk, and whoever no longer
             // fits leaves. It is the only point in this phase where `residents`
             // changes, and therefore the only one that has to invalidate the
-            // coverage: capacity is counted on the residents present (A12).
+            // coverage: capacity is counted on the residents present.
             //
             // A destination the table does not contain evicts **nobody**, and
             // that is the point of the `if let`. `decays()` deliberately sends

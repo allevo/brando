@@ -141,7 +141,7 @@ impl HousesByTile {
 /// Recomputes coverage from scratch on the current state.
 ///
 /// In M0 step 3 of the tick calls exactly this, for every provider, each time
-/// `dirty.coverage` is not empty: `CLAUDE.md` licenses the naivety here, as
+/// `dirty.coverage` is not empty. Implementing this step naively is allowed as
 /// long as the flags exist. What the dirty flag protects today is not the cost
 /// of the recomputation but its **absence** when nothing has changed; and what
 /// the equivalence test catches is a forgotten invalidation, not an algorithm
@@ -155,7 +155,7 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
     // of cost: during the computation they have to be **queried** once per
     // candidate of every provider — ~100,000 times at the reference scale,
     // because `pick_within_capacity` walks every candidate and does not stop
-    // when it fills up (it skips whoever does not fit, A5). A `BTreeMap` with
+    // when it fills up (it skips whoever does not fit). A `BTreeMap` with
     // 3,750 keys would pay ~13 comparisons each time; a `SecondaryMap` is dense
     // over the slot index, so it costs one access. The `Coverage` is
     // materialised at the end, once.

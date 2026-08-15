@@ -1,7 +1,13 @@
+---
+id: 12
+kind: phase
+status: implemented
+opened: 2026-08-09
+closed: 2026-08-10
+---
+
 # Phase 12 — House satisfaction
 
-> **Status: implemented — phase 12.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -10,7 +16,7 @@
 `DataSet`**; take the water away and it goes back to zero in `max / step_down`.
 **Depends on:** 11.
 **Size:** M.
-**Decisions involved:** [A10](../DECISIONS.md), A9, D5, tick order step 6.
+**Decisions involved:** A10, A9, D5, tick order step 6.
 
 ## Why now
 
@@ -45,15 +51,15 @@ pub struct House {
 }
 ```
 
-`u8` and not `i16` as [A10](../DECISIONS.md) had supposed: the accumulator is clamped to `0..=max`
+`u8` and not `i16` as A10 had supposed: the accumulator is clamped to `0..=max`
 and never needs the sign or the range. `House` stays small, and there is nothing extra to defend —
 the tight budget is `Tile`'s, not this one's.
 
 **Why not a resource level.** Measuring *how much* food enters a house would break phase 07's "no
 partial consumption", and it is that choice that makes conservation an exact equality instead of an
 inequality. It would also be degenerate: with capacity/output consistency
-([A5](../DECISIONS.md)) a covered house always receives 100%. The reasoning at length is in
-[A10](../DECISIONS.md).
+(A5) a covered house always receives 100%. The reasoning at length is in
+A10.
 
 ### Step 6.1, in `sim-core/src/tick.rs`
 
@@ -83,7 +89,7 @@ forever: past the maximum, one more month of water buys nothing.
 
 ### The asymmetry in `served`, which this phase dissolves
 
-[A9](../DECISIONS.md) points out that `House::served` means two things depending on the bit: for
+A9 points out that `House::served` means two things depending on the bit: for
 water "it is covered" (written by step 3), for food "it ate" (rewritten by step 4). With the
 invariant *covered ⇒ always eats* the two coincide, so today the difference exists only on paper —
 but this phase is the first to **read** that field, and reading it with two meanings is the trap A9
@@ -233,7 +239,7 @@ the curve.
 
 `bench` is worth looking at in this phase more than in the others: step 6 has always cost zero, and
 from here it costs one pass over every house on every tick. The measure to compare is `A`, the empty
-tick, which [A11](../DECISIONS.md) names as the number to keep an eye on.
+tick, which A11 names as the number to keep an eye on.
 
 Two notes from doing it.
 

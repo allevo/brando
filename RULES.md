@@ -331,7 +331,7 @@ Changing one of these changes what the game *is*, so there is nothing to tune.
 | A building that requires services and provides none is a house | `sim-core/src/data.rs` |
 | A service reaches a house by coverage over walked distance, never by a walker carrying it (D2). The walkers the player sees are decorative and live in the renderer | `sim-core/src/coverage.rs` |
 | A house is served whole or left out whole, and its residents eat whole or not at all | `sim-core/src/coverage.rs`, `sim-core/src/production.rs` |
-| Money has no fractions, and quantities do (A1) | `sim-core/src/units.rs` |
+| Money has no fractions, and quantities do | `sim-core/src/units.rs` |
 | An invalid command is discarded and reported, and does not interrupt the tick | `sim-core/src/tick.rs` |
 | Which services exist at all (D6) — kinds of building, by contrast, **are** data | `sim-core/src/service.rs` |
 | Which terrains exist at all (D6), and that the table describes every one of them | `sim-core/src/grid.rs` |
@@ -342,8 +342,8 @@ index can address, the most levels a per-level table can hold, how many thousand
 version stamped into a recording, and how often a recording writes a hash down. Each is the
 definition of a representation or of a file format, never of a rule.
 
-If you find yourself wanting to tune something on this page, that is a design change worth an entry
-in [DECISIONS.md](DECISIONS.md) — not an edit.
+If you find yourself wanting to tune something on this page, that is a design change worth a task of
+its own in [ROADMAP.md](ROADMAP.md) — not an edit.
 
 ---
 

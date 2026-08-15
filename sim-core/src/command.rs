@@ -1,8 +1,8 @@
 //! The primitive commands and their errors.
 //!
 //! Commands are the only write channel into the core: the renderer never calls
-//! a method that mutates state (CLAUDE.md, core/renderer boundary), and a save
-//! file is `seed + Vec<Command>` (D4).
+//! a method that mutates state, because it is only a rendering client that reads
+//! snapshots and emits commands (D1). A save file is `seed + Vec<Command>` (D4).
 //!
 //! The error messages are not cosmetic: they are the feedback that will go
 //! back to the LLM (M3), which will produce invalid commands by construction.

@@ -1,7 +1,13 @@
+---
+id: 02
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 02 — One RNG per domain
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -62,7 +68,7 @@ Two details that look like pedantry and are not:
   systems can draw from the same stream in the same tick, the draw order becomes an implicit
   contract.
 > **Amended by the documentation audit (2026-08-13).** Two things moved. The type is called
-> **`RngKind`** — the vocabulary review ([A19](../DECISIONS.md)) retired `domain` as a hard word that
+> **`RngKind`** — the vocabulary review (A19) retired `domain` as a hard word that
 > bought nothing — and it has a **fourth** variant, `Demographics`, added in phase 14. That fourth
 > one is the first kind any system actually draws from: for the whole of M0 the separation this phase
 > built was never exercised, and phase 14 is where it paid, because `Migration` keeps its own stream

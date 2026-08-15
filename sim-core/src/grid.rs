@@ -1,14 +1,14 @@
 //! The tile grid and the types that make it up.
 //!
 //! Memory constraint: `Tile` fits in 4 bytes, so 40,000 tiles take 160 KB and
-//! stay in cache (CLAUDE.md, state model). Every field added here has to be
-//! weighed against that budget, which a test guards.
+//! stay in cache. `u16` indices, no pointers, no `Option<Box<...>>`: every field
+//! added here has to be weighed against that budget, which a test guards.
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{TileIdx, TilePos};
 
-/// Maximum side of the grid (A4). Beyond it, `TileIdx(u16)` would not be enough.
+/// Maximum side of the grid. Beyond it, `TileIdx(u16)` would not be enough.
 pub const MAX_SIDE: u16 = 256;
 
 /// The kind of ground on a tile. The numbers that go with it (buildable? road

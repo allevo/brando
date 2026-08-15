@@ -1,7 +1,7 @@
 //! The balancing dataset: the validated shape the core consumes.
 //!
 //! The **definitions** live here rather than in `sim-data` because of the
-//! direction of the dependencies: the `World` holds an `Arc<DataSet>` (A2), and
+//! direction of the dependencies: the `World` holds an `Arc<DataSet>`, and
 //! sim-core cannot depend on sim-data. What stays in `sim-data` is the RON
 //! parsing, the validation and the I/O — that is, everything the core must not
 //! do (D4).
@@ -70,8 +70,8 @@ impl DemographicsRules {
     /// stored coverage against a from-scratch one computed after step 6 has
     /// already moved somebody and diverges for a reason that is not a bug.
     /// And `bench --zero-demographics` measures `H`, the tick with the
-    /// demographics off, which is the term A17 needs in order to tell the cost
-    /// of the recomputation apart from the cost of step 6 itself.
+    /// demographics off, which is the term slot 18.5 needs in order to tell the
+    /// cost of the recomputation apart from the cost of step 6 itself.
     ///
     /// All three rates or none: a table with births at zero and deaths at six
     /// is a city that dies out, and that is the mistake
@@ -97,15 +97,16 @@ impl DemographicsRules {
 pub struct HouseLevelDef {
     /// The most residents it can hold. It is the house's ceiling, **not** what
     /// the coverage counts a provider's capacity against: that is counted on
-    /// the residents who actually live there (A12). A house that can hold 8
+    /// the residents who actually live there. A house that can hold 8
     /// with two residents weighs two, not eight.
     pub max_residents: u16,
     /// The services needed to **rise to** this level and to **stay at** it.
     ///
     /// This is where `required_services` stops being declarative data read only
-    /// by [`BuildingDef::is_house`] — the hole noted in A9. Three systems read
-    /// it: the mood and the decay check use the house's **own** level, the
-    /// level-up check the **destination's**.
+    /// by [`BuildingDef::is_house`]: the coverage never reads it, which is the
+    /// hole this field closes. Three systems read it: the mood and the decay
+    /// check use the house's **own** level, the level-up check the
+    /// **destination's**.
     ///
     /// What it does **not** decide is which satisfaction accumulators move:
     /// those follow the union declared by [`BuildingDef::required_services`],
@@ -124,7 +125,7 @@ pub struct HouseLevelDef {
     /// Together with the field above it forms the gap
     /// `decay_threshold..level_up_threshold`, inside which a house stays where it
     /// is whichever side it came from. A gap that is not strictly positive is
-    /// [`Inconsistency::NoGap`] — the gap is a **check**, not a comment (A10).
+    /// [`Inconsistency::NoGap`] — the gap is a **check**, not a comment.
     ///
     /// Unread at level 1: there is no level 0 to fall to.
     pub decay_threshold: u8,
@@ -397,7 +398,7 @@ impl BuildingDef {
 ///
 /// It is not `Serialize` either, on purpose: what travels in a replay's header
 /// is the **textual** id, never this index. A `Serialize` impl here is the one
-/// thing that would make writing the index into a save file look natural (A13).
+/// thing that would make writing the index into a save file look natural.
 ///
 /// [`World::new`]: crate::world::World::new
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -436,7 +437,7 @@ pub struct DifficultyDef {
 
 /// The validated tables, ready for the core.
 ///
-/// It lives behind an `Arc` inside the `World` (A2): loading is I/O and stays
+/// It lives behind an `Arc` inside the `World`: loading is I/O and stays
 /// outside the core, but the systems need the tables every tick.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataSet {
@@ -450,7 +451,7 @@ pub struct DataSet {
     pub difficulties: Vec<DifficultyDef>,
     /// blake3 of the **validated** content, not of the files' bytes:
     /// reformatting a RON file or adding a comment does not change the hash,
-    /// changing a number does. It feeds into the state hash (A2).
+    /// changing a number does. It feeds into the state hash.
     /// [`DataSet::new`] computes it.
     pub hash: [u8; 32],
 }
@@ -528,12 +529,12 @@ impl DataSet {
 
     /// Every inconsistency *between* tables, in one place.
     ///
-    /// It lives in the core because that is where the definitions live (A2) and
+    /// It lives in the core because that is where the definitions live and
     /// because it is also needed by the fixture in
     /// `sim-core/tests/common/mod.rs`, which does not go through `sim-data`.
-    /// Adding a check here automatically makes it active on the fixture too: it
-    /// is the generalisation of A5's lesson — a number that has to stand in a
-    /// relation with another one is a **check**, not a comment.
+    /// Adding a check here automatically makes it active on the fixture too: a
+    /// number that has to stand in a relation with another one is a **check**,
+    /// not a comment.
     ///
     /// The split with `sim-data` is by kind, not by convenience: what can be
     /// checked on one field of one table (a negative cost, an unknown service
@@ -557,8 +558,9 @@ impl DataSet {
 
     /// The demographic rates have to describe a game that can be won.
     ///
-    /// Two relations, and both are checks rather than comments for A5's reason
-    /// — a number that has to stand in a relation with another one is a check.
+    /// Two relations, and both are checks rather than comments for the same
+    /// reason — a number that has to stand in a relation with another one is a
+    /// check.
     ///
     /// **Births above deaths at the top.** If a city at maximum satisfaction,
     /// fully served, still shrinks, then no growth scenario is winnable and
@@ -690,7 +692,8 @@ impl DataSet {
                     .max();
                 match best {
                     None => out.push(Inconsistency::ServiceWithoutProvider { level, service }),
-                    // With A12 this is not a blocker — the house is servable as
+                    // Capacity is counted on the residents actually present, so
+                    // this is not a blocker — the house is servable as
                     // long as it stays half empty — but it is a dataset in
                     // which a level can never be served in full, and the city
                     // plugs up without saying why.
@@ -725,7 +728,8 @@ impl DataSet {
     /// part of the same rule and not an exception to it: it hands out nothing,
     /// so every positive capacity it claims is beyond what it sustains.
     ///
-    /// **It lives exactly as long as A5.** It is the right rule while the farm
+    /// **It lives exactly as long as the farm's own stock does.** It is the
+    /// right rule while the farm
     /// produces into its own stock; in M3 the goods will come from a warehouse
     /// via real logistics walkers, capacity will stop depending on local
     /// output, and this check has to go along with the simplification it

@@ -1,7 +1,13 @@
+---
+id: 06
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 06 — Aggregate service coverage
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -62,7 +68,7 @@ this point has to be reopened.
 > rules this phase did not have — no partial assignment, and whoever does not fit in the remaining
 > capacity is *skipped* instead of stopping the scan. The first provider still wins a contest, but
 > a contested house no longer consumes the capacity of whoever comes second.
-> See [A5](../DECISIONS.md) and `coverage::pick_within_capacity`.
+> See A5 and `coverage::pick_within_capacity`.
 
 **In M0 `dirty.coverage` may be recomputed naively**: when the roads change, every provider is
 dirty. `CLAUDE.md` licenses the naivety here, as long as the flags exist — and they have since

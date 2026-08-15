@@ -1,7 +1,13 @@
+---
+id: 03
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 03 — sim-data: validated RON tables
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -112,7 +118,7 @@ The minimum checks:
 
 `hash` is `blake3` over the dataset's **normalised** content (the validated values, not the files'
 bytes: that way a reformatting or a comment in the RON does not invalidate the recordings, while a
-changed number does). It feeds the state hash (see [A2](../DECISIONS.md)).
+changed number does). It feeds the state hash (see A2).
 
 Loading is I/O and lives in `sim-data`, never inside `sim-core` (D4: no I/O in the core).
 

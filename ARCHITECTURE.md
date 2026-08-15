@@ -4,8 +4,8 @@
 
 It describes the tree **as it is today**, in the present tense. It carries no balancing values — those
 live in `sim-data/data/*.ron` and are described, without their numbers, in [RULES.md](RULES.md). It
-carries no history — that is [plan/](plan/README.md) — and no rationale — that is
-[DECISIONS.md](DECISIONS.md).
+carries no history — that is [plan/](plan/) — and no rationale, which lives in the comment on the
+code each rule binds.
 
 **Every change checks this file.** The question to ask is narrow and answerable: *did you add, move,
 remove or reorder a tick step; change what a step reads or writes; add a field to `World`; or add a
@@ -50,10 +50,10 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | `units.rs` | `Milli(i32)` and `Coins(i32)`: the only numeric quantities allowed in the state. |
 | `ids.rs` | Newtype ids. A bare `usize` never appears in a public signature. |
 | `service.rs` | `ServiceKind` — an enum, unlike building kinds, which are data (D6). |
-| `data.rs` (`BuildingRole`) | An enum over the two **roles** — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty (A21). |
+| `data.rs` (`BuildingRole`) | An enum over the two **roles** — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty. |
 | `command.rs` | The primitive commands and their structured errors. The only write channel in. |
 | `event.rs` | Delta events for the renderer, emitted on state **change**, never per tick. |
-| `data_hash.rs` | blake3 of the validated dataset, fed field by field by hand (A3). |
+| `data_hash.rs` | blake3 of the validated dataset, fed field by field by hand rather than through serde, so the hash does not depend on a serialisation format. |
 
 ## The state
 
@@ -71,6 +71,15 @@ than as a hash divergence: `roads`, `coverage`.
 
 **Bookkeeping:** `dirty`, `buildings_by_origin`, `houses_by_origin`. The two indexes are `BTreeMap`s
 and not `HashMap`s (D4) — their iteration order is a contract.
+
+Two budgets inside that state are not free to grow:
+
+- **`Tile` stays small** — `u16` indices, no pointers, no `Option<Box<...>>`. Forty thousand tiles have
+  to stay in cache as much as possible; `Tile` fits in 4 bytes today, which is 160 KB for the grid, and
+  a test in `sim-core/src/grid.rs` guards the budget against the next field somebody wants to add.
+- **The `DirtyFlags` are not optional.** They exist from the start because retrofitting them is
+  painful. Using them naively — when the roads change, every provider goes dirty — is allowed and is
+  what M0 does; not having them is not.
 
 Two non-obvious invariants worth knowing before you touch any of this:
 
@@ -128,10 +137,11 @@ events these would be one per house per tick, which is the polling the core/rend
 | 6.6 | *immigration* | **Reserved slot** — phase 15. |
 | — | invalidate the coverage if anyone moved | Stays the **last** thing step 6 does, including after 15 lands. |
 
-Phases add their sub-steps **below** these, never above. That final conditional invalidation is
-A12's cost site: coverage is counted on the residents present, so if anyone moved, yesterday's
-assignment no longer holds. It is conditional rather than unconditional on purpose — but phase 14
-measured the condition as true on **100%** of ticks at the reference scale ([A17](DECISIONS.md)).
+Phases add their sub-steps **below** these, never above. That final conditional invalidation is where
+the services chasing the population is paid for: coverage is counted on the residents present, so if
+anyone moved, yesterday's assignment no longer holds. It is conditional rather than unconditional on
+purpose — but phase 14 measured the condition as true on **100%** of ticks at the reference scale,
+and what to do about that is the open question at slot 18.5.
 
 ### The demographics draw order — a determinism contract
 

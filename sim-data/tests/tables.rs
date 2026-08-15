@@ -174,7 +174,7 @@ fn no_food_provider_promises_more_than_it_produces() {
     assert_eq!(d.inconsistencies(), vec![]);
 }
 
-/// The fourth table (A13). `easy` is deliberately today's behaviour — a house
+/// The fourth table. `easy` is deliberately today's behaviour — a house
 /// born at its full level-1 capacity — which is what makes phase 11's `.hashes`
 /// diff attributable to the difficulty byte alone.
 #[test]
@@ -698,8 +698,9 @@ fn a_service_no_building_provides() {
     assert_eq!(e, expected);
 }
 
-/// A provider too small for a full house of that level. Not a blocker with A12
-/// — the house is servable as long as it stays half empty — but it is a city
+/// A provider too small for a full house of that level. Not a blocker, because
+/// capacity counts the residents present — the house is servable as long as it
+/// stays half empty — but it is a city
 /// that plugs up without saying why.
 #[test]
 fn a_level_no_provider_can_serve_in_full() {
@@ -848,7 +849,7 @@ fn the_hash_ignores_reformatting() {
 }
 
 /// But a changed number does: that is what makes the replay fail immediately
-/// and for the right reason (A2).
+/// and for the right reason.
 #[test]
 fn the_hash_notices_a_balance_change() {
     let original = read_data("buildings.ron");
@@ -881,12 +882,12 @@ fn the_hash_covers_every_table() {
     assert_ne!(base.hash, a.hash, "the rules must go into the hash");
 
     // The satisfaction curve is a block inside the rules, and a nested table is
-    // exactly the kind that gets forgotten in a hash written by hand (A3):
+    // exactly the kind that gets forgotten in a hash written by hand:
     // without this, rebalancing the curve would leave every recording green
     // while the game has changed.
     // The satisfaction curve and the house levels are blocks **inside** the
     // rules, and a nested table is exactly the kind that gets forgotten in a
-    // hash written by hand (A3): without these, rebalancing them would leave
+    // hash written by hand: without these, rebalancing them would leave
     // every recording green while the game has changed. Every field of a level
     // is changed, not just one: the hash is fed field by field, so one of
     // them can be left out on its own.

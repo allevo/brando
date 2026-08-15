@@ -1,7 +1,12 @@
+---
+id: 17
+kind: phase
+status: not-yet-built
+opened: 2026-08-09
+---
+
 # Phase 17 — `sim-scenario` and objectives
 
-> **Status: not yet built.**
->
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
@@ -9,7 +14,7 @@
 not before.
 **Depends on:** 16.
 **Size:** L.
-**Decisions involved:** [A16](../DECISIONS.md), A2, A6, D7.
+**Decisions involved:** A16, A2, A6, D7.
 
 ## Why now
 
@@ -18,8 +23,11 @@ there is a game underneath: before phase 16 the city could not finance its own g
 residents within 5 years" would have been won or lost by the balancing rather than by the player.
 
 It is also the first new crate since M0. It comes into being now and not earlier because
-[plan/README](README.md) is explicit: *empty crates scaffolded in advance are surface that invites
+[plan/README](../CLAUDE.md) is explicit: *empty crates scaffolded in advance are surface that invites
 you to fill it*.
+
+> **Amended 2026-08-15.** `plan/README.md` no longer exists. The rule it was quoted for is a working
+> rule rather than a record, so it moved to `CLAUDE.md`, under "Scope", and the link points there.
 
 ## What gets built
 
@@ -27,7 +35,7 @@ you to fill it*.
 
 `CLAUDE.md` puts checking the objectives at **step 9 of the tick**, inside `step`. But the
 dependencies point towards `sim-core`, so `sim-scenario` depends on the core and the core cannot call
-it. The split is forced, and it is the same one as [A2](../DECISIONS.md):
+it. The split is forced, and it is the same one as A2:
 
 - In **`sim-core`**: the `Objective` enum, its evaluation, and the progress state. They are pure
   structs with no I/O, and they belong to the core's vocabulary like `ServiceKind`.

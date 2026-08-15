@@ -1,7 +1,13 @@
+---
+id: 07
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 07 — The farm, food, and the first observable loop
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -96,7 +102,7 @@ kinds of food.
    > **Updated after M0.** In phase 07 this point failed: the hungry state *was* absorbing, and the
    > test was written to pin down the limitation instead of the property. Now the property really
    > does hold — *a house covered by food always eats* — because a producer's capacity cannot
-   > exceed what its output sustains. See [A5](../DECISIONS.md).
+   > exceed what its output sustains. See A5.
 5. **Saturation**: a farm with no houses covered ⇒ `stock` grows to `max_stock` and stops;
    `lost_to_full_stock` grows accordingly.
 6. **Deterministic order**: enough stock for two houses out of three ⇒ it is always the same two

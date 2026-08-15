@@ -370,14 +370,14 @@ mod levels {
         }
     }
 
-    // --- 4. levelling up does not touch the coverage (A12) ------------------
+    // --- 4. levelling up does not touch the coverage ------------------
 
     /// A house that goes up a level changes neither the assignments nor the
     /// number of recomputations: it brought nobody in, so no provider's
     /// capacity moved.
     ///
-    /// It is the test that pins A12 down where it is easiest to get wrong —
-    /// whoever implements the per-level capacity will be tempted to use it in
+    /// It is the test that pins that rule down where it is easiest to get
+    /// wrong — whoever implements the per-level capacity will be tempted to use it in
     /// `coverage.rs` too.
     #[test]
     fn levelling_up_touches_neither_the_coverage_nor_its_recomputes() {
@@ -566,7 +566,7 @@ mod levels {
 
     /// Eviction is the only point in this phase where `residents` changes, so
     /// it is the only one that has to invalidate the coverage: capacity is
-    /// counted on the residents present (A12).
+    /// counted on the residents present.
     #[test]
     fn eviction_invalidates_the_coverage() {
         let (mut w, house) = a_house_too_full_for_the_level_below();

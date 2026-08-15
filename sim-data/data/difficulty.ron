@@ -1,4 +1,4 @@
-// Difficulty profiles (A13). Chosen at the start of a game and never changed
+// Difficulty profiles. Chosen at the start of a game and never changed
 // afterwards: it changes the simulation, so it travels in the replay's header
 // and goes into the state hash.
 //
