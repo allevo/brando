@@ -20,8 +20,6 @@
 //! the provider fills up, and some house falls out of the coverage. That is not
 //! a pathology to switch off, it is the game loop.
 
-use std::sync::Arc;
-
 use crate::data::Rules;
 use crate::event::Event;
 use crate::ids::Level;
@@ -43,19 +41,20 @@ use crate::world::{House, World};
 ///
 /// The houses are walked in `HouseId` order, like every other pass in the core.
 pub(crate) fn review(world: &mut World, r: &mut StepReport) {
-    // A refcount bump, not a copy of the dataset: it lets the tables be read
-    // while the houses are mutated.
-    let data = Arc::clone(&world.data);
+    // Splitting the fields is what lets the houses be written while the tables
+    // are read and the totals are updated: they are disjoint fields of the same
+    // `World`, but the borrow checker only sees that if they are named
+    // separately. Naming `data` here is what replaced a refcount bump that was
+    // there for the same reason and cost an atomic.
+    let World {
+        data,
+        houses,
+        population,
+        ..
+    } = world;
     let rules = &data.rules;
     let top = rules.top_house_level();
     let mut anyone_evicted = false;
-
-    // Splitting the fields is what lets the houses be written while the totals
-    // are updated: they are disjoint fields of the same `World`, but the borrow
-    // checker only sees that if they are named separately.
-    let World {
-        houses, population, ..
-    } = world;
 
     for (house, h) in houses.iter_mut() {
         let from = h.level;

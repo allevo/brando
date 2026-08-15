@@ -188,7 +188,7 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
         let Some(def) = world.data().def(b.kind) else {
             continue;
         };
-        let Some(service) = def.service.as_ref() else {
+        let Some(service) = def.service() else {
             continue;
         };
         let (Some(range), Some(capacity)) = (service.range(b.level), service.capacity(b.level))

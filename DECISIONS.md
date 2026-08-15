@@ -1003,3 +1003,96 @@ does not exist yet.
 `CapacityBeyondOutput` depends on for *a house covered by food always eats*. Answer 2 in particular
 changes what that sentence means, so the check has to be re-argued rather than assumed — for the
 third time in that function's life.
+
+---
+
+## A21 — A building declares its role, and the roster stays data
+
+**Status: decided**, phase 14.4.
+
+`BuildingDef::is_house()` classified a building by **two absences** — no service, and a non-empty
+`required_services`. It worked, and keeping it working cost three validation checks and a warning
+comment in `buildings.ron`. The tell was `InconsistentRequirements`: the building's
+`required_services` was doing two unrelated jobs at once — saying *which satisfaction accumulators
+move*, which `satisfaction::update` needs, and saying *this is a house*, which is why the field could
+never be simplified.
+
+The building now declares a `role`, and the field does one job.
+
+### Why a sum type rather than a tag beside the old fields
+
+The flat eight-field struct was a union in disguise. A house carried `service: None`,
+`output_per_tick: None`, `max_stock: None`; a well carried an empty `required_services`. Every
+illegal combination was representable, and validation was what stood between the table and a state
+the rest of the game had no meaning for. Adding a tag to that struct would have declared the role and
+left all of it standing.
+
+`BuildingDef` is now `{ id, size, cost, levels, role, production }`, with
+`BuildingRole::House { required_services } | Provider { service }`. Grouping the two production
+fields into a `Production` where both are required means `ProducerWithoutStock` and
+`StockWithoutOutput` still fire against the **raw** table — they are properties of one row of one
+file — but past validation the broken combination has no shape to be in.
+
+### Why the variants are roles and not buildings
+
+The proposal on the table was an enum per kind of building — house, well, farm — with a matching
+enum for the live data. It was rejected on three counts, and the reasons are worth keeping because
+the idea is a natural one:
+
+- **It contradicts D6.** The roster in code means a civilisation cannot add a building from data and
+  a balancing run cannot vary it, which bears on the project's second non-functional requirement.
+  `ids.rs` already said so: *"Not an enum: building kinds are data, not code (D6)."*
+- **It unshares what a prototype exists to share.** `size`, `cost` and `levels` are identical in
+  shape for every building, and a variant per building duplicates them into every arm — a match at
+  every shared read, growing with each building the game gains. Roles are two, and stay two.
+- **It costs memory rather than saving it, which was its stated purpose.** An enum is as large as its
+  largest variant plus a tag. Unioning the instances would take a house from 8 bytes to 12, and the
+  day a variant carries anything larger every house in the city grows to match it. The instance side
+  of the proposal was also already in the tree: `Building` and `House` are two structs in two
+  `SlotMap`s, and `Building.kind` is the reference to the prototype.
+
+A related proposal — a raw `*const BuildingDef` on each instance — was refused on
+`#![forbid(unsafe_code)]`, and fatally on the state hash: `sim-replay/src/hash.rs` hashes
+`kind.get()`, and an address is per-process. The regeneration protocol names *memory addresses* as
+the non-determinism a separate process exists to catch. **The index is the more self-contained of the
+two**: a pointer that cannot dangle, and one that can be hashed, compared and written to a file.
+
+### Producing is not a role
+
+The `farm` supplies food **and** grows it, so no single variant could hold it. Production is a
+separate `Option<Production>`. Putting it inside `Provider` would have ruled out a producer that
+supplies no service — M3's warehouse — which is the widening D6 warns against inventing before
+something needs it.
+
+### What survived, and why
+
+- `NoHouse` **stays**, restated as *no row declares the house role*. Without one,
+  `satisfaction::update` and `remove_house` silently do nothing. It did get harder to trip by
+  accident, which is the check earning its keep rather than a reason to drop it: producing a
+  house-less table now takes rows that are all valid providers, so the test became a fixture file
+  instead of a one-word replacement.
+- `LevelCountMismatch` is untouched. It was never about the heuristic.
+- `InconsistentRequirements` **stays with its body and a new message**. Its old reason — *or
+  `is_house()` stops recognising it* — died with the heuristic. Its real reason outlived it, and was
+  already written down twice in the code: a service required by a level but missing from the union
+  has an accumulator nothing ever moves, so **that level is unreachable by construction**.
+- `required_services` **stays declared** rather than derived from `house_levels`.
+  [A20](#a20--a-house-is-covered-by-services-its-level-does-not-require) is still open, and deriving
+  the union would fix the answer to a question A20 has not been asked. It is a later phase and a
+  smaller one if it still looks right once A20 closes.
+
+### What this did not fix
+
+A `House` still carries no `BuildingKindId`, so `DataSet::house_def()` is still a scan over the
+definitions recovering what the house did not record, and a civilisation with two kinds of house
+still does not work. Declaring the role did not lift that limit — it lives in the instance, not in
+the definition — and lifting it adds a hashed field to `House`, which is a second reason to
+regenerate and therefore a phase of its own.
+
+### The raw table stayed flat
+
+`RawBuildingDef` keeps its flat fields and gains `role: String`, required. A RON enum would make an
+unknown role a serde *"unknown variant"* error instead of a validation error naming the row it is in,
+which is the rule `raw.rs` opens with. Turning the flat row into the sum is what validation does, and
+the contradictions found on the way — a house declaring a service, a provider declaring none — are
+reported against the field to blame.

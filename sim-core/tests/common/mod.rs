@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sim_core::data::{
-    BuildingDef, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef, Rules,
-    SatisfactionRules, ServiceDef, TerrainDef,
+    BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
+    Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
 };
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Level, Milli, ServiceKind, Terrain,
@@ -287,43 +287,46 @@ fn dataset_built_with(
             size: (1, 1),
             cost: Coins::new(HOUSE_COST),
             levels: u8::try_from(levels.len()).expect("the fixture has few levels"),
-            service: None,
-            required_services: union,
-            output_per_tick: None,
-            max_stock: None,
+            role: BuildingRole::House {
+                required_services: union,
+            },
+            production: None,
         },
         BuildingDef {
             id: "well".into(),
             size: (1, 1),
             cost: Coins::new(WELL_COST),
             levels: 1,
-            service: Some(ServiceDef {
-                kind: ServiceKind::Water,
-                range_per_level: vec![12],
-                // Residents, not houses: eight houses of four.
-                capacity_per_level: vec![WELL_CAPACITY],
-            }),
-            required_services: vec![],
-            output_per_tick: None,
-            max_stock: None,
+            role: BuildingRole::Provider {
+                service: ServiceDef {
+                    kind: ServiceKind::Water,
+                    range_per_level: vec![12],
+                    // Residents, not houses: eight houses of four.
+                    capacity_per_level: vec![WELL_CAPACITY],
+                },
+            },
+            production: None,
         },
         BuildingDef {
             id: "farm".into(),
             size: (2, 2),
             cost: Coins::new(FARM_COST),
             levels: 1,
-            service: Some(ServiceDef {
-                kind: ServiceKind::Food,
-                range_per_level: vec![10],
-                capacity_per_level: vec![FARM_CAPACITY],
-            }),
-            required_services: vec![],
-            output_per_tick: match farm_output {
-                FarmOutput::AsProduction => Some(Milli::from_millis(400)),
-                FarmOutput::None => None,
+            role: BuildingRole::Provider {
+                service: ServiceDef {
+                    kind: ServiceKind::Food,
+                    range_per_level: vec![10],
+                    capacity_per_level: vec![FARM_CAPACITY],
+                },
             },
-            max_stock: match farm_output {
-                FarmOutput::AsProduction => Some(Milli::from_millis(20_000)),
+            // The farm is the one building that is a provider **and** a
+            // producer, which is why production is its own field and not a role
+            // of its own: no single variant could hold both.
+            production: match farm_output {
+                FarmOutput::AsProduction => Some(Production {
+                    output_per_tick: Milli::from_millis(400),
+                    max_stock: Milli::from_millis(20_000),
+                }),
                 FarmOutput::None => None,
             },
         },
@@ -332,14 +335,14 @@ fn dataset_built_with(
             size: (1, 1),
             cost: Coins::new(WELL_COST),
             levels: 1,
-            service: Some(ServiceDef {
-                kind: ServiceKind::Water,
-                range_per_level: vec![12],
-                capacity_per_level: vec![SMALL_WELL_CAPACITY],
-            }),
-            required_services: vec![],
-            output_per_tick: None,
-            max_stock: None,
+            role: BuildingRole::Provider {
+                service: ServiceDef {
+                    kind: ServiceKind::Water,
+                    range_per_level: vec![12],
+                    capacity_per_level: vec![SMALL_WELL_CAPACITY],
+                },
+            },
+            production: None,
         },
     ];
 

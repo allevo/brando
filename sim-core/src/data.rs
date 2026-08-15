@@ -280,6 +280,58 @@ impl ServiceDef {
     }
 }
 
+/// What part a building plays in the city: a **house**, which needs services,
+/// or a **provider**, which supplies one.
+///
+/// **It is declared in the table, not worked out from what is missing.** Until
+/// phase 14.4 a building was a house because it had no service *and* asked for
+/// some, and keeping that inference true cost three validation checks: the
+/// building's `required_services` had to stay the exact union of its levels', or
+/// the house quietly stopped being read as a house at all. The field said two
+/// unrelated things at once — *which satisfaction accumulators move* and *this
+/// is a house* — and only the second one made it un-simplifiable.
+///
+/// **A sum type and not a tag beside the old fields**, because the flat struct
+/// was a union in disguise: a house carried three `None`s and a well carried an
+/// empty list, so every illegal combination was representable and held off by a
+/// check. Here they cannot be built.
+///
+/// **The variants are roles, not buildings.** House and provider are two, and
+/// stay two; a variant per building — house, well, farm — would put the roster
+/// in the code, which D6 forbids, would duplicate `size`, `cost` and `levels`
+/// into every arm, and would grow a match at every shared read for each building
+/// the game gains.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuildingRole {
+    /// A house. The list is the **union** of what its levels ask for, and it
+    /// says which satisfaction accumulators move — nothing else. See
+    /// `satisfaction::update`, and [`HouseLevelDef::required_services`] for the
+    /// per-level list the mood and the level review read instead.
+    House { required_services: Vec<ServiceKind> },
+    /// A provider: it supplies one service to the houses within its range.
+    Provider { service: ServiceDef },
+}
+
+/// What a building grows, and the granary it grows into.
+///
+/// **Orthogonal to the role, because the farm is both.** It provides food *and*
+/// produces it, so a role variant per kind of thing could not hold it; and
+/// putting production inside [`BuildingRole::Provider`] would rule out a
+/// producer that provides no service — M3's warehouse — which is the widening
+/// D6 warns against inventing before something needs it.
+///
+/// **Both fields, always.** An output with no granary to hold it, or a granary
+/// with nothing to put in it, are the two mistakes `ProducerWithoutStock` and
+/// `StockWithoutOutput` name in the raw table. They stay as validation errors —
+/// building this struct is what validation does when they do *not* fire — and
+/// past that point the broken state has no shape to be in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Production {
+    pub output_per_tick: Milli,
+    /// The granary's lid. What would go in beyond it is lost, not queued.
+    pub max_stock: Milli,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildingDef {
     pub id: String,
@@ -287,21 +339,45 @@ pub struct BuildingDef {
     pub size: (u8, u8),
     pub cost: Coins,
     pub levels: u8,
-    pub service: Option<ServiceDef>,
-    pub required_services: Vec<ServiceKind>,
-    pub output_per_tick: Option<Milli>,
-    pub max_stock: Option<Milli>,
+    pub role: BuildingRole,
+    pub production: Option<Production>,
 }
 
 impl BuildingDef {
-    /// A building is a house if it requires services instead of providing them.
-    /// A structural rule, not a number: it belongs in the code on purpose.
-    pub fn is_house(&self) -> bool {
-        self.service.is_none() && !self.required_services.is_empty()
+    /// Whether this building is a house. It **reads what the table declared**
+    /// rather than inferring it from what the row is missing.
+    ///
+    /// It keeps its name and its signature from when it was a heuristic, which
+    /// is why `world.rs`, `tick.rs` and `grid.rs` go on asking the same question
+    /// unchanged — the point of it having been a function all along.
+    pub const fn is_house(&self) -> bool {
+        matches!(self.role, BuildingRole::House { .. })
     }
 
-    pub fn is_producer(&self) -> bool {
-        self.output_per_tick.is_some()
+    /// Whether this building grows something. Independent of the role: the farm
+    /// is a provider that also produces.
+    pub const fn is_producer(&self) -> bool {
+        self.production.is_some()
+    }
+
+    /// The service this building supplies, `None` for a house.
+    pub const fn service(&self) -> Option<&ServiceDef> {
+        match &self.role {
+            BuildingRole::Provider { service } => Some(service),
+            BuildingRole::House { .. } => None,
+        }
+    }
+
+    /// The services this building **requires** — the union across its levels,
+    /// and empty for anything that is not a house.
+    ///
+    /// It says which satisfaction accumulators move, and that is all it says
+    /// since the role took over classifying.
+    pub fn required_services(&self) -> &[ServiceKind] {
+        match &self.role {
+            BuildingRole::House { required_services } => required_services,
+            BuildingRole::Provider { .. } => &[],
+        }
     }
 
     /// How many tiles it takes up.
@@ -404,13 +480,14 @@ impl DataSet {
 
     /// The definition of the house.
     ///
-    /// Found by [`BuildingDef::is_house`] and not by the textual id `"house"`:
-    /// it is the same classifier the placing of a building uses to decide
-    /// whether what is being built is a house, so a building placed as a house
-    /// is also read as one afterwards. A civilisation whose houses are called
-    /// something else keeps working; one with two kinds of house does not, and
-    /// that is a limit `House` will dissolve when it starts carrying its own
-    /// kind (M3).
+    /// Found by the declared role and not by the textual id `"house"`: it asks
+    /// the same question [`BuildingDef::is_house`] answers when a building is
+    /// placed, so a building placed as a house is also read as one afterwards.
+    /// A civilisation whose houses are called something else keeps working; one
+    /// with two kinds of house does not, and that is a limit `House` will
+    /// dissolve when it starts carrying its own [`BuildingKindId`] (M3) —
+    /// declaring the role did not lift it, because a house still does not
+    /// record which row it came from.
     pub fn house_def(&self) -> Option<&BuildingDef> {
         self.buildings.iter().find(|b| b.is_house())
     }
@@ -522,13 +599,16 @@ impl DataSet {
 
     /// The house building and `rules.house_levels` describe the same house.
     ///
-    /// [`BuildingDef::is_house`] is a heuristic — no service, and it requires
-    /// some. If the per-level lists were to become the only place requirements
-    /// live and the building's line disappeared, **the house would stop being a
-    /// house** and half the game would change behaviour in silence. These three
-    /// checks are what makes that impossible: one says a house exists at all,
-    /// one that the levels are as many as declared, one that the building's
-    /// list is exactly the union of the levels'.
+    /// Two of these three checks once existed to keep [`BuildingDef::is_house`]
+    /// true while it was a heuristic. It is a declared role since phase 14.4, so
+    /// they are re-read here for what they are still worth: one says a house
+    /// exists at all — without one, `satisfaction::update` and `remove_house`
+    /// silently do nothing — one that the levels are as many as declared, and
+    /// one that the building's union covers every level's list, **or a level
+    /// that introduces a new service is unreachable by construction**: nothing
+    /// would ever move that accumulator off zero, so its threshold could never
+    /// be met. That last reason is the real one, and it outlived the heuristic
+    /// it was written for.
     fn check_the_house_agrees_with_the_levels(&self, out: &mut Vec<Inconsistency>) {
         let Some(house) = self.house_def() else {
             out.push(Inconsistency::NoHouse);
@@ -547,7 +627,7 @@ impl DataSet {
                 .iter()
                 .flat_map(|l| l.required_services.iter().copied()),
         );
-        let declared = sorted(house.required_services.iter().copied());
+        let declared = sorted(house.required_services().iter().copied());
         if declared != union {
             out.push(Inconsistency::InconsistentRequirements {
                 declared,
@@ -604,7 +684,7 @@ impl DataSet {
                 let best = self
                     .buildings
                     .iter()
-                    .filter_map(|b| b.service.as_ref())
+                    .filter_map(BuildingDef::service)
                     .filter(|s| s.kind == service)
                     .filter_map(|s| s.capacity_per_level.iter().copied().max())
                     .max();
@@ -659,23 +739,22 @@ impl DataSet {
         }
 
         for (building, def) in self.buildings.iter().enumerate() {
-            let Some(service) = def.service.as_ref() else {
+            let Some(service) = def.service() else {
                 continue;
             };
             if service.kind != ServiceKind::Food {
                 continue;
             }
-            // Skipping the provider that declares no output, or no granary to
-            // hold it in, is what let a phantom farm through: the coverage
-            // never consults `output_per_tick`, so it wins its houses on
-            // distance alone and then feeds none of them, for ever — the first
-            // provider keeps a contested house, so not even a real farm built
-            // afterwards can take them over. It sustains nobody, and the loop
-            // below says so with `sustainable: 0`.
-            let available = match (def.output_per_tick, def.max_stock) {
-                (Some(output), Some(max_stock)) => output.to_millis().min(max_stock.to_millis()),
-                _ => 0,
-            };
+            // Skipping the provider that grows nothing is what let a phantom
+            // farm through: the coverage never consults the production, so such
+            // a farm wins its houses on distance alone and then feeds none of
+            // them, for ever — the first provider keeps a contested house, so
+            // not even a real farm built afterwards can take them over. It
+            // sustains nobody, and the loop below says so with
+            // `sustainable: 0`.
+            let available = def.production.as_ref().map_or(0, |p| {
+                p.output_per_tick.to_millis().min(p.max_stock.to_millis())
+            });
             let sustainable = u16::try_from(available / per_resident).unwrap_or(u16::MAX);
             for (level, capacity) in service.capacities() {
                 if capacity > sustainable {
@@ -721,8 +800,7 @@ impl DataSet {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Inconsistency {
     #[error(
-        "no building is a house: `is_house()` classifies as a house whatever \
-         requires services without providing any, and with none of them the \
+        "no building declares the house role, and with no house at all the \
          houses stop levelling up, stop eating and stop being taxed, in silence"
     )]
     NoHouse,
@@ -732,7 +810,9 @@ pub enum Inconsistency {
 
     #[error(
         "the house requires {} but its levels require {}: the building's list \
-         has to stay the union, or `is_house()` stops recognising it",
+         has to stay the union, or a level asking for a service missing from it \
+         is unreachable — nothing ever moves that accumulator off zero, so its \
+         threshold can never be met",
         ids(declared),
         ids(in_levels)
     )]

@@ -70,12 +70,26 @@ pub struct RawBuildingTable {
     pub buildings: Vec<RawBuildingDef>,
 }
 
+/// The **flat** shape of a building row, which is not the shape `BuildingDef`
+/// has after validation.
+///
+/// `BuildingDef` is a sum type — a house xor a provider — and this is not, on
+/// purpose. The file mirrors the file: a role written as a RON enum would make
+/// an unknown one a serde "unknown variant" error instead of a validation error
+/// naming the row it is in, which is the rule this module opens with. Turning
+/// the flat row into the sum is exactly what validation does, and the
+/// contradictions it can find on the way — a house that declares a service, a
+/// provider that declares none — are reported against the field to blame.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawBuildingDef {
     pub id: String,
     pub size: (u8, u8),
     pub cost: i32,
     pub levels: u8,
+    /// What part the building plays: `"house"` or `"provider"`. **Required** —
+    /// a default would let a row that forgets to say what it is become
+    /// something silently, which is the very inference this field replaced.
+    pub role: String,
     #[serde(default)]
     pub service: Option<RawServiceDef>,
     #[serde(default)]

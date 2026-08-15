@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use crate::grid::Terrain;
 
 use crate::data::{
-    BuildingDef, DemographicsRules, DifficultyDef, HouseLevelDef, Rules, SatisfactionRules,
-    TerrainDef,
+    BuildingDef, BuildingRole, DemographicsRules, DifficultyDef, HouseLevelDef, Production, Rules,
+    SatisfactionRules, TerrainDef,
 };
 
 /// Hash prefix: keeps this hash apart from any other blake3 in the project.
@@ -110,10 +110,8 @@ pub(crate) fn dataset_hash(
             size,
             cost,
             levels,
-            service,
-            required_services,
-            output_per_tick,
-            max_stock,
+            role,
+            production,
         } = b;
         // The length before the content: without it, "ab"+"c" and "a"+"bc"
         // would give the same hash.
@@ -122,25 +120,40 @@ pub(crate) fn dataset_hash(
         h.update(&[size.0, size.1, *levels]);
         h.update(&cost.get().to_le_bytes());
 
-        match service {
+        // A discriminant byte, then the variant's own payload. **The order of
+        // the variants is frozen**, exactly as the declaration order of the RNG
+        // kinds is: renumbering them rewrites every checkpoint of every
+        // recording for a change that altered no rule of the game, and nobody
+        // reading the diff afterwards could tell that was all it was.
+        match role {
+            BuildingRole::House { required_services } => {
+                h.update(&[0u8]);
+                h.update(&(required_services.len() as u64).to_le_bytes());
+                for s in required_services {
+                    h.update(&[s.index() as u8]);
+                }
+            }
+            BuildingRole::Provider { service } => {
+                h.update(&[1u8]);
+                h.update(&[service.kind.index() as u8]);
+                hash_u16_slice(&mut h, &service.range_per_level);
+                hash_u16_slice(&mut h, &service.capacity_per_level);
+            }
+        }
+
+        match production {
             None => {
                 h.update(&[0u8]);
             }
-            Some(s) => {
+            Some(Production {
+                output_per_tick,
+                max_stock,
+            }) => {
                 h.update(&[1u8]);
-                h.update(&[s.kind.index() as u8]);
-                hash_u16_slice(&mut h, &s.range_per_level);
-                hash_u16_slice(&mut h, &s.capacity_per_level);
+                h.update(&output_per_tick.to_millis().to_le_bytes());
+                h.update(&max_stock.to_millis().to_le_bytes());
             }
         }
-
-        h.update(&(required_services.len() as u64).to_le_bytes());
-        for s in required_services {
-            h.update(&[s.index() as u8]);
-        }
-
-        hash_opt_milli(&mut h, *output_per_tick);
-        hash_opt_milli(&mut h, *max_stock);
     }
 
     // --- difficulty profiles, in DifficultyId order ---
@@ -162,17 +175,5 @@ fn hash_u16_slice(h: &mut blake3::Hasher, v: &[u16]) {
     h.update(&(v.len() as u64).to_le_bytes());
     for x in v {
         h.update(&x.to_le_bytes());
-    }
-}
-
-fn hash_opt_milli(h: &mut blake3::Hasher, v: Option<crate::units::Milli>) {
-    match v {
-        None => {
-            h.update(&[0u8]);
-        }
-        Some(m) => {
-            h.update(&[1u8]);
-            h.update(&m.to_millis().to_le_bytes());
-        }
     }
 }

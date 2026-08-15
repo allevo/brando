@@ -11,8 +11,8 @@ use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
 
 use crate::raw::{RawBuildingDef, RawDataSet, RawDemographics, RawSatisfaction};
 use sim_core::data::{
-    BuildingDef, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef, Inconsistency, Rules,
-    SatisfactionRules, ServiceDef, TerrainDef,
+    BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
+    Inconsistency, Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
 };
 
 /// A single problem, with the logical path of the field that causes it.
@@ -68,6 +68,21 @@ pub enum ValidationErrorKind {
 
     #[error("max_stock on a building that produces nothing")]
     StockWithoutOutput,
+
+    #[error("unknown role: {name:?} (known: {known})")]
+    UnknownRole { name: String, known: String },
+
+    #[error("a building with the provider role supplies no service")]
+    ProviderWithoutService,
+
+    #[error("a house declares a service: a house needs services, it does not supply them")]
+    ServiceOnAHouse,
+
+    #[error(
+        "required_services on a provider: only a house requires services, so \
+         this list would be read by nobody"
+    )]
+    RequirementsOnAProvider,
 
     /// A relation between two tables that does not hold.
     ///
@@ -572,23 +587,88 @@ fn validate_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<Build
             );
         }
 
-        let service = validate_service(b, &path, rep);
-        let required_services = services(&b.required_services, &path, rep);
-        validate_output(b, &path, rep);
-
         out.push(BuildingDef {
             id: b.id.clone(),
             size: b.size,
             cost: Coins::new(b.cost),
             levels: b.levels,
-            service,
-            required_services,
-            output_per_tick: b.output_per_tick.map(Milli::from_millis),
-            max_stock: b.max_stock.map(Milli::from_millis),
+            role: validate_role(b, &path, rep),
+            production: validate_production(b, &path, rep),
         });
     }
 
     out
+}
+
+/// The role names the RON tables use.
+///
+/// Part of the contract with the data files, like [`ServiceKind::as_id`]:
+/// renaming one invalidates every table. The literals in [`validate_role`]'s
+/// match are these same two, and `every_known_role_is_accepted` is what keeps
+/// the two lists from drifting apart.
+const ROLES: [&str; 2] = ["house", "provider"];
+
+/// Turns the flat row into the sum, reporting whatever contradicts it.
+///
+/// **The fallback role is never observed.** [`validate`] returns the report
+/// before the dataset is built whenever anything was pushed, and every path
+/// that reaches the fallback pushes. It exists so that one unreadable row does
+/// not remove an entry from `buildings` and shift what `buildings[i]` means for
+/// every error reported after it.
+fn validate_role(b: &RawBuildingDef, path: &str, rep: &mut ValidationReport) -> BuildingRole {
+    match b.role.as_str() {
+        "house" => {
+            if b.service.is_some() {
+                rep.push(
+                    format!("{path}.service"),
+                    ValidationErrorKind::ServiceOnAHouse,
+                );
+            }
+            BuildingRole::House {
+                required_services: services(&b.required_services, path, rep),
+            }
+        }
+        "provider" => {
+            if !b.required_services.is_empty() {
+                rep.push(
+                    format!("{path}.required_services"),
+                    ValidationErrorKind::RequirementsOnAProvider,
+                );
+            }
+            match validate_service(b, path, rep) {
+                Some(service) => BuildingRole::Provider { service },
+                None => {
+                    // An unknown service kind has already been reported by
+                    // `validate_service`; saying so twice would be noise. What
+                    // it cannot report is the row that declares no service at
+                    // all, because it has no service block to blame.
+                    if b.service.is_none() {
+                        rep.push(
+                            format!("{path}.service"),
+                            ValidationErrorKind::ProviderWithoutService,
+                        );
+                    }
+                    fallback_role()
+                }
+            }
+        }
+        other => {
+            rep.push(
+                format!("{path}.role"),
+                ValidationErrorKind::UnknownRole {
+                    name: other.to_string(),
+                    known: ROLES.join(", "),
+                },
+            );
+            fallback_role()
+        }
+    }
+}
+
+fn fallback_role() -> BuildingRole {
+    BuildingRole::House {
+        required_services: Vec::new(),
+    }
 }
 
 fn validate_difficulty(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<DifficultyDef> {
@@ -699,7 +779,20 @@ fn services(names: &[String], path: &str, rep: &mut ValidationReport) -> Vec<Ser
     out
 }
 
-fn validate_output(b: &RawBuildingDef, path: &str, rep: &mut ValidationReport) {
+/// Builds the production block, or reports why it cannot.
+///
+/// The two errors it can report are the two halves of a producer that does not
+/// hold together: an output with no granary to put it in, and a granary with
+/// nothing to fill it. They stay validation errors — they are properties of one
+/// row of one table — and building [`Production`] is what happens when neither
+/// fires. Past this point the broken combination has no shape to be in, which is
+/// what it means for the core to make the state unrepresentable rather than
+/// merely checked.
+fn validate_production(
+    b: &RawBuildingDef,
+    path: &str,
+    rep: &mut ValidationReport,
+) -> Option<Production> {
     match (b.output_per_tick, b.max_stock) {
         (Some(p), stock) => {
             if p < 0 {
@@ -710,18 +803,28 @@ fn validate_output(b: &RawBuildingDef, path: &str, rep: &mut ValidationReport) {
                     },
                 );
             }
-            if stock.is_none_or(|g| g <= 0) {
-                rep.push(
-                    format!("{path}.max_stock"),
-                    ValidationErrorKind::ProducerWithoutStock,
-                );
+            match stock {
+                Some(g) if g > 0 => Some(Production {
+                    output_per_tick: Milli::from_millis(p),
+                    max_stock: Milli::from_millis(g),
+                }),
+                _ => {
+                    rep.push(
+                        format!("{path}.max_stock"),
+                        ValidationErrorKind::ProducerWithoutStock,
+                    );
+                    None
+                }
             }
         }
-        (None, Some(_)) => rep.push(
-            format!("{path}.max_stock"),
-            ValidationErrorKind::StockWithoutOutput,
-        ),
-        (None, None) => {}
+        (None, Some(_)) => {
+            rep.push(
+                format!("{path}.max_stock"),
+                ValidationErrorKind::StockWithoutOutput,
+            );
+            None
+        }
+        (None, None) => None,
     }
 }
 

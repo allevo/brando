@@ -235,8 +235,13 @@ fn mature(world: &mut World, flow: Flow, numerator: i64, divisor: i64) -> u64 {
 /// rate generalises to every service a rung ever demands instead of being wired
 /// to food.
 fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool {
-    let rules = world.data.rules.clone();
-    let d = &rules.demographics;
+    // Copied, and only the rates: `jitter` and `mature` want the whole
+    // `&mut World`, so no borrow of the tables survives across them, and
+    // naming the fields separately cannot help here the way it does in
+    // `levels::review`. What it replaced was a clone of the whole `Rules`,
+    // which drags `house_levels` and a `Vec<ServiceKind>` per level along with
+    // it — several heap allocations, on every tick, for ten bytes of rates.
+    let d = world.data.rules.demographics.clone();
 
     let mut served = 0i64;
     let mut unserved = 0i64;
@@ -314,13 +319,18 @@ fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool
 /// rate is zero and the population stops — and it stops for a reason a reader
 /// can point at instead of because two constants happen to cancel.
 fn births(world: &mut World, divisor: i64) -> bool {
-    let rules = world.data.rules.clone();
-    let d = &rules.demographics;
+    // The rates alone, and copied, for the reason spelled out in `deaths`.
+    // Everything else the table is asked for here — `max_residents` below,
+    // `satisfaction.max` further down — is read through `world` at a point
+    // where nothing holds it mutably, so it needs no copy at all.
+    let d = world.data.rules.demographics.clone();
 
     let mut eligible: Vec<HouseId> = Vec::new();
     let mut eligible_residents = 0i64;
     for (id, h) in world.houses.iter() {
-        let room = rules
+        let room = world
+            .data
+            .rules
             .max_residents(h.level)
             .is_some_and(|max| h.residents < max);
         if h.residents > 0 && room && worst_required(world, h) >= d.birth_threshold {
@@ -336,7 +346,7 @@ fn births(world: &mut World, divisor: i64) -> bool {
     // The satisfaction scaling folds into the numerator, and `satisfaction.max`
     // into the divisor: scaling the rate first would truncate it to a whole
     // number and throw away most of the curve.
-    let max = i64::from(rules.satisfaction.max);
+    let max = i64::from(world.data.rules.satisfaction.max);
     if max == 0 {
         return false;
     }
@@ -365,8 +375,11 @@ fn births(world: &mut World, divisor: i64) -> bool {
             moved = true;
             h.residents
         };
-        if rules
-            .max_residents(level_of(world, house))
+        let level = level_of(world, house);
+        if world
+            .data
+            .rules
+            .max_residents(level)
             .is_some_and(|m| full >= m)
         {
             eligible.remove(at);

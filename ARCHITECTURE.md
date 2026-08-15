@@ -50,6 +50,7 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | `units.rs` | `Milli(i32)` and `Coins(i32)`: the only numeric quantities allowed in the state. |
 | `ids.rs` | Newtype ids. A bare `usize` never appears in a public signature. |
 | `service.rs` | `ServiceKind` — an enum, unlike building kinds, which are data (D6). |
+| `data.rs` (`BuildingRole`) | An enum over the two **roles** — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty (A21). |
 | `command.rs` | The primitive commands and their structured errors. The only write channel in. |
 | `event.rs` | Delta events for the renderer, emitted on state **change**, never per tick. |
 | `data_hash.rs` | blake3 of the validated dataset, fed field by field by hand (A3). |
