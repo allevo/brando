@@ -144,24 +144,6 @@ impl DirtyFlags {
 }
 
 /// The complete state of a game.
-///
-/// **`World` is not `Clone`, in any configuration (A22).** A world is obtained
-/// by playing a game: a save is `seed + Vec<Command>` and never a dump of the
-/// state (D4), so the way to a second world holding a given state is to play
-/// the same game again. A copy would be a second way to reach a state, and the
-/// determinism story rests on there being one.
-///
-/// A test that wants a `before` to compare against therefore builds a second
-/// world and steps it — `twins` in `sim-core/tests/common`, a second `replay`
-/// in `sim-replay`. That comparison says **more** than the copy it replaces:
-/// two worlds that were both played once can be compared on the derived
-/// structures as well, so a rejected command that dirties a flag which step 2
-/// or step 3 then consumes inside the same tick shows up. Against a copy it did
-/// not — those counters legitimately move during a tick.
-/// [`World::first_difference`] is that comparison.
-///
-/// The rule is a check and not a comment, because the derive is one word and
-/// its absence is invisible: [`not_clone`] refuses it at compile time.
 #[derive(Debug)]
 pub struct World {
     pub(crate) tick: u32,
@@ -215,26 +197,6 @@ pub struct World {
 }
 
 /// A **compile-time** refusal of `Clone` on [`World`] (A22).
-///
-/// A world is `seed + Vec<Command>` played out (D4), never a copy of another
-/// world. The rule is written as a check rather than a comment for the reason
-/// CLAUDE.md gives generally: `#[derive(Clone)]` is one word, nothing else in
-/// the tree would fail if it came back, and a test that copies a world instead
-/// of playing one asserts something weaker without ever going red.
-///
-/// **How it decides.** An inherent associated constant is chosen ahead of a
-/// trait's of the same name, and the inherent `IS_CLONE` below exists only
-/// where `T: Clone` holds. So `Probe<T>::IS_CLONE` reads `true` for a type that
-/// implements `Clone` and falls back to the trait's `false` for one that does
-/// not. It answers for a hand-written `impl Clone for World` as well as for the
-/// derive: it asks the compiler the real question rather than reading the
-/// source for a spelling.
-///
-/// `Cloneable` is the positive control, and it is not decoration: without it a
-/// change that broke the resolution above would leave the guard answering
-/// `false` to everything, which is green for the wrong reason. It is the same
-/// lesson as `dataset_with_a_farm_that_grows_nothing` — give the check
-/// something it has to catch.
 mod not_clone {
     use core::marker::PhantomData;
 
