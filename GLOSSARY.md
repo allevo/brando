@@ -2,7 +2,7 @@
 
 This file exists for one reason: so that no word in the code sends you to a dictionary.
 
-Four sections:
+Sections:
 
 1. **[Words worth a definition](#words-worth-a-definition)** — the words used in identifiers that
    are not everyday vocabulary, each with a plain explanation.
@@ -60,18 +60,17 @@ The rule is **plain words over jargon**.
 | **flow** | One of the four ways the population moves — births, deaths, immigration, emigration. Each keeps its own running total, and the four together are what makes conservation an exact equality. |
 | **jitter** | A small random wobble added to a rate, so two games with different seeds do not play out identically. Symmetric, so it does not move the average. |
 | **eligible** | Whoever a rate is counted against. Births are counted against the residents of houses with room to spare and a satisfaction above the threshold — *not* against the whole population, which is what makes a full city stop growing on its own. |
+| **attractiveness** | One number saying how much the city draws new people in. It is what decides whether anybody moves there, and it is read for the whole city rather than for one house. |
 | **ground height** | How high the ground is on one tile, counted in **steps** rather than in any unit of length. The grid's own `height` is its size in tiles, which is a different thing — hence the longer name. A step is a unit of gameplay: the renderer multiplies it by a scale of its own to get pixels. |
 | **slope** | The difference between the highest and the lowest ground height across the tiles a building sits on. Zero means level ground. It is worked out when it is needed and never stored, so it cannot disagree with the heights it comes from. |
 | **task** | One document under `plan/`, and one piece of work: a single goal, closed by a command that answers yes or no. It is the word for the *document*, not a second word for **phase** — a phase is one kind a task can be, alongside an open question and the constitution. |
 | **front matter** | The block of `key: value` lines between two `---` lines at the very top of a task, holding its id, kind, status and dates. It is the machine-readable half of a task; everything below it is prose for the reader. |
-| **constitution** | The seven rules `D1`–`D7`, settled before the first line of code and binding on all of it. They are the only rules that live in a document rather than in the comment on the code they bind, because they bind code that does not exist yet. |
+| **constitution** | The rules `D1`–`D7`, settled before the first line of code and binding on all of it. They are the only rules that live in a document rather than in the comment on the code they bind, because they bind code that does not exist yet. |
 
-Three words are defined here but do not exist in the code yet, because the phases that introduce them
-are not written: **attractiveness** (one number saying how much the city draws new people in), which
-arrives with phase 15, and **ground height** and **slope**, which arrive with phase 19. Until then,
-finding them in `plan/` and not in a `.rs` is expected, not a stale entry.
-**jitter** was in this note until phase 14, and is now in the table above because it is in
-`demographics.rs`.
+Some words above are defined here but do not exist in the code yet, because the phases that introduce
+them are not written: **attractiveness** arrives with phase 15, **ground height** and **slope** with
+phase 19. Until then, finding one in `plan/` and not in a `.rs` is expected, not a stale entry.
+**jitter** was in this note until phase 14, and is out of it because it is in `demographics.rs`.
 
 ---
 

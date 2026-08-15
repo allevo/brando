@@ -22,7 +22,7 @@ Then **[GLOSSARY.md](GLOSSARY.md)** when a word is unfamiliar — no word in thi
 you to a dictionary.
 
 There is no separate document saying *why*. A rule the code has is explained in full in the comment
-on that code, so the answer is next to the thing you are reading. The seven rules taken before the
+on that code, so the answer is next to the thing you are reading. The rules taken before the
 first line of code, and binding on all of it, are the constitution in
 **[plan/14.5.5-the-constitution.md](plan/14.5.5-the-constitution.md)**.
 
@@ -69,6 +69,6 @@ xtask/         headless runner, recordings, benchmarks, doc checks
 plan/          the development record, phase by phase — history, not reference
 ```
 
-Dependencies always point towards `sim-core`. Six further crates are planned and deliberately not
+Dependencies always point towards `sim-core`. Further crates are planned and deliberately not
 scaffolded yet; [ARCHITECTURE.md](ARCHITECTURE.md) lists them and [ROADMAP.md](ROADMAP.md) says when
 they arrive.

@@ -29,7 +29,7 @@ dependencies, that is an architectural mistake.
 | `agent-llm` | no | Semantic observation and tool schema for the LLM. M3. |
 | `game-bevy` | no | Renderer. Consumes snapshots and events. M2. |
 
-The six absent crates are absent **deliberately**: empty scaffolding is surface that invites you to
+The crates marked *no* are absent **deliberately**: empty scaffolding is surface that invites you to
 fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 
 ### `sim-core` modules
@@ -38,7 +38,7 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 |---|---|
 | `world.rs` | The game state: a concrete struct of `SlotMap`s and `Vec`s, not an ECS (D1). |
 | `tick.rs` | The ten-step tick, whose order is game semantics. |
-| `data.rs` | The validated dataset the core consumes, plus every **cross-table** consistency check. |
+| `data.rs` | The validated dataset the core consumes, plus every **cross-table** consistency check. `BuildingRole` is an enum over the **roles** a building can play — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty. |
 | `grid.rs` | The tile grid. `Tile` fits in 4 bytes so 40,000 tiles stay in cache. |
 | `rng.rs` | One seeded PCG64 stream per kind, derived from the kind's **name**, not its index. |
 | `network.rs` | Road connected components and walked distances. Derived, outside the hash. |
@@ -50,7 +50,6 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | `units.rs` | `Milli(i32)` and `Coins(i32)`: the only numeric quantities allowed in the state. |
 | `ids.rs` | Newtype ids. A bare `usize` never appears in a public signature. |
 | `service.rs` | `ServiceKind` — an enum, unlike building kinds, which are data (D6). |
-| `data.rs` (`BuildingRole`) | An enum over the two **roles** — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty. |
 | `command.rs` | The primitive commands and their structured errors. The only write channel in. |
 | `event.rs` | Delta events for the renderer, emitted on state **change**, never per tick. |
 | `data_hash.rs` | blake3 of the validated dataset, fed field by field by hand rather than through serde, so the hash does not depend on a serialisation format. |
@@ -72,7 +71,7 @@ than as a hash divergence: `roads`, `coverage`.
 **Bookkeeping:** `dirty`, `buildings_by_origin`, `houses_by_origin`. The two indexes are `BTreeMap`s
 and not `HashMap`s (D4) — their iteration order is a contract.
 
-Two budgets inside that state are not free to grow:
+The budgets inside that state that are not free to grow:
 
 - **`Tile` stays small** — `u16` indices, no pointers, no `Option<Box<...>>`. Forty thousand tiles have
   to stay in cache as much as possible; `Tile` fits in 4 bytes today, which is 160 KB for the grid, and
@@ -81,7 +80,7 @@ Two budgets inside that state are not free to grow:
   painful. Using them naively — when the roads change, every provider goes dirty — is allowed and is
   what M0 does; not having them is not.
 
-Two non-obvious invariants worth knowing before you touch any of this:
+Non-obvious invariants worth knowing before you touch any of this:
 
 - Iterating a `SlotMap` goes by slot index, so it is deterministic given the same sequence of
   insertions and removals — which the command log guarantees (D4).
@@ -114,12 +113,12 @@ the development timeline. Reordering requires regenerating the recordings and wr
 | 5 | Step the real logistics walkers | no — M3 (D3) | — |
 | 6 | Houses: satisfaction, levels, migration | **yes**, partly | `satisfaction.rs`, `levels.rs`, `demographics.rs` |
 | 7 | Finance and taxes | no — phase 16 | — |
-| 8 | Random events | no — M1. First use of `RngKind::Events` | — |
+| 8 | Random events | no — not scheduled. First use of `RngKind::Events` | — |
 | 9 | Check the scenario objectives | no — phase 17, needs `sim-scenario` | — |
 | 10 | Emit the events for the renderer | **yes** | `event.rs` |
 
-**Six full, four empty.** An invalid command does not interrupt the tick and is not an `Err` of the
-tick: it is discarded and reported with the index it had in `cmds`.
+An invalid command does not interrupt the tick and is not an `Err` of the tick: it is discarded and
+reported with the index it had in `cmds`.
 
 After step 10, `summarise` reads the tick's aggregates off the world. It is **not** a delta event: it
 is the snapshot the renderer draws its bars from and the evaluator (M2) reads its metrics from. As
@@ -156,20 +155,20 @@ there is nothing to draw for.
 
 ## The frozen orders
 
-Four declaration orders are load-bearing. Reordering any of them **silently invalidates every
-recorded replay** — nothing about it will look like an error:
+The orders this file defines are load-bearing. Reordering one **silently invalidates every recorded
+replay** — nothing about it will look like an error:
 
 | Order | Why |
 |---|---|
-| The ten tick steps | Game semantics. |
+| The tick steps | Game semantics. |
 | Step 6's sub-steps | Game semantics. |
 | The demographics draws | The RNG sequence. |
-| `RngKind` `[Events, Migration, Production, Demographics]` | Position in the state hash. Renaming a variant also changes its **salt**. |
-| `Flow` `[Births, Deaths, Immigration, Emigration]` | Indexes `Demographics::remainder`, which is hashed. |
-| `Terrain` `[Plain, Water, Rock]` · `ServiceKind` `[Water, Food]` | Table completeness checks and fixed-size array indices. |
 
-These are listed in `GLOSSARY.md` under "Frozen strings and values" and are verified by
-`cargo xtask doc-check`.
+The declaration order of an enum is load-bearing the same way — a position stored in the state hash,
+or an index into a fixed-size array — but it is not stated here. It is stated once, in `GLOSSARY.md`
+under "Frozen strings and values", where `cargo xtask doc-check` reads each row and compares it
+against that type's own `const ALL`. A second copy here would be prose nothing keeps in agreement
+with the code.
 
 ## The boundary with the renderer
 

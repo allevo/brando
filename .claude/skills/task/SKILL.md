@@ -76,8 +76,8 @@ There are no other fields. `size` in particular is prose, not front matter; the 
 
 ### 4. Write the body
 
-Three shapes exist in the tree, and the one to copy depends on what you are opening. Read the file
-named beside each as the model before writing.
+Which shape to copy depends on what you are opening. Read the file named beside each as the model
+before writing.
 
 **A full plan** — a phase you are about to build. Model: `plan/15-migration.md`.
 
@@ -104,24 +104,26 @@ exists` → `## The shape it will take` → `## The decisions it will produce, n
 
 **An open question** — a decision you are deferring. Model: `plan/14.5-an-empty-house-consumes-no-capacity.md`.
 No blockquote, no `**Goal:**` block, and the H1 is the problem stated in plain prose with no
-`Phase N —` prefix. Exactly two sections:
+`Phase N —` prefix. Its sections:
 
 - `## What the code does` — name the function and the file it lives in, and quote the line that
   causes the question.
 - `## Why it could be a problem` — the argument, ending in what makes it urgent now.
 
 An open question has **no `## Verification` section**. It closes with an answer, not a command, and
-all three in the tree are written this way.
+the ones in the tree are all written this way.
 
-Whatever the shape: no balancing number goes in a `.rs` (D6), no `A<n>` goes anywhere at all — it
-names nothing and `doc-check` fails on it — and no `**Decisions involved:**` line, which older files
-still carry from a register that no longer exists.
+Whatever the shape: no balancing number goes in a `.rs` (D6), and no `**Decisions involved:**` line.
+**No `A<n>` either — it names nothing.** In a `.rs`, `.ron` or `.toml` `doc-check` fails on one; in a
+task it cannot see it, so that rule is yours to keep. A task already in the tree that carries one
+keeps it — the older files do, unbuilt plans included, and both it and the `**Decisions involved:**`
+line come from a register that no longer exists. What you are writing now carries neither.
 
 ### 5. Add the row to `ROADMAP.md`
 
 Rows are ordered by number, so an open question sits immediately before the phase it blocks.
 
-A phase goes in `## To do`, four columns:
+A phase goes in the *to do* table, whose heading names the milestone it is the rest of:
 
 ```markdown
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows | |
@@ -150,7 +152,7 @@ cargo xtask doc-check
 
 ## Closing
 
-A phase is not finished until all seven of these are true.
+A phase is not finished until all of these are true.
 
 1. `cargo test --workspace` is green, and the new behaviour has the tests its task file promised.
 2. `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` are clean.
@@ -167,7 +169,7 @@ A phase is not finished until all seven of these are true.
 7. Any decision taken along the way is written where it binds; any decision **deferred** gets an open
    question, opened by the steps above. `CLAUDE.md` says which case goes where.
 
-Then the four edits, which have to agree with each other:
+Then the edits, which have to agree with each other:
 
 **The front matter.** `status: implemented`, and a `closed` date that is today and not before
 `opened`. A phase abandoned rather than built is `superseded`, which also carries a `closed` date.
@@ -186,12 +188,12 @@ That is the point of the section, not an aside: the original prediction next to 
 is the most useful thing in the whole record. Paragraphs open with a bold lead-in sentence. Nothing
 above this section is rewritten to match the outcome.
 
-**`ROADMAP.md`.** Move the row out of `## To do` and into `## Done`, whose three columns are
+**`ROADMAP.md`.** Move the row out of the *to do* table and into `## Done`, whose columns are
 `| # | What | When |`, and whose `When` has to be the same date as the task's `closed` — the checker
-compares them. Then update the status line:
+compares them. Then update the status line, which names the id you have just closed:
 
 ```markdown
-> **Implemented through phase 14.9.** M0 is complete; M1 is in progress.
+> **Implemented through phase <the id you just closed>.** M0 is complete; M1 is in progress.
 ```
 
 It has to name the **highest** implemented id, which is what `doc-check` reads it as. A row whose `#`

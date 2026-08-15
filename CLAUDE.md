@@ -6,8 +6,8 @@ answers it — the table below. Nothing here states the current state of the tre
 
 *Why* is not on that list, and that is deliberate: it is answered where it binds. A rule the code has
 is stated in full in the comment on that code; a question still open is stated in its own task; and
-the seven rules that bind code nobody has written yet are the **constitution**, `D1`–`D7`, which is
-the one task holding rules instead of a record of work.
+the rules that bind code nobody has written yet are the **constitution**, `D1`–`D7`, which is the one
+task holding rules instead of a record of work.
 
 Every identifier, comment and document in this repository is in English. Any word you do not
 recognise is defined in [GLOSSARY.md](GLOSSARY.md).
@@ -45,11 +45,13 @@ renamed, repoint the link and leave the sentence exactly as it was written. A de
 meaning of the sentence carrying it, where repointing preserves it: the freeze is on what a document
 says, not on where its links land.
 
-**A task written before 2026-08-15 may cite an `A<n>`, and it resolves to nothing.** Those were
-implementation decisions in a register that has been removed; the rules they held are now stated in
-full at the places they bind, and the tasks that name them were left as written rather than rewritten
-to hide it. Reading `A12` in an old task and finding no `A12` anywhere is expected, not a broken
-link. `D<n>` still resolves, and always will.
+**A task written before the register was removed may cite an `A<n>`, and it resolves to nothing.**
+Those were implementation decisions in a register that has been removed; the rules they held are now
+stated in full at the places they bind, and the tasks that name them were left as written rather than
+rewritten to hide it. Reading `A12` in one and finding no `A12` anywhere is expected, not a broken
+link. **That includes plans not yet built**, several of which still open with a
+`**Decisions involved:**` line, so a phase taken off the shelf has to be read with it in mind. A task
+written now carries none. `D<n>` still resolves, and always will.
 
 ### What a task looks like
 
@@ -77,8 +79,8 @@ A phase is not finished until the tests are green, the recordings are accounted 
 `ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has been updated or consciously
 declared unaffected — say which, explicitly, because "I did not think about it" is the failure this
 guards against — and the task file has its `## How it went`, including the ways the plan was wrong.
-That is seven items, and they are in the skill together with the edits that close a task, because
-they are read at the moment a phase closes and at no other.
+The full list is in the skill, together with the edits that close a task, because they are read at
+the moment a phase closes and at no other.
 
 The one of them that reaches further than the task file: any decision taken along the way is written
 where it binds — see below — and any decision **deferred** gets a half-numbered **open question**
@@ -99,7 +101,7 @@ So, by case:
   the naming rule below already required it: the sentence has to teach the rule to a reader who
   cannot look anything up.
 - **A rule that binds code nobody has written yet.** The constitution, and only if it is genuinely of
-  that kind. It is one task, it holds seven rules, and it has not grown since the first commit.
+  that kind. It is one task, and it has not grown since the first commit.
 - **A question not yet settled.** A half-numbered **open question** slot in `ROADMAP.md`, at the
   point where it has to be answered, plus a task of its own holding the argument. The slot exists
   because such a question goes invisible otherwise, which is what happened twice while four phases
