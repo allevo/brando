@@ -370,7 +370,7 @@ impl World {
     pub fn set_terrain(&mut self, pos: TilePos, terrain: crate::grid::Terrain) -> bool {
         match self.grid.at_mut(pos) {
             Some(t) => {
-                t.terrain = terrain;
+                t.set_terrain(terrain);
                 true
             }
             None => false,
@@ -440,7 +440,7 @@ impl World {
                     continue;
                 };
                 for v in self.grid.neighbors4(idx) {
-                    if self.grid.get(v).is_some_and(|t| t.flags.has_road()) {
+                    if self.grid.get(v).is_some_and(|t| t.has_road()) {
                         out.push(v);
                     }
                 }

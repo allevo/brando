@@ -123,7 +123,7 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
     let idx = world.grid.index(at).ok_or(CommandError::OutsideMap(at))?;
     let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
 
-    if tile.flags.has_road() {
+    if tile.has_road() {
         return Err(CommandError::TileOccupied {
             at,
             occupant: OccupantKind::Road,
@@ -138,18 +138,18 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
 
     // Whether a road may be laid here is a fact about the ground and the enum
     // answers it; only the price comes from the tables.
-    if !tile.terrain.is_walkable() {
+    if !tile.terrain().is_walkable() {
         return Err(CommandError::WrongTerrain {
             at,
-            terrain: tile.terrain,
+            terrain: tile.terrain(),
         });
     }
-    let cost = world.data.road_cost(tile.terrain);
+    let cost = world.data.road_cost(tile.terrain());
     charge(world, cost)?;
 
     // From here on nothing can fail: no partial mutation.
     if let Some(t) = world.grid.get_mut(idx) {
-        t.flags.set_road(true);
+        t.set_road(true);
     }
     world.dirty.roads = true;
     r.events.push(Event::RoadPlaced { at });
@@ -185,7 +185,7 @@ fn place_building(
     let tiles = tiles_covered(world, origin, size)?;
     for (idx, pos) in &tiles {
         let tile = world.grid.get(*idx).ok_or(CommandError::OutsideMap(*pos))?;
-        if tile.flags.has_road() {
+        if tile.has_road() {
             return Err(CommandError::TileOccupied {
                 at: *pos,
                 occupant: OccupantKind::Road,
@@ -197,10 +197,10 @@ fn place_building(
                 occupant: occ.into(),
             });
         }
-        if !tile.terrain.is_buildable() {
+        if !tile.terrain().is_buildable() {
             return Err(CommandError::WrongTerrain {
                 at: *pos,
-                terrain: tile.terrain,
+                terrain: tile.terrain(),
             });
         }
     }
@@ -258,9 +258,9 @@ fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), Co
     }
 
     let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
-    if tile.flags.has_road() {
+    if tile.has_road() {
         if let Some(t) = world.grid.get_mut(idx) {
-            t.flags.set_road(false);
+            t.set_road(false);
         }
         world.dirty.roads = true;
         r.events.push(Event::RoadRemoved { at });

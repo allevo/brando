@@ -113,7 +113,7 @@ impl RoadNetwork {
 }
 
 fn is_road(grid: &Grid, idx: TileIndex) -> bool {
-    grid.get(idx).is_some_and(|t| t.flags.has_road())
+    grid.get(idx).is_some_and(|t| t.has_road())
 }
 
 /// The set of tiles already visited by a BFS, reusable between one call and
@@ -246,7 +246,7 @@ mod tests {
         for x in 0..8u8 {
             let idx = g.index(TilePos::new(x, y)).expect("on the map");
             if let Some(t) = g.get_mut(idx) {
-                t.flags.set_road(true);
+                t.set_road(true);
             }
         }
         g

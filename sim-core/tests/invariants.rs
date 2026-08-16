@@ -78,7 +78,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
             }
             None => return Err(format!("{idx:?} is occupied but resolves to no id")),
         }
-        if tile.flags.has_road() {
+        if tile.has_road() {
             return Err(format!("{idx:?} has both a road and an occupant"));
         }
     }
@@ -250,7 +250,7 @@ fn accepted_cost(w: &World, cmd: &Command) -> Coins {
         Command::PlaceRoad { at } => w
             .grid()
             .at(*at)
-            .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain)),
+            .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain())),
         Command::PlaceBuilding { kind, .. } => w.data().def(*kind).map_or(Coins::ZERO, |d| d.cost),
     }
 }

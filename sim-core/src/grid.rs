@@ -58,13 +58,6 @@ impl TilePos {
 
 /// The kind of ground on a tile.
 ///
-/// What may be *done* on it lives here, in [`Terrain::is_buildable`] and
-/// [`Terrain::is_walkable`]: those are facts about the ground and not knobs,
-/// and changing one changes what the game is rather than how it is balanced.
-/// What it *costs* does not live here — the price of laying a road on a terrain
-/// is a number, and every number in this game lives in a RON table loaded and
-/// validated at startup (D6).
-///
 /// The three kinds, in plain terms:
 /// - `Plain` — ordinary flat ground. You can build on it and lay roads on it.
 ///   It is the default the whole map starts as.
@@ -83,20 +76,13 @@ pub enum Terrain {
 }
 
 impl Terrain {
-    /// Every variant, in a stable order. `sim-data` uses it to check that the
-    /// terrain table is complete.
+    /// Every variant, in a stable order.
     pub const ALL: [Terrain; 3] = [Terrain::Plain, Terrain::Water, Terrain::Rock];
 
     /// How many kinds of ground there are, for the arrays indexed by one.
     pub const COUNT: usize = Self::ALL.len();
 
     /// Position in the arrays indexed by terrain.
-    ///
-    /// It is also the number the hashes store for a terrain, which is why the
-    /// declaration order is frozen. Written out here rather than left to the
-    /// discriminant so there is one way to ask, and a test holds the two to
-    /// each other: reordering the variants without reordering these numbers
-    /// would put a terrain's cost under another terrain's name.
     pub const fn index(self) -> usize {
         match self {
             Self::Plain => 0,
@@ -106,18 +92,6 @@ impl Terrain {
     }
 
     /// Whether a building may stand on this terrain.
-    ///
-    /// `Plain` is the only ground a building stands on. That is a rule of the
-    /// game and not a balancing knob: letting a house sit on rock would change
-    /// what the map means, where changing what a road costs to cut through rock
-    /// only changes how expensive a mountain pass is. Everything numeric lives
-    /// in the RON tables (D6); a yes or a no is not numeric and lives here.
-    ///
-    /// A terrain added later answers no here until somebody says otherwise, and
-    /// what stops that going unnoticed is `doc-check`: it refuses a terrain
-    /// that `RULES.md` has no row for, and compares that row's answers against
-    /// this one. So a new kind of ground cannot land without its answer being
-    /// written down, and the page and this method cannot drift apart.
     pub const fn is_buildable(self) -> bool {
         matches!(self, Terrain::Plain)
     }
@@ -127,61 +101,48 @@ impl Terrain {
     /// A separate question from [`Terrain::is_buildable`], and the terrains
     /// answer the two differently on purpose: a road can be cut through `Rock`
     /// where no building fits — you cross a mountain, you do not settle on it —
-    /// and `Water` takes neither, so a stretch of it splits the city in two
-    /// until something is built to span it. One field answering both questions
-    /// could not say that.
-    ///
-    /// It says nothing about *crossing*. Once a road is laid, every road tile
-    /// costs the same to walk whatever lies underneath it: the terrain decides
-    /// what a road costs to lay and never what it costs to use.
-    ///
-    /// A terrain added later answers no here too, and `doc-check` guards it the
-    /// same way it guards [`Terrain::is_buildable`].
+    /// and `Water` takes neither.
     pub const fn is_walkable(self) -> bool {
         matches!(self, Terrain::Plain | Terrain::Rock)
     }
 }
 
-/// Status bits of a tile. Hand-written instead of using `bitflags` so as not
-/// to add a dependency to `sim-core` (D1).
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-pub struct TileFlags(u8);
+/// What a tile carries: a road, an occupant, and whether that occupant is a
+/// house — a road is not an occupant, and no tile ever has both.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+struct TileFlags(u8);
 
 impl TileFlags {
+    /// Whether a road runs over the tile.
     const HAS_ROAD: u8 = 1 << 0;
-    /// Whether the tile is occupied. It needs a bit of its own because the
-    /// occupant's index no longer has a sentinel value: any `TileIndex`,
-    /// `u16::MAX` included, is a legitimate origin for a building on a 256x256
-    /// map.
+    /// Whether the tile is occupied.
     const HAS_OCCUPANT: u8 = 1 << 1;
     /// Whether the occupant is a house; otherwise it is a building.
     const OCCUPANT_IS_HOUSE: u8 = 1 << 2;
 
-    pub const fn empty() -> Self {
-        Self(0)
-    }
-
-    pub const fn bits(self) -> u8 {
+    /// The flags.
+    const fn bits(self) -> u8 {
         self.0
     }
 
-    pub const fn has_road(self) -> bool {
+    /// Whether a road runs over the tile.
+    const fn has_road(self) -> bool {
         self.0 & Self::HAS_ROAD != 0
     }
 
-    pub const fn set_road(&mut self, on: bool) {
-        self.set(Self::HAS_ROAD, on);
-    }
-
-    pub const fn has_occupant(self) -> bool {
+    /// Whether a building or a house stands on the tile.
+    const fn has_occupant(self) -> bool {
         self.0 & Self::HAS_OCCUPANT != 0
     }
 
-    pub const fn occupant_is_house(self) -> bool {
+    /// Whether the occupant is a house rather than a building, meaningful only
+    /// while `has_occupant` is set.
+    const fn occupant_is_house(self) -> bool {
         self.0 & Self::OCCUPANT_IS_HOUSE != 0
     }
 
-    pub(crate) const fn set(&mut self, bit: u8, on: bool) {
+    /// Turns a raw bit mask on or off.
+    const fn set(&mut self, bit: u8, on: bool) {
         if on {
             self.0 |= bit;
         } else {
@@ -215,17 +176,30 @@ pub struct TileOccupant {
     pub is_house: bool,
 }
 
-/// Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+/// NB: Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Tile {
-    pub terrain: Terrain,
-    pub flags: TileFlags,
-    /// Only valid if `flags.has_occupant()`. Private: reading it without
-    /// checking the flag would give the origin of an occupant already removed.
+    terrain: Terrain,
+    flags: TileFlags,
     occupant_origin: TileIndex,
 }
 
 impl Tile {
+    /// The kind of ground on the tile.
+    pub const fn terrain(&self) -> Terrain {
+        self.terrain
+    }
+
+    /// Whether a road runs over the tile.
+    pub const fn has_road(&self) -> bool {
+        self.flags.has_road()
+    }
+
+    /// The flag byte, which is what the state hash reads.
+    pub const fn flag_bits(&self) -> u8 {
+        self.flags.bits()
+    }
+
     /// The tile's occupant, if there is one.
     pub const fn occupant(&self) -> Option<TileOccupant> {
         if self.flags.has_occupant() {
@@ -242,13 +216,23 @@ impl Tile {
         !self.flags.has_occupant() && !self.flags.has_road()
     }
 
-    pub const fn set_occupant(&mut self, occ: TileOccupant) {
+    /// Sets the kind of ground, which only scenario setup does.
+    pub(crate) const fn set_terrain(&mut self, terrain: Terrain) {
+        self.terrain = terrain;
+    }
+
+    /// Puts a road on the tile or takes it away.
+    pub(crate) const fn set_road(&mut self, on: bool) {
+        self.flags.set(TileFlags::HAS_ROAD, on);
+    }
+
+    pub(crate) const fn set_occupant(&mut self, occ: TileOccupant) {
         self.occupant_origin = occ.origin;
         self.flags.set(TileFlags::HAS_OCCUPANT, true);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.is_house);
     }
 
-    pub const fn clear_occupant(&mut self) {
+    pub(crate) const fn clear_occupant(&mut self) {
         self.flags.set(TileFlags::HAS_OCCUPANT, false);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
         self.occupant_origin = TileIndex::new(0);
@@ -262,10 +246,6 @@ pub enum GridError {
 }
 
 /// A dense grid of tiles, indexed `y * width + x`.
-///
-/// `width` and `height` are `u16` rather than `u8` because the maximum side is
-/// 256, which would not fit in a `u8`: the allowed values are `1..=256`. The
-/// coordinates stay `u8` (0..=255).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Grid {
     width: u16,
@@ -343,7 +323,7 @@ impl Grid {
         self.tiles.get(idx.as_usize())
     }
 
-    pub fn get_mut(&mut self, idx: TileIndex) -> Option<&mut Tile> {
+    pub(crate) fn get_mut(&mut self, idx: TileIndex) -> Option<&mut Tile> {
         self.tiles.get_mut(idx.as_usize())
     }
 
@@ -351,7 +331,7 @@ impl Grid {
         self.get(self.index(pos)?)
     }
 
-    pub fn at_mut(&mut self, pos: TilePos) -> Option<&mut Tile> {
+    pub(crate) fn at_mut(&mut self, pos: TilePos) -> Option<&mut Tile> {
         let idx = self.index(pos)?;
         self.get_mut(idx)
     }
@@ -367,7 +347,7 @@ impl Grid {
     /// tile of the row below.
     ///
     /// Emission order: north, west, east, south — that is, increasing
-    /// `TileIndex`. The order is part of the BFS determinism contract (D4).
+    /// `TileIndex`.
     pub fn neighbors4(&self, idx: TileIndex) -> impl Iterator<Item = TileIndex> {
         let mut out = [None; 4];
         if let Some(p) = self.pos(idx) {
@@ -500,6 +480,53 @@ mod tests {
         t.clear_occupant();
         assert_eq!(t.occupant(), None);
         assert_eq!(t, Tile::default(), "clearing also resets the origin");
+    }
+
+    /// The flags go into the state hash as one byte per tile, so moving one of
+    /// these numbers would change every hash with nothing about it looking like
+    /// an error — the constants are private, so the check goes through the
+    /// accessors that set them.
+    #[test]
+    fn the_bit_numbers_are_frozen() {
+        let mut t = Tile::default();
+        assert_eq!(t.flag_bits(), 0);
+
+        t.set_road(true);
+        assert_eq!(t.flag_bits(), 0b001);
+        t.set_road(false);
+
+        let origin = TileIndex::new(0);
+        t.set_occupant(TileOccupant {
+            origin,
+            is_house: false,
+        });
+        assert_eq!(t.flag_bits(), 0b010);
+
+        t.set_occupant(TileOccupant {
+            origin,
+            is_house: true,
+        });
+        assert_eq!(t.flag_bits(), 0b110);
+    }
+
+    /// The type enforces no rule about which flags may be set together — that
+    /// is `tick`'s job — but one bit must never disturb another.
+    #[test]
+    fn the_flags_are_independent() {
+        let mut t = Tile::default();
+        t.set_road(true);
+        t.set_occupant(TileOccupant {
+            origin: TileIndex::new(7),
+            is_house: true,
+        });
+        assert!(t.has_road(), "taking the tile left the road alone");
+
+        t.clear_occupant();
+        assert!(t.has_road(), "clearing the occupant left the road alone");
+        assert_eq!(t.occupant(), None);
+
+        t.set_road(false);
+        assert_eq!(t, Tile::default());
     }
 
     #[test]

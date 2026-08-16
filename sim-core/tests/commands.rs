@@ -233,7 +233,7 @@ fn a_road_costs_money_sets_the_flag_and_dirties_the_network() {
         Coins::new(STARTING_TREASURY - PLAIN_ROAD_COST)
     );
     let idx = w.grid().index(pos(2, 2)).expect("on the map");
-    assert!(w.grid().get(idx).expect("tile").flags.has_road());
+    assert!(w.grid().get(idx).expect("tile").has_road());
     // Step 2 has already consumed the flag within the same tick: what stays
     // observable is that the rebuild happened.
     assert!(!w.dirty().roads);
@@ -308,7 +308,7 @@ fn a_road_crosses_rock_but_no_building_stands_on_it() {
         "{:?}",
         r.rejected[0].1
     );
-    assert!(w.grid().at(pos(6, 6)).expect("on the map").flags.has_road());
+    assert!(w.grid().at(pos(6, 6)).expect("on the map").has_road());
 
     // Charged at rock's price and not at plain's. Every recording is uniformly
     // plain, so this is the only thing in the tree that would catch a road
@@ -388,8 +388,8 @@ fn one_invalid_command_does_not_stop_the_others() {
     assert_eq!(r.rejected.len(), 1);
     assert_eq!(r.rejected[0].0, 1, "the index of the discarded command");
     assert_eq!(r.accepted(3), 2);
-    assert!(w.grid().at(pos(0, 0)).expect("tile").flags.has_road());
-    assert!(w.grid().at(pos(1, 0)).expect("tile").flags.has_road());
+    assert!(w.grid().at(pos(0, 0)).expect("tile").has_road());
+    assert!(w.grid().at(pos(1, 0)).expect("tile").has_road());
 }
 
 #[test]

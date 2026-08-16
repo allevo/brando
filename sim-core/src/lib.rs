@@ -32,7 +32,7 @@ pub use data::{
 };
 pub use demographics::{Demographics, Flow, PopulationTotals};
 pub use event::Event;
-pub use grid::{Grid, GridError, Terrain, Tile, TileFlags, TileIndex, TileOccupant, TilePos};
+pub use grid::{Grid, GridError, Terrain, Tile, TileIndex, TileOccupant, TilePos};
 pub use ids::{BuildingId, BuildingKindId, HouseId, Level};
 pub use network::{ComponentId, RoadNetwork, Visited};
 pub use production::FoodTotals;
