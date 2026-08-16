@@ -197,7 +197,7 @@ mod tests {
 
     fn a_house(level: u8) -> House {
         let mut h = House {
-            origin: crate::ids::TilePos::new(0, 0),
+            origin: crate::grid::TilePos::new(0, 0),
             level: crate::ids::Level::new(level).expect("levels count from 1"),
             residents: 4,
             served: crate::service::ServiceFlags::empty(),

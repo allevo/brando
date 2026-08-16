@@ -21,7 +21,7 @@ const PREFIX: &[u8] = b"brando/world/v1";
 /// The state hash, in an order fixed **here** and nowhere else.
 ///
 /// What goes in: the tick, the dataset hash, the difficulty, the grid's
-/// dimensions, the tiles in `TileIdx` order, the buildings and the houses in id
+/// dimensions, the tiles in `TileIndex` order, the buildings and the houses in id
 /// order, the walkers, the economy, the demographics' pending fractions and the
 /// position of every RNG stream.
 ///
@@ -58,10 +58,10 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     h.update(&grid.width().to_le_bytes());
     h.update(&grid.height().to_le_bytes());
 
-    // --- tiles, in TileIdx order ---
+    // --- tiles, in TileIndex order ---
     for idx in grid.indices() {
         let Some(t) = grid.get(idx) else { continue };
-        h.update(&[t.terrain.index() as u8, t.flags.bits()]);
+        h.update(&[t.terrain().index() as u8, t.flag_bits()]);
         // The flags already say whether there is an occupant; the origin is
         // added only when there is one, so no meaningless bytes get hashed.
         if let Some(occ) = t.occupant() {

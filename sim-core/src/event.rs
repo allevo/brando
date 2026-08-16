@@ -6,7 +6,8 @@
 //! is unacceptable. An event is emitted on a **change of state**, never every
 //! tick: the wrong choice here costs 40,000 events per tick.
 
-use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TilePos};
+use crate::grid::TilePos;
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
 

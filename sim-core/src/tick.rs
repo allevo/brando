@@ -11,7 +11,8 @@
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::data::BuildingDef;
 use crate::event::Event;
-use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
+use crate::grid::{TileIndex, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level};
 use crate::satisfaction::Mood;
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
@@ -119,10 +120,10 @@ fn apply_commands(world: &mut World, cmds: &[Command], r: &mut StepReport) {
 }
 
 fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
+    let idx = world.grid.index(at).ok_or(CommandError::OutsideMap(at))?;
     let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
 
-    if tile.flags.has_road() {
+    if tile.has_road() {
         return Err(CommandError::TileOccupied {
             at,
             occupant: OccupantKind::Road,
@@ -137,18 +138,18 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
 
     // Whether a road may be laid here is a fact about the ground and the enum
     // answers it; only the price comes from the tables.
-    if !tile.terrain.is_walkable() {
+    if !tile.terrain().is_walkable() {
         return Err(CommandError::WrongTerrain {
             at,
-            terrain: tile.terrain,
+            terrain: tile.terrain(),
         });
     }
-    let cost = world.data.road_cost(tile.terrain);
+    let cost = world.data.road_cost(tile.terrain());
     charge(world, cost)?;
 
     // From here on nothing can fail: no partial mutation.
     if let Some(t) = world.grid.get_mut(idx) {
-        t.flags.set_road(true);
+        t.set_road(true);
     }
     world.dirty.roads = true;
     r.events.push(Event::RoadPlaced { at });
@@ -184,7 +185,7 @@ fn place_building(
     let tiles = tiles_covered(world, origin, size)?;
     for (idx, pos) in &tiles {
         let tile = world.grid.get(*idx).ok_or(CommandError::OutsideMap(*pos))?;
-        if tile.flags.has_road() {
+        if tile.has_road() {
             return Err(CommandError::TileOccupied {
                 at: *pos,
                 occupant: OccupantKind::Road,
@@ -196,10 +197,10 @@ fn place_building(
                 occupant: occ.into(),
             });
         }
-        if !tile.terrain.is_buildable() {
+        if !tile.terrain().is_buildable() {
             return Err(CommandError::WrongTerrain {
                 at: *pos,
-                terrain: tile.terrain,
+                terrain: tile.terrain(),
             });
         }
     }
@@ -210,7 +211,7 @@ fn place_building(
     let origin_idx = tiles
         .first()
         .map(|(i, _)| *i)
-        .unwrap_or_else(|| TileIdx::new(0));
+        .unwrap_or_else(|| TileIndex::new(0));
 
     if is_a_house {
         let id = world.houses.insert(House {
@@ -246,7 +247,7 @@ fn place_building(
 }
 
 fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
+    let idx = world.grid.index(at).ok_or(CommandError::OutsideMap(at))?;
 
     if let Some(occ) = world.occupant(idx) {
         match occ {
@@ -257,9 +258,9 @@ fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), Co
     }
 
     let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
-    if tile.flags.has_road() {
+    if tile.has_road() {
         if let Some(t) = world.grid.get_mut(idx) {
-            t.flags.set_road(false);
+            t.set_road(false);
         }
         world.dirty.roads = true;
         r.events.push(Event::RoadRemoved { at });
@@ -296,7 +297,7 @@ fn remove_building(world: &mut World, id: BuildingId, r: &mut StepReport) {
         world.food.lost_to_demolition += i64::from(stock.to_millis());
     }
     clear_tiles(world, origin, size);
-    if let Some(idx) = world.grid.idx(origin) {
+    if let Some(idx) = world.grid.index(origin) {
         world.buildings_by_origin.remove(&idx);
     }
     world.dirty.forget_coverage(id);
@@ -320,7 +321,7 @@ fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     world.population.lost_to_demolition += u64::from(h.residents);
     let size = world.data.house_def().map_or((1, 1), |d| d.size);
     clear_tiles(world, h.origin, size);
-    if let Some(idx) = world.grid.idx(h.origin) {
+    if let Some(idx) = world.grid.index(h.origin) {
         world.houses_by_origin.remove(&idx);
     }
     mark_all_providers_dirty(world);
@@ -513,13 +514,13 @@ fn charge(world: &mut World, cost: Coins) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// The tiles an area covers, in increasing `TileIdx` order. An error if even
+/// The tiles an area covers, in increasing `TileIndex` order. An error if even
 /// one of them leaves the map.
 fn tiles_covered(
     world: &World,
     origin: TilePos,
     size: (u8, u8),
-) -> Result<Vec<(TileIdx, TilePos)>, CommandError> {
+) -> Result<Vec<(TileIndex, TilePos)>, CommandError> {
     let (w, h) = size;
     let mut out = Vec::with_capacity(usize::from(w) * usize::from(h));
     for dy in 0..h {
@@ -533,14 +534,19 @@ fn tiles_covered(
                 .checked_add(dy)
                 .ok_or(CommandError::OutsideMap(origin))?;
             let pos = TilePos::new(x, y);
-            let idx = world.grid.idx(pos).ok_or(CommandError::OutsideMap(pos))?;
+            let idx = world.grid.index(pos).ok_or(CommandError::OutsideMap(pos))?;
             out.push((idx, pos));
         }
     }
     Ok(out)
 }
 
-fn occupy(world: &mut World, tiles: &[(TileIdx, TilePos)], origin_idx: TileIdx, is_house: bool) {
+fn occupy(
+    world: &mut World,
+    tiles: &[(TileIndex, TilePos)],
+    origin_idx: TileIndex,
+    is_house: bool,
+) {
     let occ = crate::grid::TileOccupant {
         origin: origin_idx,
         is_house,

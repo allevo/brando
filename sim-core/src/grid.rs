@@ -6,19 +6,57 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{TileIdx, TilePos};
-
-/// Maximum side of the grid. Beyond it, `TileIdx(u16)` would not be enough.
+/// Maximum side of the grid. Beyond it, `TileIndex(u16)` would not be enough.
 pub const MAX_SIDE: u16 = 256;
 
-/// The kind of ground on a tile.
+/// Linear tile index: `y * width + x`.
 ///
-/// What may be *done* on it lives here, in [`Terrain::is_buildable`] and
-/// [`Terrain::is_walkable`]: those are facts about the ground and not knobs,
-/// and changing one changes what the game is rather than how it is balanced.
-/// What it *costs* does not live here — the price of laying a road on a terrain
-/// is a number, and every number in this game lives in a RON table loaded and
-/// validated at startup (D6).
+/// The map is at most 256x256, so 65,536 tiles: the last index is
+/// `u16::MAX` and fits exactly.
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
+)]
+pub struct TileIndex(u16);
+
+impl TileIndex {
+    pub const fn new(v: u16) -> Self {
+        Self(v)
+    }
+
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// A position on the grid. `x` and `y` are `u8` because the maximum side is
+/// 256: valid coordinates run from 0 to 255.
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
+)]
+pub struct TilePos {
+    pub x: u8,
+    pub y: u8,
+}
+
+impl TilePos {
+    pub const fn new(x: u8, y: u8) -> Self {
+        Self { x, y }
+    }
+
+    /// Manhattan distance, as the crow flies. This is **not** the distance
+    /// used by service coverage, which is measured along the road network (D2).
+    pub const fn manhattan(self, other: Self) -> u16 {
+        let dx = self.x.abs_diff(other.x) as u16;
+        let dy = self.y.abs_diff(other.y) as u16;
+        dx + dy
+    }
+}
+
+/// The kind of ground on a tile.
 ///
 /// The three kinds, in plain terms:
 /// - `Plain` — ordinary flat ground. You can build on it and lay roads on it.
@@ -38,20 +76,13 @@ pub enum Terrain {
 }
 
 impl Terrain {
-    /// Every variant, in a stable order. `sim-data` uses it to check that the
-    /// terrain table is complete.
+    /// Every variant, in a stable order.
     pub const ALL: [Terrain; 3] = [Terrain::Plain, Terrain::Water, Terrain::Rock];
 
     /// How many kinds of ground there are, for the arrays indexed by one.
     pub const COUNT: usize = Self::ALL.len();
 
     /// Position in the arrays indexed by terrain.
-    ///
-    /// It is also the number the hashes store for a terrain, which is why the
-    /// declaration order is frozen. Written out here rather than left to the
-    /// discriminant so there is one way to ask, and a test holds the two to
-    /// each other: reordering the variants without reordering these numbers
-    /// would put a terrain's cost under another terrain's name.
     pub const fn index(self) -> usize {
         match self {
             Self::Plain => 0,
@@ -61,18 +92,6 @@ impl Terrain {
     }
 
     /// Whether a building may stand on this terrain.
-    ///
-    /// `Plain` is the only ground a building stands on. That is a rule of the
-    /// game and not a balancing knob: letting a house sit on rock would change
-    /// what the map means, where changing what a road costs to cut through rock
-    /// only changes how expensive a mountain pass is. Everything numeric lives
-    /// in the RON tables (D6); a yes or a no is not numeric and lives here.
-    ///
-    /// A terrain added later answers no here until somebody says otherwise, and
-    /// what stops that going unnoticed is `doc-check`: it refuses a terrain
-    /// that `RULES.md` has no row for, and compares that row's answers against
-    /// this one. So a new kind of ground cannot land without its answer being
-    /// written down, and the page and this method cannot drift apart.
     pub const fn is_buildable(self) -> bool {
         matches!(self, Terrain::Plain)
     }
@@ -82,61 +101,48 @@ impl Terrain {
     /// A separate question from [`Terrain::is_buildable`], and the terrains
     /// answer the two differently on purpose: a road can be cut through `Rock`
     /// where no building fits — you cross a mountain, you do not settle on it —
-    /// and `Water` takes neither, so a stretch of it splits the city in two
-    /// until something is built to span it. One field answering both questions
-    /// could not say that.
-    ///
-    /// It says nothing about *crossing*. Once a road is laid, every road tile
-    /// costs the same to walk whatever lies underneath it: the terrain decides
-    /// what a road costs to lay and never what it costs to use.
-    ///
-    /// A terrain added later answers no here too, and `doc-check` guards it the
-    /// same way it guards [`Terrain::is_buildable`].
+    /// and `Water` takes neither.
     pub const fn is_walkable(self) -> bool {
         matches!(self, Terrain::Plain | Terrain::Rock)
     }
 }
 
-/// Status bits of a tile. Hand-written instead of using `bitflags` so as not
-/// to add a dependency to `sim-core` (D1).
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-pub struct TileFlags(u8);
+/// What a tile carries: a road, an occupant, and whether that occupant is a
+/// house — a road is not an occupant, and no tile ever has both.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+struct TileFlags(u8);
 
 impl TileFlags {
+    /// Whether a road runs over the tile.
     const HAS_ROAD: u8 = 1 << 0;
-    /// Whether the tile is occupied. It needs a bit of its own because the
-    /// occupant's index no longer has a sentinel value: any `TileIdx`,
-    /// `u16::MAX` included, is a legitimate origin for a building on a 256x256
-    /// map.
+    /// Whether the tile is occupied.
     const HAS_OCCUPANT: u8 = 1 << 1;
     /// Whether the occupant is a house; otherwise it is a building.
     const OCCUPANT_IS_HOUSE: u8 = 1 << 2;
 
-    pub const fn empty() -> Self {
-        Self(0)
-    }
-
-    pub const fn bits(self) -> u8 {
+    /// The flags.
+    const fn bits(self) -> u8 {
         self.0
     }
 
-    pub const fn has_road(self) -> bool {
+    /// Whether a road runs over the tile.
+    const fn has_road(self) -> bool {
         self.0 & Self::HAS_ROAD != 0
     }
 
-    pub const fn set_road(&mut self, on: bool) {
-        self.set(Self::HAS_ROAD, on);
-    }
-
-    pub const fn has_occupant(self) -> bool {
+    /// Whether a building or a house stands on the tile.
+    const fn has_occupant(self) -> bool {
         self.0 & Self::HAS_OCCUPANT != 0
     }
 
-    pub const fn occupant_is_house(self) -> bool {
+    /// Whether the occupant is a house rather than a building, meaningful only
+    /// while `has_occupant` is set.
+    const fn occupant_is_house(self) -> bool {
         self.0 & Self::OCCUPANT_IS_HOUSE != 0
     }
 
-    pub(crate) const fn set(&mut self, bit: u8, on: bool) {
+    /// Turns a raw bit mask on or off.
+    const fn set(&mut self, bit: u8, on: bool) {
         if on {
             self.0 |= bit;
         } else {
@@ -166,21 +172,34 @@ impl std::fmt::Debug for TileFlags {
 /// `BuildingId`/`HouseId` lives in the `World`, not in the tile.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct TileOccupant {
-    pub origin: TileIdx,
+    pub origin: TileIndex,
     pub is_house: bool,
 }
 
-/// Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+/// NB: Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Tile {
-    pub terrain: Terrain,
-    pub flags: TileFlags,
-    /// Only valid if `flags.has_occupant()`. Private: reading it without
-    /// checking the flag would give the origin of an occupant already removed.
-    occupant_origin: TileIdx,
+    terrain: Terrain,
+    flags: TileFlags,
+    occupant_origin: TileIndex,
 }
 
 impl Tile {
+    /// The kind of ground on the tile.
+    pub const fn terrain(&self) -> Terrain {
+        self.terrain
+    }
+
+    /// Whether a road runs over the tile.
+    pub const fn has_road(&self) -> bool {
+        self.flags.has_road()
+    }
+
+    /// The flag byte, which is what the state hash reads.
+    pub const fn flag_bits(&self) -> u8 {
+        self.flags.bits()
+    }
+
     /// The tile's occupant, if there is one.
     pub const fn occupant(&self) -> Option<TileOccupant> {
         if self.flags.has_occupant() {
@@ -197,16 +216,26 @@ impl Tile {
         !self.flags.has_occupant() && !self.flags.has_road()
     }
 
-    pub const fn set_occupant(&mut self, occ: TileOccupant) {
+    /// Sets the kind of ground, which only scenario setup does.
+    pub(crate) const fn set_terrain(&mut self, terrain: Terrain) {
+        self.terrain = terrain;
+    }
+
+    /// Puts a road on the tile or takes it away.
+    pub(crate) const fn set_road(&mut self, on: bool) {
+        self.flags.set(TileFlags::HAS_ROAD, on);
+    }
+
+    pub(crate) const fn set_occupant(&mut self, occ: TileOccupant) {
         self.occupant_origin = occ.origin;
         self.flags.set(TileFlags::HAS_OCCUPANT, true);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.is_house);
     }
 
-    pub const fn clear_occupant(&mut self) {
+    pub(crate) const fn clear_occupant(&mut self) {
         self.flags.set(TileFlags::HAS_OCCUPANT, false);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
-        self.occupant_origin = TileIdx::new(0);
+        self.occupant_origin = TileIndex::new(0);
     }
 }
 
@@ -217,15 +246,11 @@ pub enum GridError {
 }
 
 /// A dense grid of tiles, indexed `y * width + x`.
-///
-/// `width` and `height` are `u16` rather than `u8` because the maximum side is
-/// 256, which would not fit in a `u8`: the allowed values are `1..=256`. The
-/// coordinates stay `u8` (0..=255).
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Grid {
     width: u16,
     height: u16,
-    tiles: Vec<Tile>,
+    tiles: Box<[Tile]>,
 }
 
 impl Grid {
@@ -246,7 +271,7 @@ impl Grid {
         Ok(Self {
             width,
             height,
-            tiles: vec![tile; len],
+            tiles: vec![tile; len].into_boxed_slice(),
         })
     }
 
@@ -274,18 +299,18 @@ impl Grid {
     }
 
     /// Linear index of the position, `None` if off the map.
-    pub const fn idx(&self, pos: TilePos) -> Option<TileIdx> {
+    pub const fn index(&self, pos: TilePos) -> Option<TileIndex> {
         if !self.in_bounds(pos) {
             return None;
         }
         let i = pos.y as u32 * self.width as u32 + pos.x as u32;
         // Invariant: in_bounds implies i < width*height <= 65_536, so i fits in
         // a u16 (the last valid index is 65_535).
-        Some(TileIdx::new(i as u16))
+        Some(TileIndex::new(i as u16))
     }
 
     /// The position matching an index, `None` if off the map.
-    pub const fn pos(&self, idx: TileIdx) -> Option<TilePos> {
+    pub const fn pos(&self, idx: TileIndex) -> Option<TilePos> {
         let i = idx.get() as u32;
         if i >= self.len() {
             return None;
@@ -294,27 +319,27 @@ impl Grid {
         Some(TilePos::new((i % w) as u8, (i / w) as u8))
     }
 
-    pub fn get(&self, idx: TileIdx) -> Option<&Tile> {
+    pub fn get(&self, idx: TileIndex) -> Option<&Tile> {
         self.tiles.get(idx.as_usize())
     }
 
-    pub fn get_mut(&mut self, idx: TileIdx) -> Option<&mut Tile> {
+    pub(crate) fn get_mut(&mut self, idx: TileIndex) -> Option<&mut Tile> {
         self.tiles.get_mut(idx.as_usize())
     }
 
     pub fn at(&self, pos: TilePos) -> Option<&Tile> {
-        self.get(self.idx(pos)?)
+        self.get(self.index(pos)?)
     }
 
-    pub fn at_mut(&mut self, pos: TilePos) -> Option<&mut Tile> {
-        let idx = self.idx(pos)?;
+    pub(crate) fn at_mut(&mut self, pos: TilePos) -> Option<&mut Tile> {
+        let idx = self.index(pos)?;
         self.get_mut(idx)
     }
 
     /// Every valid index, in increasing order. It is the scan order the rest of
     /// the core assumes: rebuilding the road network (phase 05) relies on it.
-    pub fn indices(&self) -> impl Iterator<Item = TileIdx> {
-        (0..self.len()).map(|i| TileIdx::new(i as u16))
+    pub fn indices(&self) -> impl Iterator<Item = TileIndex> {
+        (0..self.len()).map(|i| TileIndex::new(i as u16))
     }
 
     /// The four orthogonal neighbours, **without wraparound**: the neighbour
@@ -322,22 +347,22 @@ impl Grid {
     /// tile of the row below.
     ///
     /// Emission order: north, west, east, south — that is, increasing
-    /// `TileIdx`. The order is part of the BFS determinism contract (D4).
-    pub fn neighbors4(&self, idx: TileIdx) -> impl Iterator<Item = TileIdx> {
+    /// `TileIndex`.
+    pub fn neighbors4(&self, idx: TileIndex) -> impl Iterator<Item = TileIndex> {
         let mut out = [None; 4];
         if let Some(p) = self.pos(idx) {
             let i = idx.get();
             if p.y > 0 {
-                out[0] = Some(TileIdx::new(i - self.width));
+                out[0] = Some(TileIndex::new(i - self.width));
             }
             if p.x > 0 {
-                out[1] = Some(TileIdx::new(i - 1));
+                out[1] = Some(TileIndex::new(i - 1));
             }
             if u16::from(p.x) + 1 < self.width {
-                out[2] = Some(TileIdx::new(i + 1));
+                out[2] = Some(TileIndex::new(i + 1));
             }
             if u16::from(p.y) + 1 < self.height {
-                out[3] = Some(TileIdx::new(i + self.width));
+                out[3] = Some(TileIndex::new(i + self.width));
             }
         }
         out.into_iter().flatten()
@@ -393,6 +418,15 @@ mod tests {
     }
 
     #[test]
+    fn manhattan_is_symmetric_and_does_not_wrap() {
+        let a = TilePos::new(0, 0);
+        let b = TilePos::new(255, 255);
+        assert_eq!(a.manhattan(b), 510);
+        assert_eq!(b.manhattan(a), 510);
+        assert_eq!(a.manhattan(a), 0);
+    }
+
+    #[test]
     fn tile_stays_within_budget() {
         assert_eq!(
             size_of::<Tile>(),
@@ -421,12 +455,12 @@ mod tests {
     fn the_largest_grid_can_index_its_last_tile() {
         let g = Grid::new(256, 256, Terrain::Plain).expect("256x256 is valid");
         assert_eq!(g.len(), 65_536);
-        let last = g.idx(TilePos::new(255, 255)).expect("in bounds");
+        let last = g.index(TilePos::new(255, 255)).expect("in bounds");
         assert_eq!(last.get(), u16::MAX);
         assert_eq!(g.pos(last), Some(TilePos::new(255, 255)));
     }
 
-    /// Even the last tile of a 256x256 map (`TileIdx` = u16::MAX) can be the
+    /// Even the last tile of a 256x256 map (`TileIndex` = u16::MAX) can be the
     /// origin of an occupant: that is why presence lives in a flag rather than
     /// in a sentinel value.
     #[test]
@@ -436,7 +470,7 @@ mod tests {
         assert!(t.is_free());
 
         let occ = TileOccupant {
-            origin: TileIdx::new(u16::MAX),
+            origin: TileIndex::new(u16::MAX),
             is_house: true,
         };
         t.set_occupant(occ);
@@ -448,13 +482,60 @@ mod tests {
         assert_eq!(t, Tile::default(), "clearing also resets the origin");
     }
 
+    /// The flags go into the state hash as one byte per tile, so moving one of
+    /// these numbers would change every hash with nothing about it looking like
+    /// an error — the constants are private, so the check goes through the
+    /// accessors that set them.
+    #[test]
+    fn the_bit_numbers_are_frozen() {
+        let mut t = Tile::default();
+        assert_eq!(t.flag_bits(), 0);
+
+        t.set_road(true);
+        assert_eq!(t.flag_bits(), 0b001);
+        t.set_road(false);
+
+        let origin = TileIndex::new(0);
+        t.set_occupant(TileOccupant {
+            origin,
+            is_house: false,
+        });
+        assert_eq!(t.flag_bits(), 0b010);
+
+        t.set_occupant(TileOccupant {
+            origin,
+            is_house: true,
+        });
+        assert_eq!(t.flag_bits(), 0b110);
+    }
+
+    /// The type enforces no rule about which flags may be set together — that
+    /// is `tick`'s job — but one bit must never disturb another.
+    #[test]
+    fn the_flags_are_independent() {
+        let mut t = Tile::default();
+        t.set_road(true);
+        t.set_occupant(TileOccupant {
+            origin: TileIndex::new(7),
+            is_house: true,
+        });
+        assert!(t.has_road(), "taking the tile left the road alone");
+
+        t.clear_occupant();
+        assert!(t.has_road(), "clearing the occupant left the road alone");
+        assert_eq!(t.occupant(), None);
+
+        t.set_road(false);
+        assert_eq!(t, Tile::default());
+    }
+
     #[test]
     fn no_wraparound_at_the_edges() {
         let g = Grid::new(4, 4, Terrain::Plain).expect("valid grid");
         // The tile to the right of the first row is not a neighbour of the
         // first tile of the second row.
-        let right = g.idx(TilePos::new(3, 0)).expect("in bounds");
-        let left_of_next_row = g.idx(TilePos::new(0, 1)).expect("in bounds");
+        let right = g.index(TilePos::new(3, 0)).expect("in bounds");
+        let left_of_next_row = g.index(TilePos::new(0, 1)).expect("in bounds");
         let neighbors: Vec<_> = g.neighbors4(right).collect();
         assert!(!neighbors.contains(&left_of_next_row));
     }
@@ -463,7 +544,7 @@ mod tests {
     fn neighbor_count_by_position() {
         let g = Grid::new(5, 4, Terrain::Plain).expect("valid grid");
         let n = |x, y| {
-            g.neighbors4(g.idx(TilePos::new(x, y)).expect("in bounds"))
+            g.neighbors4(g.index(TilePos::new(x, y)).expect("in bounds"))
                 .count()
         };
         assert_eq!(n(0, 0), 2, "corner");
@@ -485,17 +566,38 @@ mod tests {
 
         /// Position -> index -> position gets you back where you started.
         #[test]
-        fn pos_to_idx_round_trips((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+        fn pos_to_index_round_trips((g, p) in grid_and_pos()) {
+            let i = g.index(p).expect("generated pos is in bounds");
             prop_assert_eq!(g.pos(i), Some(p));
         }
 
         /// And the other way round: index -> position -> index.
         #[test]
-        fn idx_to_pos_round_trips((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+        fn index_to_pos_round_trips((g, p) in grid_and_pos()) {
+            let i = g.index(p).expect("generated pos is in bounds");
             let p2 = g.pos(i).expect("valid index");
-            prop_assert_eq!(g.idx(p2), Some(i));
+            prop_assert_eq!(g.index(p2), Some(i));
+        }
+
+        /// Every index the grid hands out resolves to a tile, and one past the
+        /// end does not.
+        ///
+        /// The tile count is stated twice — once by `len`, as `width * height`,
+        /// and once by the slice `get` reads — and this is the property that
+        /// says they agree. Failing it is unreachable today, because the slice
+        /// is sized from `len` and nothing can resize it afterwards, and the
+        /// property is written down anyway: a `get` answering `None` here would
+        /// be swallowed in silence by the state hash, which skips an index it
+        /// cannot resolve rather than reporting one.
+        #[test]
+        fn every_index_the_grid_hands_out_resolves((g, _p) in grid_and_pos()) {
+            prop_assert!(g.indices().all(|i| g.get(i).is_some()));
+            // On the largest map the next index wraps to 0, which is a real
+            // tile; anywhere else it is off the end.
+            prop_assert_eq!(
+                g.get(TileIndex::new(g.len() as u16)).is_some(),
+                g.len() == 65_536
+            );
         }
 
         /// Outside the edges there is no index.
@@ -503,17 +605,17 @@ mod tests {
         fn outside_the_edge_there_is_no_index((g, _p) in grid_and_pos()) {
             if g.width() < MAX_SIDE {
                 let outside = TilePos::new(g.width() as u8, 0);
-                prop_assert_eq!(g.idx(outside), None);
+                prop_assert_eq!(g.index(outside), None);
                 prop_assert!(!g.in_bounds(outside));
             }
-            prop_assert_eq!(g.pos(TileIdx::new(u16::MAX)).is_some(), g.len() == 65_536);
+            prop_assert_eq!(g.pos(TileIndex::new(u16::MAX)).is_some(), g.len() == 65_536);
         }
 
         /// Every neighbour is on the map and at Manhattan distance 1; how many
         /// there are depends only on how many edges the tile touches.
         #[test]
         fn neighbors4_stays_on_the_map_and_does_not_wrap((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+            let i = g.index(p).expect("generated pos is in bounds");
             let neighbors: Vec<_> = g.neighbors4(i).collect();
 
             for &v in &neighbors {
@@ -527,7 +629,7 @@ mod tests {
                 + if g.height() == 1 { 0 } else if on_edge_y { 1 } else { 2 };
             prop_assert_eq!(neighbors.len(), expected);
 
-            // Neighbours come out in increasing TileIdx order (BFS contract).
+            // Neighbours come out in increasing TileIndex order (BFS contract).
             let mut sorted = neighbors.clone();
             sorted.sort_unstable();
             prop_assert_eq!(neighbors, sorted);
@@ -536,7 +638,7 @@ mod tests {
         /// Being neighbours is a symmetric relation.
         #[test]
         fn neighbors4_is_symmetric((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+            let i = g.index(p).expect("generated pos is in bounds");
             for v in g.neighbors4(i) {
                 prop_assert!(g.neighbors4(v).any(|w| w == i));
             }

@@ -78,7 +78,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
             }
             None => return Err(format!("{idx:?} is occupied but resolves to no id")),
         }
-        if tile.flags.has_road() {
+        if tile.has_road() {
             return Err(format!("{idx:?} has both a road and an occupant"));
         }
     }
@@ -95,7 +95,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
             let p = TilePos::new(b.origin.x + dx, b.origin.y + dy);
             let idx = w
                 .grid()
-                .idx(p)
+                .index(p)
                 .ok_or_else(|| format!("building {id:?} sticks off the map at {p:?}"))?;
             if w.occupant(idx) != Some(Occupant::Building(id)) {
                 return Err(format!("{p:?} does not belong to {id:?}"));
@@ -106,7 +106,7 @@ fn no_overlap(w: &World) -> Result<(), String> {
         expected += 1; // houses are 1x1 in M0
         let idx = w
             .grid()
-            .idx(h.origin)
+            .index(h.origin)
             .ok_or_else(|| format!("house {id:?} off the map"))?;
         if w.occupant(idx) != Some(Occupant::House(id)) {
             return Err(format!("{:?} does not belong to {id:?}", h.origin));
@@ -250,7 +250,7 @@ fn accepted_cost(w: &World, cmd: &Command) -> Coins {
         Command::PlaceRoad { at } => w
             .grid()
             .at(*at)
-            .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain)),
+            .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain())),
         Command::PlaceBuilding { kind, .. } => w.data().def(*kind).map_or(Coins::ZERO, |d| d.cost),
     }
 }

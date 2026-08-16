@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 
 use slotmap::SecondaryMap;
 
-use crate::ids::{BuildingId, HouseId, TileIdx};
+use crate::grid::TileIndex;
+use crate::ids::{BuildingId, HouseId};
 use crate::network::{Visited, bfs_roads};
 use crate::service::ServiceKind;
 use crate::world::World;
@@ -63,7 +64,7 @@ impl Coverage {
 /// From a road tile to the houses that face onto it.
 ///
 /// In CSR form: the houses of tile `t` are `houses[offsets[t]..offsets[t + 1]]`.
-/// `TileIdx` is a **dense** index over the grid, so indexing it directly costs
+/// `TileIndex` is a **dense** index over the grid, so indexing it directly costs
 /// one access, against the ~13 comparisons with pointer chasing of a
 /// `BTreeMap`. That is not a detail: it is the most frequent operation of the
 /// whole recomputation — one per reached tile, per provider, i.e. ~100,000
@@ -92,7 +93,7 @@ impl HousesByTile {
 
         // The pairs are collected in `HouseId` order: that is the order that
         // then shows up inside each group.
-        let mut pairs: Vec<(TileIdx, HouseId)> = Vec::new();
+        let mut pairs: Vec<(TileIndex, HouseId)> = Vec::new();
         let mut entrances = Vec::new();
         for (id, _) in world.houses() {
             world.house_entrances_into(id, &mut entrances);
@@ -129,7 +130,7 @@ impl HousesByTile {
         Self { offsets, houses }
     }
 
-    fn get(&self, t: TileIdx) -> &[HouseId] {
+    fn get(&self, t: TileIndex) -> &[HouseId] {
         let i = t.as_usize();
         let (Some(&from), Some(&to)) = (self.offsets.get(i), self.offsets.get(i + 1)) else {
             return &[];
@@ -165,8 +166,8 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
     // one tile is not counted twice: the value is the index of the current
     // provider, so there is no need to clear it between providers.
     let mut seen: SecondaryMap<HouseId, u32> = SecondaryMap::new();
-    let mut candidates: Vec<(u16, TileIdx, HouseId)> = Vec::new();
-    let mut entrances: Vec<TileIdx> = Vec::new();
+    let mut candidates: Vec<(u16, TileIndex, HouseId)> = Vec::new();
+    let mut entrances: Vec<TileIndex> = Vec::new();
     // One per recomputation, reused by every provider: allocating it per
     // provider was the last per-provider cost proportional to the map.
     let mut visited = Visited::new(world.grid().len());
@@ -220,7 +221,7 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
                 let Some(house) = world.house(*h) else {
                     continue;
                 };
-                let Some(idx) = world.grid().idx(house.origin) else {
+                let Some(idx) = world.grid().index(house.origin) else {
                     continue;
                 };
                 candidates.push((d, idx, *h));
@@ -229,7 +230,7 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
 
         // **Priority order**, game semantics: when the candidates exceed the
         // capacity, the nearest ones are served; at equal distance the smaller
-        // `TileIdx` wins. It is a total order — without the second criterion
+        // `TileIndex` wins. It is a total order — without the second criterion
         // two equidistant houses would be ordered by the BFS's visit order,
         // i.e. by an implementation detail, and the recorded replay would
         // become fragile.

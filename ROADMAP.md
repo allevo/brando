@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 14.9.7.** M0 is complete; M1 is in progress.
+> **Implemented through phase 14.9.8.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -26,6 +26,7 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.9.5 | [Writing a task is a procedure](plan/14.9.5-writing-a-task-is-a-procedure.md) — the task mechanics leave `CLAUDE.md` for a skill, whose template is checked against the code | 2026-08-15 |
 | 14.9.6 | [An id sorts the same way everywhere](plan/14.9.6-an-id-sorts-the-same-way-everywhere.md) — a number after the first is a single digit, so a listing runs the way the numbers do | 2026-08-15 |
 | 14.9.7 | [A terrain says what it allows](plan/14.9.7-a-terrain-says-what-it-allows.md) — what may be built on and walked on leaves the tables for the enum; a new terrain kind is now a compile error | 2026-08-16 |
+| 14.9.8 | [A tile answers for itself](plan/14.9.8-a-tile-answers-for-itself.md) — a tile exposes no field and `Grid` hands out no mutable one; outside `sim-core` a tile changes through setup or a command, and by no third way | 2026-08-16 |
 
 ## To do — the rest of M1
 
