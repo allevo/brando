@@ -53,16 +53,13 @@ impl Terrain {
     /// only changes how expensive a mountain pass is. Everything numeric lives
     /// in the RON tables (D6); a yes or a no is not numeric and lives here.
     ///
-    /// Written as a match over every variant rather than as a lookup, so a
-    /// terrain added later cannot compile until somebody has said whether you
-    /// can build on it. That guarantee used to come from the tables refusing to
-    /// load with a row missing; it now comes from the compiler, one step
-    /// earlier.
+    /// A terrain added later answers no here until somebody says otherwise, and
+    /// what stops that going unnoticed is `doc-check`: it refuses a terrain
+    /// that `RULES.md` has no row for, and compares that row's answers against
+    /// this one. So a new kind of ground cannot land without its answer being
+    /// written down, and the page and this method cannot drift apart.
     pub const fn is_buildable(self) -> bool {
-        match self {
-            Terrain::Plain => true,
-            Terrain::Water | Terrain::Rock => false,
-        }
+        matches!(self, Terrain::Plain)
     }
 
     /// Whether a road may be laid on this terrain.
@@ -78,12 +75,10 @@ impl Terrain {
     /// costs the same to walk whatever lies underneath it: the terrain decides
     /// what a road costs to lay and never what it costs to use.
     ///
-    /// Same match over every variant, for the same reason as above.
+    /// A terrain added later answers no here too, and `doc-check` guards it the
+    /// same way it guards [`Terrain::is_buildable`].
     pub const fn is_walkable(self) -> bool {
-        match self {
-            Terrain::Plain | Terrain::Rock => true,
-            Terrain::Water => false,
-        }
+        matches!(self, Terrain::Plain | Terrain::Rock)
     }
 }
 
