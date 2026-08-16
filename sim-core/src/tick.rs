@@ -11,7 +11,8 @@
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::data::BuildingDef;
 use crate::event::Event;
-use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
+use crate::grid::{TileIndex, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level};
 use crate::satisfaction::Mood;
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
@@ -210,7 +211,7 @@ fn place_building(
     let origin_idx = tiles
         .first()
         .map(|(i, _)| *i)
-        .unwrap_or_else(|| TileIdx::new(0));
+        .unwrap_or_else(|| TileIndex::new(0));
 
     if is_a_house {
         let id = world.houses.insert(House {
@@ -513,13 +514,13 @@ fn charge(world: &mut World, cost: Coins) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// The tiles an area covers, in increasing `TileIdx` order. An error if even
+/// The tiles an area covers, in increasing `TileIndex` order. An error if even
 /// one of them leaves the map.
 fn tiles_covered(
     world: &World,
     origin: TilePos,
     size: (u8, u8),
-) -> Result<Vec<(TileIdx, TilePos)>, CommandError> {
+) -> Result<Vec<(TileIndex, TilePos)>, CommandError> {
     let (w, h) = size;
     let mut out = Vec::with_capacity(usize::from(w) * usize::from(h));
     for dy in 0..h {
@@ -540,7 +541,12 @@ fn tiles_covered(
     Ok(out)
 }
 
-fn occupy(world: &mut World, tiles: &[(TileIdx, TilePos)], origin_idx: TileIdx, is_house: bool) {
+fn occupy(
+    world: &mut World,
+    tiles: &[(TileIndex, TilePos)],
+    origin_idx: TileIndex,
+    is_house: bool,
+) {
     let occ = crate::grid::TileOccupant {
         origin: origin_idx,
         is_house,

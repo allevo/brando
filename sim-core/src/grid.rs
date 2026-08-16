@@ -6,10 +6,55 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{TileIdx, TilePos};
-
-/// Maximum side of the grid. Beyond it, `TileIdx(u16)` would not be enough.
+/// Maximum side of the grid. Beyond it, `TileIndex(u16)` would not be enough.
 pub const MAX_SIDE: u16 = 256;
+
+/// Linear tile index: `y * width + x`.
+///
+/// The map is at most 256x256, so 65,536 tiles: the last index is
+/// `u16::MAX` and fits exactly.
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
+)]
+pub struct TileIndex(u16);
+
+impl TileIndex {
+    pub const fn new(v: u16) -> Self {
+        Self(v)
+    }
+
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// A position on the grid. `x` and `y` are `u8` because the maximum side is
+/// 256: valid coordinates run from 0 to 255.
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
+)]
+pub struct TilePos {
+    pub x: u8,
+    pub y: u8,
+}
+
+impl TilePos {
+    pub const fn new(x: u8, y: u8) -> Self {
+        Self { x, y }
+    }
+
+    /// Manhattan distance, as the crow flies. This is **not** the distance
+    /// used by service coverage, which is measured along the road network (D2).
+    pub const fn manhattan(self, other: Self) -> u16 {
+        let dx = self.x.abs_diff(other.x) as u16;
+        let dy = self.y.abs_diff(other.y) as u16;
+        dx + dy
+    }
+}
 
 /// The kind of ground on a tile.
 ///
@@ -105,7 +150,7 @@ pub struct TileFlags(u8);
 impl TileFlags {
     const HAS_ROAD: u8 = 1 << 0;
     /// Whether the tile is occupied. It needs a bit of its own because the
-    /// occupant's index no longer has a sentinel value: any `TileIdx`,
+    /// occupant's index no longer has a sentinel value: any `TileIndex`,
     /// `u16::MAX` included, is a legitimate origin for a building on a 256x256
     /// map.
     const HAS_OCCUPANT: u8 = 1 << 1;
@@ -166,7 +211,7 @@ impl std::fmt::Debug for TileFlags {
 /// `BuildingId`/`HouseId` lives in the `World`, not in the tile.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct TileOccupant {
-    pub origin: TileIdx,
+    pub origin: TileIndex,
     pub is_house: bool,
 }
 
@@ -177,7 +222,7 @@ pub struct Tile {
     pub flags: TileFlags,
     /// Only valid if `flags.has_occupant()`. Private: reading it without
     /// checking the flag would give the origin of an occupant already removed.
-    occupant_origin: TileIdx,
+    occupant_origin: TileIndex,
 }
 
 impl Tile {
@@ -206,7 +251,7 @@ impl Tile {
     pub const fn clear_occupant(&mut self) {
         self.flags.set(TileFlags::HAS_OCCUPANT, false);
         self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
-        self.occupant_origin = TileIdx::new(0);
+        self.occupant_origin = TileIndex::new(0);
     }
 }
 
@@ -274,18 +319,18 @@ impl Grid {
     }
 
     /// Linear index of the position, `None` if off the map.
-    pub const fn idx(&self, pos: TilePos) -> Option<TileIdx> {
+    pub const fn idx(&self, pos: TilePos) -> Option<TileIndex> {
         if !self.in_bounds(pos) {
             return None;
         }
         let i = pos.y as u32 * self.width as u32 + pos.x as u32;
         // Invariant: in_bounds implies i < width*height <= 65_536, so i fits in
         // a u16 (the last valid index is 65_535).
-        Some(TileIdx::new(i as u16))
+        Some(TileIndex::new(i as u16))
     }
 
     /// The position matching an index, `None` if off the map.
-    pub const fn pos(&self, idx: TileIdx) -> Option<TilePos> {
+    pub const fn pos(&self, idx: TileIndex) -> Option<TilePos> {
         let i = idx.get() as u32;
         if i >= self.len() {
             return None;
@@ -294,11 +339,11 @@ impl Grid {
         Some(TilePos::new((i % w) as u8, (i / w) as u8))
     }
 
-    pub fn get(&self, idx: TileIdx) -> Option<&Tile> {
+    pub fn get(&self, idx: TileIndex) -> Option<&Tile> {
         self.tiles.get(idx.as_usize())
     }
 
-    pub fn get_mut(&mut self, idx: TileIdx) -> Option<&mut Tile> {
+    pub fn get_mut(&mut self, idx: TileIndex) -> Option<&mut Tile> {
         self.tiles.get_mut(idx.as_usize())
     }
 
@@ -313,8 +358,8 @@ impl Grid {
 
     /// Every valid index, in increasing order. It is the scan order the rest of
     /// the core assumes: rebuilding the road network (phase 05) relies on it.
-    pub fn indices(&self) -> impl Iterator<Item = TileIdx> {
-        (0..self.len()).map(|i| TileIdx::new(i as u16))
+    pub fn indices(&self) -> impl Iterator<Item = TileIndex> {
+        (0..self.len()).map(|i| TileIndex::new(i as u16))
     }
 
     /// The four orthogonal neighbours, **without wraparound**: the neighbour
@@ -322,22 +367,22 @@ impl Grid {
     /// tile of the row below.
     ///
     /// Emission order: north, west, east, south — that is, increasing
-    /// `TileIdx`. The order is part of the BFS determinism contract (D4).
-    pub fn neighbors4(&self, idx: TileIdx) -> impl Iterator<Item = TileIdx> {
+    /// `TileIndex`. The order is part of the BFS determinism contract (D4).
+    pub fn neighbors4(&self, idx: TileIndex) -> impl Iterator<Item = TileIndex> {
         let mut out = [None; 4];
         if let Some(p) = self.pos(idx) {
             let i = idx.get();
             if p.y > 0 {
-                out[0] = Some(TileIdx::new(i - self.width));
+                out[0] = Some(TileIndex::new(i - self.width));
             }
             if p.x > 0 {
-                out[1] = Some(TileIdx::new(i - 1));
+                out[1] = Some(TileIndex::new(i - 1));
             }
             if u16::from(p.x) + 1 < self.width {
-                out[2] = Some(TileIdx::new(i + 1));
+                out[2] = Some(TileIndex::new(i + 1));
             }
             if u16::from(p.y) + 1 < self.height {
-                out[3] = Some(TileIdx::new(i + self.width));
+                out[3] = Some(TileIndex::new(i + self.width));
             }
         }
         out.into_iter().flatten()
@@ -393,6 +438,15 @@ mod tests {
     }
 
     #[test]
+    fn manhattan_is_symmetric_and_does_not_wrap() {
+        let a = TilePos::new(0, 0);
+        let b = TilePos::new(255, 255);
+        assert_eq!(a.manhattan(b), 510);
+        assert_eq!(b.manhattan(a), 510);
+        assert_eq!(a.manhattan(a), 0);
+    }
+
+    #[test]
     fn tile_stays_within_budget() {
         assert_eq!(
             size_of::<Tile>(),
@@ -426,7 +480,7 @@ mod tests {
         assert_eq!(g.pos(last), Some(TilePos::new(255, 255)));
     }
 
-    /// Even the last tile of a 256x256 map (`TileIdx` = u16::MAX) can be the
+    /// Even the last tile of a 256x256 map (`TileIndex` = u16::MAX) can be the
     /// origin of an occupant: that is why presence lives in a flag rather than
     /// in a sentinel value.
     #[test]
@@ -436,7 +490,7 @@ mod tests {
         assert!(t.is_free());
 
         let occ = TileOccupant {
-            origin: TileIdx::new(u16::MAX),
+            origin: TileIndex::new(u16::MAX),
             is_house: true,
         };
         t.set_occupant(occ);
@@ -514,7 +568,7 @@ mod tests {
             // On the largest map the next index wraps to 0, which is a real
             // tile; anywhere else it is off the end.
             prop_assert_eq!(
-                g.get(TileIdx::new(g.len() as u16)).is_some(),
+                g.get(TileIndex::new(g.len() as u16)).is_some(),
                 g.len() == 65_536
             );
         }
@@ -527,7 +581,7 @@ mod tests {
                 prop_assert_eq!(g.idx(outside), None);
                 prop_assert!(!g.in_bounds(outside));
             }
-            prop_assert_eq!(g.pos(TileIdx::new(u16::MAX)).is_some(), g.len() == 65_536);
+            prop_assert_eq!(g.pos(TileIndex::new(u16::MAX)).is_some(), g.len() == 65_536);
         }
 
         /// Every neighbour is on the map and at Manhattan distance 1; how many
@@ -548,7 +602,7 @@ mod tests {
                 + if g.height() == 1 { 0 } else if on_edge_y { 1 } else { 2 };
             prop_assert_eq!(neighbors.len(), expected);
 
-            // Neighbours come out in increasing TileIdx order (BFS contract).
+            // Neighbours come out in increasing TileIndex order (BFS contract).
             let mut sorted = neighbors.clone();
             sorted.sort_unstable();
             prop_assert_eq!(neighbors, sorted);

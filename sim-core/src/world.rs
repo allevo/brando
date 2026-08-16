@@ -12,8 +12,8 @@ use slotmap::SlotMap;
 use crate::coverage::Coverage;
 use crate::data::{DataSet, DifficultyId};
 use crate::demographics::{Demographics, PopulationTotals};
-use crate::grid::Grid;
-use crate::ids::{BuildingId, BuildingKindId, HouseId, Level, TileIdx, TilePos};
+use crate::grid::{Grid, TileIndex, TilePos};
+use crate::ids::{BuildingId, BuildingKindId, HouseId, Level};
 use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
@@ -183,8 +183,8 @@ pub struct World {
     pub(crate) population: PopulationTotals,
     /// Indexes from origin tile to id. They are `BTreeMap`s and not `HashMap`s
     /// (D4): the iteration order is a contract.
-    pub(crate) buildings_by_origin: BTreeMap<TileIdx, BuildingId>,
-    pub(crate) houses_by_origin: BTreeMap<TileIdx, HouseId>,
+    pub(crate) buildings_by_origin: BTreeMap<TileIndex, BuildingId>,
+    pub(crate) houses_by_origin: BTreeMap<TileIndex, HouseId>,
     /// The balancing tables. They live inside the state rather than being
     /// a parameter of `step` so they need not be threaded through every
     /// internal function; their hash feeds the state hash, so a balance change
@@ -383,14 +383,14 @@ impl World {
     /// tile of its area touches a road orthogonally. It is the Zeus rule, where
     /// what counts is the entrance and not the building; in M1 it might become
     /// "one designated entrance tile", and then this is the function to change.
-    pub fn building_entrances(&self, id: BuildingId) -> Vec<TileIdx> {
+    pub fn building_entrances(&self, id: BuildingId) -> Vec<TileIndex> {
         let mut out = Vec::new();
         self.building_entrances_into(id, &mut out);
         out
     }
 
     /// Like [`World::building_entrances`], writing into a reusable buffer.
-    pub fn building_entrances_into(&self, id: BuildingId, out: &mut Vec<TileIdx>) {
+    pub fn building_entrances_into(&self, id: BuildingId, out: &mut Vec<TileIndex>) {
         out.clear();
         let Some(b) = self.buildings.get(id) else {
             return;
@@ -400,7 +400,7 @@ impl World {
     }
 
     /// Like [`World::building_entrances`], for a house.
-    pub fn house_entrances(&self, id: HouseId) -> Vec<TileIdx> {
+    pub fn house_entrances(&self, id: HouseId) -> Vec<TileIndex> {
         let mut out = Vec::new();
         self.house_entrances_into(id, &mut out);
         out
@@ -412,7 +412,7 @@ impl World {
     /// recomputation: returning a fresh `Vec` every time meant 3,750
     /// allocations per recomputation at the reference scale, all of barely two
     /// elements.
-    pub fn house_entrances_into(&self, id: HouseId, out: &mut Vec<TileIdx>) {
+    pub fn house_entrances_into(&self, id: HouseId, out: &mut Vec<TileIndex>) {
         out.clear();
         let Some(h) = self.houses.get(id) else {
             return;
@@ -420,15 +420,15 @@ impl World {
         self.entrances_into(h.origin, (1, 1), out);
     }
 
-    /// The road tiles adjacent to an area, in `TileIdx` order.
-    pub fn entrances(&self, origin: TilePos, size: (u8, u8)) -> Vec<TileIdx> {
+    /// The road tiles adjacent to an area, in `TileIndex` order.
+    pub fn entrances(&self, origin: TilePos, size: (u8, u8)) -> Vec<TileIndex> {
         let mut out = Vec::new();
         self.entrances_into(origin, size, &mut out);
         out
     }
 
     /// Like [`World::entrances`], writing into a reusable buffer.
-    pub fn entrances_into(&self, origin: TilePos, size: (u8, u8), out: &mut Vec<TileIdx>) {
+    pub fn entrances_into(&self, origin: TilePos, size: (u8, u8), out: &mut Vec<TileIndex>) {
         out.clear();
         for dy in 0..size.1 {
             for dx in 0..size.0 {
@@ -481,7 +481,7 @@ impl World {
     /// `None` if the tile is free. An occupied tile that does not resolve to a
     /// live id is a bug, and it is the invariant that catches demolition
     /// mistakes (phase 09).
-    pub fn occupant(&self, idx: TileIdx) -> Option<Occupant> {
+    pub fn occupant(&self, idx: TileIndex) -> Option<Occupant> {
         let occ = self.grid.get(idx)?.occupant()?;
         if occ.is_house {
             self.houses_by_origin

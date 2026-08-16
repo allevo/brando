@@ -162,7 +162,7 @@ mod tests {
     use super::*;
     use crate::data::HouseLevelDef;
     use crate::data::{DemographicsRules, SatisfactionRules};
-    use crate::ids::TilePos;
+    use crate::grid::TilePos;
     use crate::service::{ServiceFlags, ServiceKind};
     use crate::units::{Coins, Milli};
 

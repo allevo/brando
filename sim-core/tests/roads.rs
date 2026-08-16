@@ -45,7 +45,7 @@ fn two_separate_groups_then_joined_then_separate_again() {
     assert_ne!(comp(&w, 1, 1), comp(&w, 4, 1));
 }
 
-/// A component's id is the smallest `TileIdx` of its tiles, not a counter:
+/// A component's id is the smallest `TileIndex` of its tiles, not a counter:
 /// that is what makes the labelling independent of the history.
 #[test]
 fn the_component_id_is_the_smallest_tile() {

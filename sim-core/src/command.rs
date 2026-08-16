@@ -8,8 +8,8 @@
 //! back to the LLM (M3), which will produce invalid commands by construction.
 //! Rejecting them is normal behaviour, not a failure.
 
-use crate::grid::Terrain;
-use crate::ids::{BuildingKindId, TilePos};
+use crate::grid::{Terrain, TilePos};
+use crate::ids::BuildingKindId;
 use crate::units::Coins;
 use crate::world::Occupant;
 

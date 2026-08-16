@@ -176,7 +176,7 @@ changed, the optimisation has changed the semantics and it is a bug.
 - Errors with `thiserror` in the libraries. No `unwrap()`/`expect()` in the core, except for provably
   impossible invariants, and in that case with a comment explaining why.
 - No `async` in the core: it is a tick-based simulation, it has nothing to wait for.
-- Newtypes for the ids (`BuildingId`, `HouseId`, `TileIdx`), never a bare `usize` in a signature.
+- Newtypes for the ids (`BuildingId`, `HouseId`, `TileIndex`), never a bare `usize` in a signature.
 - Balancing numbers **never** live in the code: they go in `sim-data` (D6).
   If a numeric game constant shows up in a `.rs`, it is a bug.
 - `#![forbid(unsafe_code)]` in every `sim-*` crate.

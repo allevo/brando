@@ -135,7 +135,7 @@ fn a_house_with_no_road_is_never_served() {
 // --- 5. capacity and assignment order ---------------------------------------
 
 /// The game rule: the nearest ones get served, and at equal distance the
-/// smaller `TileIdx` wins.
+/// smaller `TileIndex` wins.
 #[test]
 fn the_capacity_serves_the_nearest_ones() {
     let mut w = world();
@@ -172,7 +172,7 @@ fn the_capacity_serves_the_nearest_ones() {
 }
 
 /// When the capacity bites, at equal distance the house with the smaller
-/// `TileIdx` wins. It is an explicit game rule: without the second criterion the
+/// `TileIndex` wins. It is an explicit game rule: without the second criterion the
 /// order would come from the BFS's visit order, i.e. from an implementation
 /// detail, and the recorded replay would become fragile.
 #[test]
@@ -199,7 +199,7 @@ fn at_equal_distance_the_smaller_tile_wins() {
     let idx = |p| w.grid().idx(p).expect("on the map");
     assert!(
         idx(pos(4, 4)) < idx(pos(6, 4)),
-        "the left one has the smaller TileIdx"
+        "the left one has the smaller TileIndex"
     );
     assert!(w.coverage().is_served(nearer, ServiceKind::Water));
     assert!(

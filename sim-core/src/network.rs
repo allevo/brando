@@ -8,10 +8,9 @@
 //! Every road tile costs 1: no variable crossing cost, no road levels, no
 //! one-way streets. Those are M1 or later.
 
-use crate::grid::Grid;
-use crate::ids::TileIdx;
+use crate::grid::{Grid, TileIndex};
 
-/// Identifier of a connected component: the **smallest** `TileIdx` among its
+/// Identifier of a connected component: the **smallest** `TileIndex` among its
 /// tiles.
 ///
 /// Not a running counter. It costs the same — the scan is already in
@@ -19,10 +18,10 @@ use crate::ids::TileIdx;
 /// roads alone, not of the order they were placed in. Without it, two games
 /// that build the same roads in a different order would have different states.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct ComponentId(TileIdx);
+pub struct ComponentId(TileIndex);
 
 impl ComponentId {
-    pub const fn tile(self) -> TileIdx {
+    pub const fn tile(self) -> TileIndex {
         self.0
     }
 }
@@ -49,7 +48,7 @@ impl RoadNetwork {
         }
     }
 
-    pub fn component(&self, idx: TileIdx) -> Option<ComponentId> {
+    pub fn component(&self, idx: TileIndex) -> Option<ComponentId> {
         self.component.get(idx.as_usize()).copied().flatten()
     }
 
@@ -57,12 +56,12 @@ impl RoadNetwork {
         self.rebuilds
     }
 
-    pub fn is_road(&self, idx: TileIdx) -> bool {
+    pub fn is_road(&self, idx: TileIndex) -> bool {
         self.component(idx).is_some()
     }
 
     /// Two road tiles are connected if they are in the same component.
-    pub fn connected(&self, a: TileIdx, b: TileIdx) -> bool {
+    pub fn connected(&self, a: TileIndex, b: TileIndex) -> bool {
         match (self.component(a), self.component(b)) {
             (Some(x), Some(y)) => x == y,
             _ => false,
@@ -78,7 +77,7 @@ impl RoadNetwork {
     }
 
     /// Relabels everything from scratch, scanning the tiles in increasing
-    /// `TileIdx` order.
+    /// `TileIndex` order.
     ///
     /// A full rebuild rather than an incremental one, deliberately: scanning
     /// 40,000 tiles once is irrelevant until a profiler says otherwise, and the
@@ -89,7 +88,7 @@ impl RoadNetwork {
         self.component.resize(grid.len() as usize, None);
         self.rebuilds = self.rebuilds.wrapping_add(1);
 
-        let mut queue: Vec<TileIdx> = Vec::new();
+        let mut queue: Vec<TileIndex> = Vec::new();
         for root in grid.indices() {
             if !is_road(grid, root) || self.component(root).is_some() {
                 continue;
@@ -113,7 +112,7 @@ impl RoadNetwork {
     }
 }
 
-fn is_road(grid: &Grid, idx: TileIdx) -> bool {
+fn is_road(grid: &Grid, idx: TileIndex) -> bool {
     grid.get(idx).is_some_and(|t| t.flags.has_road())
 }
 
@@ -186,7 +185,7 @@ impl Visited {
 ///
 /// `visit` receives each reached tile **exactly once**, with the smallest
 /// distance. The visit order is by increasing distance and, at equal distance,
-/// by increasing `TileIdx`: it is a total order, so whoever builds a game rule
+/// by increasing `TileIndex`: it is a total order, so whoever builds a game rule
 /// on top of it (phase 06) does not depend on BFS internals.
 ///
 /// `visited` is opened in a fresh round on every call: its previous contents do
@@ -194,14 +193,14 @@ impl Visited {
 /// to use it.
 pub fn bfs_roads(
     grid: &Grid,
-    start: &[TileIdx],
+    start: &[TileIndex],
     max: u16,
     visited: &mut Visited,
-    mut visit: impl FnMut(TileIdx, u16),
+    mut visit: impl FnMut(TileIndex, u16),
 ) {
     visited.begin(grid.len() as usize);
 
-    let mut level: Vec<TileIdx> = start
+    let mut level: Vec<TileIndex> = start
         .iter()
         .copied()
         .filter(|t| is_road(grid, *t))
@@ -213,7 +212,7 @@ pub fn bfs_roads(
     }
 
     let mut d = 0u16;
-    let mut next: Vec<TileIdx> = Vec::new();
+    let mut next: Vec<TileIndex> = Vec::new();
     while !level.is_empty() {
         for t in &level {
             visit(*t, d);
@@ -239,8 +238,7 @@ pub fn bfs_roads(
 #[cfg(test)]
 mod tests {
     use super::{Visited, bfs_roads};
-    use crate::grid::{Grid, Terrain};
-    use crate::ids::{TileIdx, TilePos};
+    use crate::grid::{Grid, Terrain, TileIndex, TilePos};
 
     /// An 8x8 grid with a horizontal road along row `y`.
     fn with_road(y: u8) -> Grid {
@@ -254,7 +252,7 @@ mod tests {
         g
     }
 
-    fn reached(grid: &Grid, from: TileIdx, max: u16, v: &mut Visited) -> Vec<(TileIdx, u16)> {
+    fn reached(grid: &Grid, from: TileIndex, max: u16, v: &mut Visited) -> Vec<(TileIndex, u16)> {
         let mut out = Vec::new();
         bfs_roads(grid, &[from], max, v, |t, d| out.push((t, d)));
         out

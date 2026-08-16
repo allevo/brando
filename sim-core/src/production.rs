@@ -96,7 +96,7 @@ pub(crate) fn production(world: &mut World) {
 
     // --- 2. the houses eat ---
     // In HouseId order: it is a deterministic order and it is a game rule, like
-    // the (distance, TileIdx) ordering of phase 06.
+    // the (distance, TileIndex) ordering of phase 06.
     //
     // **Step 4 does not write `House::served` any more** (phase 12). That
     // bit means "covered", for water and for food alike, and step 3 is the only
