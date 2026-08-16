@@ -220,7 +220,7 @@ mod satisfaction {
     /// A service outside `required_services` is not touched, even when the coverage
     /// reaches the house with it anyway.
     ///
-    /// Coverage does not read `required_services` (A9): the farm assigns itself to
+    /// Coverage does not read `required_services`: the farm assigns itself to
     /// this house all the same, `served` says food is there, and the accumulator
     /// still has to stay still.
     #[test]

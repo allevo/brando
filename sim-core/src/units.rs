@@ -2,7 +2,7 @@
 //!
 //! Two distinct types that cannot be converted into one another:
 //! - [`Milli`] for fractional quantities (food, labour, wear), in thousandths;
-//! - [`Coins`] for money, which has no in-game fractions (A1).
+//! - [`Coins`] for money, which has no in-game fractions.
 
 use std::fmt;
 
@@ -130,7 +130,7 @@ impl fmt::Debug for Milli {
 
 /// Money. A whole number, with no thousandths: the treasury has no in-game
 /// fractions, and using thousandths would halve the useful range for nothing
-/// (A1).
+///.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
 pub struct Coins(i32);
 

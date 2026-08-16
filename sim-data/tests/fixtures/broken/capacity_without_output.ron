@@ -16,7 +16,7 @@
 // never consults the production, so the phantom farm won its houses on
 // distance, they were served for ever and fed never, and their food
 // satisfaction climbed to the ceiling on an empty stock. Absorbing hunger, the
-// state A5 was dissolved to remove.
+// state this whole check exists to make unreachable.
 //
 // The house and the well come **after** the farm, so the indices in the
 // expected report do not move. They are here for the reason spelled out in

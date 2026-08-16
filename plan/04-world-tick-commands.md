@@ -1,7 +1,13 @@
+---
+id: 04
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 04 — World, tick, commands
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
@@ -117,7 +123,7 @@ the order becomes an accident of the development timeline.
 >   moves on its own.
 > - **`StepReport` has a third field, `summary`** — the tick's aggregates, which are a snapshot and
 >   not delta events.
-> - **Three `CommandError` variants were renamed** by the vocabulary review ([A19](../DECISIONS.md)):
+> - **Three `CommandError` variants were renamed** by the vocabulary review (A19):
 >   `OutOfBounds` → `OutsideMap`, `UnsuitableTerrain` → `WrongTerrain`, and — the one the rule was
 >   written for — `InsufficientFunds` → `NotEnoughMoney`.
 > - `world.tick += 1` is a `saturating_add`.

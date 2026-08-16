@@ -246,7 +246,8 @@ fn easy_fills_a_house_the_way_m0_did() {
         // 14 the two were the same sentence: nothing moved a resident after
         // construction, so "every house is full" and "every house arrived full"
         // were indistinguishable. Births and deaths separate them, and the one
-        // this test is about is A13's knob — how full a house is *born* — which
+        // this test is about is the difficulty's one knob — how full a house is
+        // *born* — which
         // `settled_on_construction` states exactly and which the demographics
         // cannot disturb.
         let totals = w.population_totals();
@@ -293,7 +294,7 @@ fn the_header_carries_the_profile_by_name() {
 
 // --- 6. the hash covers the whole state -------------------------------------
 
-/// A mitigation of A3's known risk: the hash is written by hand, so a new field
+/// A mitigation of the known risk of a hand-written hash: a new field
 /// can stay outside it without anyone noticing — and from that moment the
 /// recordings are **blind** on that field.
 ///
@@ -304,7 +305,7 @@ fn the_hash_covers_the_whole_state() {
     let data = data();
     let rec = recording("minimal");
     // A fresh world per perturbation, and not a copy of one: `World` is not
-    // `Clone` (A22), and a world is `seed + Vec<Command>` played out (D4). That
+    // `Clone`, and a world is `seed + Vec<Command>` played out (D4). That
     // replaying it really does give back the same world is what
     // `the_same_replay_twice_gives_the_same_hashes` says, one test above.
     let again = || sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");

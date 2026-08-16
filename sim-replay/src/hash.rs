@@ -1,6 +1,6 @@
 //! The state hash.
 //!
-//! Written by hand, not delegated to serde (A3): with serde the hash would
+//! Written by hand, not delegated to serde: with serde the hash would
 //! depend on the order the fields are declared in and on the format, so moving
 //! a field inside a struct — a refactor with no semantic consequences — would
 //! invalidate every recording. That is exactly the false positive that makes
@@ -8,7 +8,8 @@
 //!
 //! The cost is that adding a field to the state requires adding it here by
 //! hand. If that is forgotten, the hash goes blind on that field and the
-//! recordings stop protecting it: it is the known risk of A3, mitigated by the
+//! recordings stop protecting it: it is the known risk of hashing by hand
+//! instead of delegating to serde, mitigated by the
 //! `the_hash_covers_the_whole_state` test.
 
 use sim_core::{Building, Demographics, Economy, Flow, House, RngKind, ServiceKind, Walker, World};
@@ -48,7 +49,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     h.update(&w.tick().to_le_bytes());
     h.update(&w.data().hash);
     // The difficulty is state, not a parameter of the run: it changes the
-    // simulation, so it enters the hash from tick 0 (A13). Two games with the
+    // simulation, so it enters the hash from tick 0. Two games with the
     // same seed and the same commands on different profiles are different games
     // and must not be confusable.
     h.update(&[w.difficulty().get()]);

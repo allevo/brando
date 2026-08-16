@@ -1,4 +1,4 @@
-# CLAUDE.md's prohibitions (D4) as linter errors, not as conventions.
+# D4's prohibitions as linter errors, not as conventions.
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "D4: non-deterministic iteration order, use BTreeMap or IndexMap" },
   { path = "std::collections::HashSet", reason = "D4: same" },

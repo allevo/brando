@@ -1,5 +1,4 @@
-//! Newtype identifiers. A bare `usize` never appears in a public signature
-//! (CLAUDE.md, conventions).
+//! Newtype identifiers. A bare `usize` never appears in a public signature.
 
 use std::fmt;
 
@@ -14,7 +13,7 @@ slotmap::new_key_type! {
 
 /// Linear tile index: `y * width + x`.
 ///
-/// The map is at most 256x256 (A4), so 65,536 tiles: the last index is
+/// The map is at most 256x256, so 65,536 tiles: the last index is
 /// `u16::MAX` and fits exactly.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
@@ -38,8 +37,8 @@ impl TileIdx {
 /// A kind of building, as an index into the `DataSet`'s `buildings` table.
 ///
 /// Not an enum: building kinds are data, not code (D6). An id that resolves to
-/// no row of the table is a command error, not a panic — the LLM will produce
-/// some (CLAUDE.md, AI interface).
+/// no row of the table is a command error, not a panic — the LLM driving the
+/// game (D7) will produce some, and that error is the feedback it gets back.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
@@ -159,7 +158,7 @@ impl fmt::Debug for Level {
 }
 
 /// A position on the grid. `x` and `y` are `u8` because the maximum side is
-/// 256 (A4): valid coordinates run from 0 to 255.
+/// 256: valid coordinates run from 0 to 255.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]

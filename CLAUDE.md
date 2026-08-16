@@ -1,19 +1,13 @@
 Instructions for developing this repository. Read all of it before writing any code.
 
-## What this project is
+**This file answers one question: how do I work here?** What the project is, what the game does, where
+the code lives and how far it has got are four other questions, and each has exactly one file that
+answers it — the table below. Nothing here states the current state of the tree.
 
-A 2.5D city builder inspired by Zeus: Master of Olympus. The player builds a city starting from a
-few resources and makes it prosper, managing the economy, food, trade and safety.
-The game supports several civilisations (Greek, Egyptian, ...), each with its own building rules.
-
-Three non-functional requirements drive the whole architecture:
-
-1. The core logic is extensively tested and deterministic.
-2. The game is drivable by an AI (an LLM that plans + a bot that executes + an evaluator that
-   judges), so the parameters can be balanced automatically.
-3. The game runs headless, with no graphics dependency at all.
-
-Language: Rust, edition 2024.
+*Why* is not on that list, and that is deliberate: it is answered where it binds. A rule the code has
+is stated in full in the comment on that code; a question still open is stated in its own task; and
+the rules that bind code nobody has written yet are the **constitution**, `D1`–`D7`, which is the one
+task holding rules instead of a record of work.
 
 Every identifier, comment and document in this repository is in English. Any word you do not
 recognise is defined in [GLOSSARY.md](GLOSSARY.md).
@@ -27,65 +21,98 @@ can both answer the same question will eventually disagree, and then neither can
 
 | Question | File | Lifecycle |
 |---|---|---|
+| What is this project, and what do I read first? | [README.md](README.md) | present tense, edited in place |
 | Where does the code live, how does data flow? | [ARCHITECTURE.md](ARCHITECTURE.md) | present tense, edited in place |
 | What does the game do? | [RULES.md](RULES.md) | present tense, **no values** — names of parameters only |
-| Why is it this way? | [DECISIONS.md](DECISIONS.md) | **append only**, never rewritten |
 | What is next, what is undecided? | [ROADMAP.md](ROADMAP.md) | the only statement of how far the tree has got |
 | What does this word mean? | [GLOSSARY.md](GLOSSARY.md) | edited in place |
 | How do I work here? | this file | edited in place — **no statements of current state** |
-| What happened, in order? | [plan/](plan/README.md) | **frozen history** |
+| How do I open and close a task? | [the `task` skill](.claude/skills/task/SKILL.md) | edited in place |
+| What happened, in order? | [plan/](plan/) | **frozen history** |
 
-**`plan/` is a record of moments in the past and is never edited to match the present.** When a phase
+The last row but one is a **skill**, which is loaded when the job comes up rather than read every
+session. Opening and closing a task is a procedure followed at two particular moments, not a rule to
+carry around, and it answers that question in full — this file does not answer it at all.
+
+**`plan/` is a record of moments in the past and is never edited to match the present.** When a task
 document turns out to describe behaviour that later changed, you do **not** rewrite the sentence: you
 append a dated amendment block below it. The original prediction next to what really happened is the
 most useful thing in the whole record — rewriting it destroys the only evidence of how the design
 moved.
 
+**A link is not prose.** When a frozen document points at a file that has since been deleted or
+renamed, repoint the link and leave the sentence exactly as it was written. A dead link destroys the
+meaning of the sentence carrying it, where repointing preserves it: the freeze is on what a document
+says, not on where its links land.
+
+**A task written before the register was removed may cite an `A<n>`, and it resolves to nothing.**
+Those were implementation decisions in a register that has been removed; the rules they held are now
+stated in full at the places they bind, and the tasks that name them were left as written rather than
+rewritten to hide it. Reading `A12` in one and finding no `A12` anywhere is expected, not a broken
+link. **That includes plans not yet built**, several of which still open with a
+`**Decisions involved:**` line, so a phase taken off the shelf has to be read with it in mind. A task
+written now carries none. `D<n>` still resolves, and always will.
+
+### What a task looks like
+
+Every document under `plan/` is a task, and every task has **one goal only**, closed by a command you
+run that gives a yes-or-no answer. If a task ends and you cannot say whether it worked, the task was
+badly defined. One task is one commit, or one PR, and you do not start the next one with the last
+still red.
+
+A task's id is the number its file name opens with, and the file states that id again in front
+matter — twice on purpose, once where a reader finds it and once where a link finds it. `kind` says
+what the document is, `status` says how far the work got, and they are two fields rather than one
+because they answer two different questions: one field answering both is how a document ends up
+disagreeing with itself. `doc-check` reads all of it, along with the dates against `ROADMAP.md`'s row
+and an open question against the roadmap slot that schedules it. Which fields exist, which values
+they take, and which shape the body takes are in the skill, whose template is itself checked against
+the code.
+
+One id namespace, cited by id and never by path: `D1`–`D7`, the **constitution**, taken before any
+code and binding on all of it. If an implementation seems to require breaking a `D`, stop and ask.
+`doc-check` refuses a `D` the constitution does not define, and refuses any other id letter outright.
+
 ### The definition of done for a phase
 
-A phase is not finished until all of these are true:
+A phase is not finished until the tests are green, the recordings are accounted for, each of
+`ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has been updated or consciously
+declared unaffected — say which, explicitly, because "I did not think about it" is the failure this
+guards against — and the task file has its `## How it went`, including the ways the plan was wrong.
+The full list is in the skill, together with the edits that close a task, because they are read at
+the moment a phase closes and at no other.
 
-1. `cargo test --workspace` is green, and the new behaviour has the tests its phase file promised.
-2. `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` are clean.
-3. `cargo xtask regen-expected --check` is green, **or** the recordings were regenerated on purpose
-   and the reason is written down. A hash that moves without the rules or tables changing is a
-   source of non-determinism: stop and find it.
-4. `cargo xtask doc-check` is green.
-5. Each of `ARCHITECTURE.md`, `RULES.md`, `ROADMAP.md` and `GLOSSARY.md` has either been updated or
-   consciously declared unaffected. Say which, explicitly; "I did not think about it" is the failure
-   mode this list exists to prevent.
-6. The phase file gets its `## How it went` section — including the ways the plan was wrong — and its
-   status header.
-7. Any decision taken along the way is a new entry in `DECISIONS.md`. Any decision **deferred** gets a
-   half-numbered `TO_BE_DECIDED` slot in `ROADMAP.md`, at the point where it has to be closed.
+The one of them that reaches further than the task file: any decision taken along the way is written
+where it binds — see below — and any decision **deferred** gets a half-numbered **open question**
+slot in `ROADMAP.md`, at the point where it has to be answered, and a task of its own holding the
+argument.
 
-### `DECISIONS.md` records what was decided, never what will be
+### Recording a decision
 
-**Do not write an entry for a decision that has not been taken yet.** Not for a phase that is planned
-and unbuilt, not "so it is not forgotten", not with a note saying it is provisional. The file is
-append-only: an entry written early cannot be withdrawn, only amended, so the cheapest repair is
-already more expensive than never having written it. Worse, it is a lie about the project's own
-history — the register's whole value is that reading it tells you what was really known when.
+**A decision is recorded where it binds, and nowhere else.** There is no register. There was one, and
+it was removed because it answered a question the code already answered: across 176 citations in 38
+source files, not one comment leaned on it — every one stated its rule in full and wore the id as a
+decoration. A second copy of a rule that nothing keeps in agreement with the first is not a record,
+it is a fork waiting to be noticed.
 
-**Do not reserve numbers either.** A reserved `A<n>` goes wrong the moment other work lands first, and
-a plan file citing an id that turned out to belong to something else is worse than one citing none.
+So, by case:
 
-Where the argument goes instead, by case:
+- **A rule the code has.** In the comment on that code, stated in full. This is the common case, and
+  the naming rule below already required it: the sentence has to teach the rule to a reader who
+  cannot look anything up.
+- **A rule that binds code nobody has written yet.** The constitution, and only if it is genuinely of
+  that kind. It is one task, and it has not grown since the first commit.
+- **A question not yet settled.** A half-numbered **open question** slot in `ROADMAP.md`, at the
+  point where it has to be answered, plus a task of its own holding the argument. The slot exists
+  because such a question goes invisible otherwise, which is what happened twice while four phases
+  were planned on top of it. `doc-check` fails if a slot is not half-numbered, names no task, or
+  names one that has been built.
+- **The reasoning for work that has not run yet.** In that task's file, which opens by saying it is a
+  plan and may diverge.
 
-- **Planning an unbuilt phase.** It goes in that phase's file under `plan/`, which opens by saying it
-  is a plan and may diverge. Arguing for an answer there is what a plan *is*. Name the decisions the
-  phase will produce, describe them, and leave them unnumbered.
-- **A decision something else is planned on top of.** That is the one case for a
-  `TO_BE_DECIDED` entry plus its half-numbered slot in `ROADMAP.md`. The slot exists because such a
-  decision goes invisible otherwise — which is exactly what happened to A17 and A18, both of which
-  stayed unseen while four phases were planned over them.
-- **A decision a phase closes by itself, in its own commit.** No entry and no slot until it is closed.
-  Nothing is planned on top of it, so it cannot go invisible; the phase file carries the reasoning
-  until the phase runs, and the entry is written then, saying what was really chosen.
-
-The test to apply before adding an entry: *has the work that settles this actually been done?* If the
-answer is "no, but I am confident", the entry is premature. Confidence is not a decision, and this
-file's most useful entries are precisely the ones where the recommendation was overturned.
+The test to apply before writing any of it down: *has the work that settles this actually been done?*
+If the answer is "no, but I am confident", it is a prediction and belongs in a task, saying so.
+Confidence is not a decision.
 
 ### Regenerating the recordings without losing the signal
 
@@ -109,100 +136,6 @@ not regenerate* — but applying it takes a protocol:
    format exists for this.
 6. **One reason to regenerate per commit.** A commit that regenerates the recordings and changes two
    mechanics is no longer diffable.
-
----
-
-## Architectural decisions already taken
-
-These decisions have been discussed and are **binding**. Do not reopen them without an explicit
-discussion. If an implementation seems to require breaking one, stop and ask.
-
-### D1 — The core is not an ECS and does not depend on Bevy
-
-`sim-core` is a pure Rust crate. The state is a concrete struct with `SlotMap`s/`Vec`s, not an ECS
-`World`. The reason: the iteration order of an ECS's queries is not a stable contract, Bevy makes
-frequent breaking releases, and for balancing runs a tight loop over dense arrays is orders of
-magnitude faster.
-
-Bevy is **only** a rendering client that reads snapshots and emits commands.
-Headless means running `sim-core` alone, with no Bevy in memory.
-
-### D2 — Aggregate coverage, not service walkers
-
-The city services (water, food, culture, health) work by **aggregate coverage**: every building
-serves the houses within a range computed as the distance walked along the road network, not as the
-crow flies. The range and the capacity are parameters read from a data table and grow with the
-building's level.
-
-The walkers the player sees "walking around" for these services are **purely decorative**, they live
-in the renderer, they are derived from the result of the coverage and they **can never influence the
-core's state**. If a decorative walker shows up in `sim-core`, it is a bug.
-
-### D3 — Some walkers, on the other hand, are real
-
-Goods transport between warehouses, trade caravans and immigrants are genuinely simulated entities:
-they take time, they can be blocked, they carry state, they live in `sim-core`.
-The distinction is per kind of building and has to be documented in the data tables.
-
-### D4 — Determinism through a seed + the command log
-
-A save file is `seed + Vec<Command>`, not a dump of the state. The core is conceptually a pure
-function `step(&mut World, &[Command])`.
-
-Non-negotiable rules:
-
-- **Never** iterate a `HashMap`/`HashSet`. Use `BTreeMap`, `IndexMap` or indexed `Vec`s.
-- **Never** `rand::thread_rng()`. The RNG lives in the state and is seeded (`rand_pcg::Pcg64`).
-- RNGs **separated per kind**. That way adding a feature does not knock the existing sequences out of
-  phase and does not invalidate every recorded replay. The kinds that exist, and the fact that their
-  declaration order is frozen, are in [ARCHITECTURE.md](ARCHITECTURE.md).
-- **No floats in the state.** Fractional quantities use the `Milli(i32)` newtype (thousandths) with
-  checked operations. Floats are allowed only in the renderer.
-- No parallelism in the core until the reduction order is provably fixed.
-- No I/O, no access to the system clock inside the core.
-
-### D5 — Houses, not citizens
-
-The unit of population simulation is the **house** (it holds N residents, a level, and a
-satisfaction state for each service). Individuals are not simulated.
-Target scale: a 200×200 tile map, ~15,000 residents.
-
-### D6 — Civilisation = data + Rust rules
-
-Everything numeric (costs, production chains, ranges, requirements) lives in RON tables loaded and
-validated at startup. The spatial and structural rules (e.g. the Egyptians bury to the west, the city
-is split east/west) live in Rust implementations of the `CivilizationRules` trait.
-
-The trait's hooks have to be **pure functions** of the state: no I/O, no RNG of their own. Keep the
-trait minimal. Do not widen it on speculation: with a single implementation there is no way to know
-what the right abstraction is. It gets widened when the second civilisation really requires it.
-
-### D7 — Scenarios and sandbox
-
-The game supports both, but **the AI player only plays scenarios** with explicit objectives
-(mandatory + optional), campaign style. The evaluator's score is based on those.
-
----
-
-## The workspace, the state and the tick
-
-**These live in [ARCHITECTURE.md](ARCHITECTURE.md), which is the only file that describes them.**
-Read it before writing code. It is kept in the present tense and is updated in the same commit as the
-code it describes; this file used to carry copies of all three, and every copy went stale.
-
-What binds regardless:
-
-- Dependencies always point towards `sim-core`, never the other way. If `game-bevy` shows up among
-  another crate's dependencies, it is an architectural mistake.
-- `Tile` has to stay small: `u16` indices, no pointers, no `Option<Box<...>>`. Forty thousand tiles
-  have to stay in cache as much as possible.
-- The order of the tick is **game semantics**, not an implementation detail. Do not reorder without
-  regenerating the recorded replays and documenting the reason. The same is true of step 6's internal
-  order and of the demographic draw order.
-- Step 3 is the hot path. Implementing it naively is fine; the `DirtyFlags` are not optional, because
-  retrofitting them later is painful.
-- Unit of time: **1 tick = 1 game day**, the month is a fixed multiple. Scenario objectives are
-  expressed in months and years.
 
 ---
 
@@ -238,65 +171,26 @@ changed, the optimisation has changed the semantics and it is a bug.
 
 ---
 
-## The AI interface
-
-The loop is: **the LLM produces `Intent`s → the bot compiles them into `Command`s → the core runs →
-the evaluator judges the saved state → feedback to the LLM.**
-
-The LLM never reasons in absolute coordinates: it is terrible at it and produces unplayable plans.
-
-```rust
-enum Intent {
-    BuildDistrict { kind: DistrictKind, near: Landmark, size: u8 },
-    EnsureService { service: ServiceKind, area: AreaRef },
-    SetupProduction { chain: ChainId, target_rate: u32 },
-    AdjustTax { delta: i8 },
-}
-```
-
-The bot returns `Result<Vec<Command>, IntentFailure>`, where the failure is **descriptive**
-(`NoFlatSpaceNear`, `NotEnoughMoney { needed, available }`, `RoadNetworkDisconnected`).
-That message goes back to the LLM as feedback and closes the loop.
-
-The determinism log records the primitive `Command`s; the `Intent`s are kept as metadata for
-analysis.
-
-**Observation for the LLM**: never the serialised state. What is needed is a summary — aggregate
-indicators, a list of problems ordered by severity, and an ASCII map downsampled to ~40×40 with
-symbols per zone. Far more effective than any detailed JSON.
-
-**Evaluator**: it produces a *vector* of metrics, not a scalar (mandatory objectives completed,
-optional ones, ticks taken, stability as the variance of the treasury, resilience as collapses in
-population). The scalar is derived afterwards, so the formula can change without redoing the runs.
-
----
-
-## The core ↔ renderer boundary
-
-Bevy receives a **complete snapshot on the first frame** and then **delta events**
-(`HouseEvolved`, `BuildingPlaced`, `WalkerSpawned`, `ServiceCoverageChanged`).
-Rebuilding 40,000 entities every tick is unacceptable.
-
-The renderer never calls methods that mutate the core. The only write channel is the `Command` queue.
-
----
-
 ## Code conventions
 
 - Errors with `thiserror` in the libraries. No `unwrap()`/`expect()` in the core, except for provably
   impossible invariants, and in that case with a comment explaining why.
 - No `async` in the core: it is a tick-based simulation, it has nothing to wait for.
 - Newtypes for the ids (`BuildingId`, `HouseId`, `TileIdx`), never a bare `usize` in a signature.
-- Balancing numbers **never** live in the code: they go in `sim-data`.
+- Balancing numbers **never** live in the code: they go in `sim-data` (D6).
   If a numeric game constant shows up in a `.rs`, it is a bug.
 - `#![forbid(unsafe_code)]` in every `sim-*` crate.
 - Comments in English, like the rest of the repository. Doc comments on the public traits and on
   every non-obvious invariant.
-- **A comment states its rule in full and tags it with the id** (`A12`, `D4`) — the tag is a label on
-  a self-contained sentence, never a substitute for one. A reader with no access to the documents
-  should still learn the rule. Where an id resolves to a code item, link it there
-  (`/// [A13]: crate::data::DifficultyDef`): rustdoc then checks the link for you.
-- **Naming — plain words, and which hard words earn their place ([A19](DECISIONS.md)).**
+- **A comment states its rule in full**, with no tag standing in for a sentence. A reader with no
+  access to any document should still learn the rule from the comment alone. This used to be phrased
+  as "state the rule *and* tag it with the id", and the tags are gone precisely because the sentences
+  were already carrying everything. The one id that survives is a `D`, and it is still a label on a
+  full sentence and never a substitute for one. Where a rule resolves to a code item, link it there
+  (`/// [`DifficultyDef`]: crate::data::DifficultyDef`): rustdoc then checks the link for you.
+- **Never cite a document by path from code.** Cite the stable id and state the rule where you cite
+  it. Paths rot when files move; ids do not. `doc-check` enforces this for `plan/`.
+- **Naming — plain words, and which hard words earn their place.**
   A hard word earns its place when it is the domain's own word, and then it is defined in
   [GLOSSARY.md](GLOSSARY.md): you learn it once and it pays you back. `capacity`, `provider`,
   `satisfaction`, `coverage`, `terrain` are of that kind and are staying. A hard word that is merely
@@ -304,45 +198,29 @@ The renderer never calls methods that mutate the core. The only write channel is
   `NotEnoughMoney` tells them for free, and `hysteresis` was retired in favour of `gap`.
   The bar is an elementary reading level, in English, for a reader who is not a native speaker.
   **If a word is not plainly elementary and not already in `GLOSSARY.md`, ask before inventing it.**
-  This binds the names sketched here but not yet written — `NoFlatSpaceNear`,
-  `RoadNetworkDisconnected` and the `Intent` variants are illustrations of the *shape* of a
-  descriptive failure, not approved spellings.
+  This binds names that are sketched but not yet written, wherever they are sketched: the shapes in
+  `ROADMAP.md` are illustrations of what a descriptive failure looks like, not approved spellings.
 
 ---
 
-## Roadmap
+## Scope, and two lessons that outrank any decision taken in the abstract
 
-**M0 — Foundations.** `World` with a grid and roads, three kinds of building (house, well, farm), the
-tick loop, primitive `Command`s, replay with hashing. No graphics.
-Tests: property tests + one recorded replay.
-
-**M1 — A minimal game loop.** Houses level up with water and food, and decay otherwise. Migration in
-and out. Treasury and taxes. One scenario with an objective ("500 residents within 5 years").
-
-**M2 — The two clients, in parallel.** Bevy renders M1's state isometrically with placeholder assets
-(the goal is validating the snapshot/event boundary, not the graphics). In parallel: a heuristic bot
-that completes the scenario + an evaluator.
-
-**M3 — Depth.** Production chains with real logistics walkers. The `CivilizationRules` trait
-introduced **together with the second civilisation**, not before. An LLM adapter on top of a bot that
-already works.
-
-### How far the tree has got
-
-**[ROADMAP.md](ROADMAP.md) says, and it is the only file that does.** Do not restate the current
-milestone here: this section used to, and it was four phases out of date, which is worse than saying
-nothing. If you finish a phase, update `ROADMAP.md`.
-
-### Two lessons that outrank any decision taken in the abstract
+**Do not expand the scope.** A city builder has an enormous number of interconnected systems and it is
+extremely easy to spend months on mechanics nobody ever plays. Every new system has to be reachable
+and observable in an existing scenario. The same rule applies to the workspace itself: a crate comes
+into being in the phase that fills it, because **empty crates scaffolded in advance are surface that
+invites you to fill it**.
 
 1. **Measure before you optimise, and measure the thing you are about to change.** Twice now the
    obvious hypothesis about where the cost lay has been wrong, and the measurement said so before it
-   got expensive — once for step 3's invalidation ([A11](DECISIONS.md)), once for the multiplier A12
-   was counting on as a discount ([A17](DECISIONS.md)). Doing the optimisation in the same phase you
-   take the measurement in means not having the *before*.
+   got expensive. Once for step 3: invalidating the coverage only where it changed was the obvious
+   win, and the measurement found the condition true on **100% of ticks at the reference scale**, so
+   there was nothing to skip and the optimisation was not built. Once for the multiplier that
+   counting capacity on the residents present was expected to earn back as a discount. Doing the
+   optimisation in the same phase you take the measurement in means not having the *before*.
 2. **A balancing number that has to stand in a particular relation with another one is a validation
    check, not a comment.** This came out of coverage on a "first capacity taken, first served" basis
-   making hunger an **absorbing** state ([A5](DECISIONS.md)). The fix was not counting capacity in
+   making hunger an **absorbing** state. The fix was not counting capacity in
    another unit — that restates the same constraint — but making a producer's capacity consistent
    with what its output sustains, from which the invariant *a house covered by food always eats*
    follows. Generalise it: if you find yourself writing a comment explaining why two numbers must
@@ -350,23 +228,3 @@ nothing. If you finish a phase, update `ROADMAP.md`.
 
 The same rule now covers the documents. If a document has to agree with the code, that agreement is a
 check in `cargo xtask doc-check` — not a promise to remember.
-
----
-
-## What NOT to do
-
-- Do not move the simulation into Bevy's `World`, for any reason.
-- Do not introduce floats, iterated `HashMap`s or `thread_rng` into the core.
-- Do not write balancing numbers into the code.
-- Do not implement `CivilizationRules` before M3: with a single civilisation the abstraction would be
-  invented.
-- Do not add game systems without the corresponding recorded replay.
-- Do not optimise before the profiler, but do not put off the `DirtyFlags`.
-- Do not expand the scope: a city builder has an enormous number of interconnected systems and it is
-  extremely easy to spend months on mechanics nobody ever plays. Every new system has to be reachable
-  and observable in an existing scenario.
-- **Do not cite a document path from code.** Cite the stable id — `A12`, `D4` — and state the rule in
-  full where you cite it. Paths rot when files move; ids do not.
-- **Do not rewrite a file in `plan/`** to match what the code does now. Append a dated amendment.
-- **Do not restate the current state of the tree** anywhere except `ROADMAP.md`, and do not write a
-  balancing value into `RULES.md`.

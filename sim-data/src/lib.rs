@@ -2,8 +2,8 @@
 
 //! The balancing tables in RON, loaded and validated at startup.
 //!
-//! Everything numeric in the game lives here and not in the code
-//! (CLAUDE.md, conventions). Loading is I/O and that is why it lives here,
+//! Everything numeric in the game — costs, ranges, requirements — lives in these
+//! tables and not in the code (D6). Loading is I/O and that is why it lives here,
 //! never inside `sim-core` (D4).
 
 pub mod load;
@@ -12,7 +12,7 @@ pub mod validate;
 
 pub use load::{LoadError, from_ron_str, load_from_dir};
 /// The dataset definitions live in `sim-core` (the `World` holds them in an
-/// `Arc`, A2); what stays here is parsing, validation and I/O. Re-exported for
+/// `Arc`); what stays here is parsing, validation and I/O. Re-exported for
 /// the convenience of whoever loads the tables.
 pub use sim_core::data::{
     BuildingDef, DataSet, DifficultyDef, DifficultyId, Rules, ServiceDef, TerrainDef,

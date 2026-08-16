@@ -35,7 +35,7 @@ pub struct Building {
 /// A house: the unit of population simulation (D5).
 ///
 /// Individuals are not simulated. A newly-built house starts with the residents
-/// its difficulty profile gives it (A13); from there births and deaths move the
+/// its difficulty profile gives it; from there births and deaths move the
 /// number on their own (phase 14), and the monthly review moves the level
 /// (phase 13). Immigration and emigration are phase 15.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,7 +47,7 @@ pub struct House {
     /// Which services reach it this tick.
     pub served: ServiceFlags,
     /// How long the service has been there, **not how much of it arrives**
-    /// (A10). One slot per service, including the ones the current level does
+    ///. One slot per service, including the ones the current level does
     /// not require: if the house levels up, the time already accumulated on a
     /// service it was receiving anyway was not a lie.
     ///
@@ -58,7 +58,7 @@ pub struct House {
     /// **What it reads is [`House::served`], which means "covered".** Since
     /// phase 12 that is true of the food bit too: step 4 stops rewriting it to
     /// mean "it ate", and the two coincide only because a covered house always
-    /// eats (A5). The day that invariant falls over — M3, when the goods come
+    /// eats. The day that invariant falls over — M3, when the goods come
     /// from a warehouse — satisfaction will rise for a house that did not eat.
     /// It is written here because here is where it would be an inexplicable
     /// balancing bug, and `FoodTotals::covered_but_unfed` is what says out loud
@@ -83,8 +83,8 @@ pub struct Economy {
 
 /// What has to be recomputed on the next tick.
 ///
-/// The flags exist from the start as a deliberate choice: retrofitting them
-/// later is painful (CLAUDE.md, tick order). In M0 the use is naive — when the
+/// The flags exist from the start as a deliberate choice: they are not optional,
+/// because retrofitting them later is painful. In M0 the use is naive — when the
 /// roads change, every provider goes dirty — but the structure is the final one.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DirtyFlags {
@@ -185,18 +185,18 @@ pub struct World {
     /// (D4): the iteration order is a contract.
     pub(crate) buildings_by_origin: BTreeMap<TileIdx, BuildingId>,
     pub(crate) houses_by_origin: BTreeMap<TileIdx, HouseId>,
-    /// The balancing tables (A2). They live inside the state rather than being
+    /// The balancing tables. They live inside the state rather than being
     /// a parameter of `step` so they need not be threaded through every
     /// internal function; their hash feeds the state hash, so a balance change
     /// makes the replay fail immediately and for the right reason.
     pub(crate) data: Arc<DataSet>,
     /// Chosen at the start of a game, never changeable afterwards: it changes
     /// the simulation, so it is **state** — it goes into the hash and it
-    /// travels in the replay's header (A13).
+    /// travels in the replay's header.
     pub(crate) difficulty: DifficultyId,
 }
 
-/// A **compile-time** refusal of `Clone` on [`World`] (A22).
+/// A **compile-time** refusal of `Clone` on [`World`].
 mod not_clone {
     use core::marker::PhantomData;
 
@@ -225,7 +225,7 @@ mod not_clone {
         !<Probe<World>>::IS_CLONE,
         "World is Clone again. A save is seed + Vec<Command> (D4): a test that wants \
          a second world plays the same game twice — `twins` in tests/common — and the \
-         production path never wanted one at all (A22)."
+         production path never wanted one at all."
     );
 }
 
@@ -235,7 +235,7 @@ impl World {
     ///
     /// The difficulty is a parameter and not a default on purpose: it changes
     /// the simulation, and a default is the mechanism by which one caller out
-    /// of four would silently keep playing on another profile (A13).
+    /// of four would silently keep playing on another profile.
     pub fn new(grid: Grid, data: Arc<DataSet>, seed: u64, difficulty: DifficultyId) -> Self {
         let treasury = data.rules.starting_treasury;
         let tiles = grid.len();
@@ -507,7 +507,8 @@ pub enum Occupant {
 /// Direct-mutation hooks, behind the `test-util` feature.
 ///
 /// They are deliberately not part of the normal API: the only write channel
-/// into the core is `Command` (CLAUDE.md, core/renderer boundary). They serve
+/// into the core is `Command`, because the renderer is only a client that reads
+/// snapshots and emits commands (D1). They serve
 /// the phase 08 test that checks the state hash really covers every field of
 /// the state — a check that by construction has to be able to touch one field
 /// at a time.
@@ -553,7 +554,7 @@ impl World {
     /// Forces the difficulty of an already started game.
     ///
     /// The game itself never does this — the profile is chosen at the start and
-    /// stays put (A13). It exists for two tests: the one that changes this
+    /// stays put. It exists for two tests: the one that changes this
     /// single field to check the difficulty enters the state hash, and the one
     /// that compares two games at different difficulties *net of the byte
     /// itself*, which is the only way to say "the knob acted here and nowhere
@@ -563,7 +564,7 @@ impl World {
     }
 
     /// The name of the first field on which two worlds differ, or `None` if
-    /// they are the same game (A22).
+    /// they are the same game.
     ///
     /// [`World`] is not `Clone`, so a test that wants to say *nothing changed*
     /// plays the same game twice and compares the two worlds. That comparison
@@ -656,7 +657,7 @@ impl World {
             return Some("houses_by_origin");
         }
         // The dataset's identity is its hash, which is what the state hash
-        // itself uses (A2) — two datasets loaded separately from the same
+        // itself uses — two datasets loaded separately from the same
         // tables are the same tables.
         if data.hash != other.data.hash {
             return Some("data");
@@ -667,7 +668,7 @@ impl World {
         None
     }
 
-    /// A **compile-time** reminder for the state hash (A3).
+    /// A **compile-time** reminder for the state hash.
     ///
     /// It does nothing at runtime. It exists because the exhaustive
     /// `let World { .. }` stops compiling the moment a field is added to the

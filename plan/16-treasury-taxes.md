@@ -1,7 +1,12 @@
+---
+id: 16
+kind: phase
+status: not-yet-built
+opened: 2026-08-09
+---
+
 # Phase 16 — Treasury and taxes
 
-> **Status: not yet built.**
->
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
@@ -9,7 +14,7 @@
 tax rate is a real lever, not free money.
 **Depends on:** 15.
 **Size:** M.
-**Decisions involved:** [A15](../DECISIONS.md), A1, D4, tick order step 7.
+**Decisions involved:** A15, A1, D4, tick order step 7.
 
 ## Why now
 
@@ -24,7 +29,7 @@ tried out before an objective is put on top of it (phase 17).
 
 The tax rate enters here **also** as the third term of the attractiveness, which phase 15
 deliberately left out so as not to have to balance two things at once
-([A15](../DECISIONS.md)).
+(A15).
 
 ## What gets built
 
@@ -108,7 +113,7 @@ The arithmetic: `Σ_houses taxable_per_resident(level) × residents`, accumulate
 multiplied by the rate's per-thousand and added to `remainder`; the whole coins move into `treasury`.
 
 The `i64` is not generic caution: 15,000 residents times a taxable base times a per-thousand leaves
-`i32`, and `Milli` is `i32` ([A1](../DECISIONS.md)). The same rule as `FoodTotals`, which is `i64`
+`i32`, and `Milli` is `i32` (A1). The same rule as `FoodTotals`, which is `i64`
 for the same reason — city-wide aggregates accumulate wide and are converted exactly once.
 
 `taxable_per_resident` lives in `HouseLevelDef` (phase 13), where it was already planned at zero: the
@@ -172,7 +177,7 @@ Variable construction costs, subsidies, loans, trade. Trade is M3 with the carav
    consumes an RNG draw, with the new form it would.
 
    > **Amended 2026-08-14.** The statement above survives word for word; the technique in it does
-   > not. `World` is no longer `Clone` ([A22](../DECISIONS.md)), so the second world is built and
+   > not. `World` is no longer `Clone` (A22), so the second world is built and
    > played rather than copied — and the reformulation this phase was going to make has already been
    > made, for its own reasons. **This phase inherits it and has nothing to do here.** The RNG draw
    > named above is covered, and so is more than was asked: the comparison is exhaustive over the

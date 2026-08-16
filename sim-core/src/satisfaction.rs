@@ -1,10 +1,10 @@
 //! House satisfaction: step 6.1 of the tick.
 //!
 //! It measures **how long** a service has been arriving, not how much of it
-//! arrives (A10). Measuring the quantity would break phase 07's "no partial
+//! arrives. Measuring the quantity would break phase 07's "no partial
 //! consumption" — the choice that makes food conservation an exact equality
 //! instead of an inequality — and it would be degenerate anyway: with
-//! capacity/output consistency (A5) a covered house always receives 100%.
+//! capacity/output consistency a covered house always receives 100%.
 //!
 //! This phase computes the accumulator and nothing else. Every **consequence**
 //! of it — levelling up, decay, migration, births — is phases 13 to 15, just as

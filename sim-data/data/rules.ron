@@ -1,7 +1,7 @@
-// Global simulation constants. None of these numbers may appear in a .rs file
-// (CLAUDE.md, conventions).
+// Global simulation constants. Everything numeric lives in these tables, so none
+// of these numbers may appear in a .rs file (D6).
 (
-    // A6: 1 tick = 1 day, 30 ticks = 1 month, 12 months = 1 year (360 ticks).
+    // 1 tick = 1 day, 30 ticks = 1 month, 12 months = 1 year (360 ticks).
     // Scenario objectives are expressed in months/years (M1).
     ticks_per_month: 30,
     months_per_year: 12,

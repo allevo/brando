@@ -57,7 +57,7 @@ pub fn initial_world(rec: &Recording, data: Arc<DataSet>) -> Result<World, Repla
     }
     // The header names the profile, so a save always replays on the difficulty
     // it was played on. There is no fallback: a default here is how a recording
-    // would silently change game halfway through the project (A13).
+    // would silently change game halfway through the project.
     let difficulty = data
         .difficulty_by_id(&rec.header.difficulty)
         .ok_or_else(|| ReplayError::UnknownDifficulty {

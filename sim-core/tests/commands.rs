@@ -10,7 +10,7 @@ use sim_core::{Coins, Command, CommandError, Event, Occupant, Terrain, TileOccup
 
 #[test]
 fn an_empty_tick_only_advances_the_tick() {
-    // The second world is never played: `World` is not `Clone` (A22), so the
+    // The second world is never played: `World` is not `Clone`, so the
     // game as it stood before the tick is a world that has not taken it.
     let (mut w, before) = twins();
 

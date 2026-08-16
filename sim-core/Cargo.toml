@@ -15,7 +15,8 @@ blake3 = { workspace = true }
 
 # Hooks on the state, for tests — other crates' since phase 08, this crate's own
 # since phase 13. Mostly direct mutation, and not an extension of the API: the
-# only write channel into the core is still the Command queue. Since A22 it also
+# only write channel into the core is still the Command queue. Since `World` stopped
+# being `Clone` in any configuration, it also
 # holds one **read-only** member, `first_difference`, which compares two worlds
 # that played the same game — what the tests do instead of copying one, `World`
 # being no longer Clone.

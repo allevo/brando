@@ -22,7 +22,7 @@ pub struct GridSpec {
 pub struct Header {
     pub format_version: u16,
     pub seed: u64,
-    /// The difficulty profile's **textual** id, not its index (A13).
+    /// The difficulty profile's **textual** id, not its index.
     ///
     /// A recording saying `difficulty: 1` cannot be read, and reordering the
     /// table would silently change the meaning of every save file already
@@ -33,7 +33,7 @@ pub struct Header {
     /// blake3 of the `DataSet`, in hexadecimal so it stays readable in the file.
     ///
     /// If the balancing changes, the replay fails immediately and for the right
-    /// reason instead of diverging ten ticks later through a side effect (A2).
+    /// reason instead of diverging ten ticks later through a side effect.
     pub dataset_hash: String,
 }
 

@@ -241,8 +241,8 @@ fn the_capacity_runs_out_in_residents() {
 
 /// And what that same rule does when a house weighs nothing.
 ///
-/// A12 counts capacity in residents; A13's `hard` profile builds every house
-/// with zero of them. Where the two meet, `pick_within_capacity`'s
+/// Capacity is counted in residents, and the `hard` difficulty profile builds
+/// every house with zero of them. Where the two meet, `pick_within_capacity`'s
 /// `left.checked_sub(residents)` can never fail, so a provider serves however
 /// many empty houses are in range — here a well declared for four residents
 /// takes seven, and it would take any number.
@@ -250,10 +250,10 @@ fn the_capacity_runs_out_in_residents() {
 /// Defensible on its own terms: an empty house genuinely consumes nothing. But
 /// coverage feeds satisfaction, so on the profile meant to be the hard one a
 /// single small well carries a whole district to the top level for
-/// free. It is a decision and not a bug, it is open as A18, and this test is
-/// here to pin what the game does today so the decision has something concrete
-/// to overturn: when A18 is closed in any direction but "accept it", this goes
-/// red, and that is the point of it.
+/// free. It is a decision and not a bug, and it is the open question at slot
+/// 14.5; this test is here to pin what the game does today so the decision has
+/// something concrete to overturn: when 14.5 is answered in any direction but
+/// "accept it", this goes red, and that is the point of it.
 ///
 /// It is also the only test in the suite that runs on `hard` other than the
 /// one in `commands.rs` that checks the knob itself.
@@ -343,7 +343,7 @@ fn breaking_the_road_uncovers_the_houses_beyond_the_break() {
 /// statement while `residents` could not change. Since phase 13 it can — decay
 /// evicts — and since phase 14 it will constantly, so the invariant is written
 /// in the form that survives: what invalidates the coverage is the population
-/// moving, and an empty tick that moves nobody has to cost nothing (A12).
+/// moving, and an empty tick that moves nobody has to cost nothing.
 ///
 /// The run is long enough to cross two monthly reviews, and the houses do level
 /// up inside it: **levelling up must not invalidate anything**, because it
@@ -413,7 +413,7 @@ proptest! {
         // phase 14, step 6 moves the population after step 3 has assigned, so
         // with the real rates the two diverge on nearly every tick — not
         // because of a bug, but because the stored coverage is one step behind
-        // by design (A12). Put the production rates back and the project's most
+        // by design. Put the production rates back and the project's most
         // valuable oracle stops checking anything, without ever going red.
         //
         // What the real rates need is a different question, and

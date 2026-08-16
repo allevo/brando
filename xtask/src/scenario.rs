@@ -15,7 +15,7 @@ pub struct Scenario {
     pub seed: u64,
     pub side: u16,
     /// The profile the scenario is played on. It is state, so it travels in the
-    /// recording's header and goes into the hash (A13).
+    /// recording's header and goes into the hash.
     pub difficulty: DifficultyId,
     /// The commands to apply, each with the tick it belongs to.
     pub commands: Vec<(u32, Command)>,

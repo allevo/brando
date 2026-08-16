@@ -1,13 +1,14 @@
 //! The dataset hash.
 //!
 //! It feeds the hasher field by field in an order spelled out here explicitly,
-//! instead of serialising with serde (A3): with serde the hash would depend on
+//! instead of serialising with serde: with serde the hash would depend on
 //! the order the fields are declared in, and moving a field — a refactor with
 //! no semantic consequences — would invalidate every recording.
 //!
 //! Corollary: adding a field to the tables requires adding it here by hand. If
 //! that is not done, a balance change on that field will not make the replays
-//! fail. It is the deliberate cost of A3.
+//! fail. It is the deliberate cost of hashing by hand instead of delegating to
+//! serde.
 
 use std::collections::BTreeMap;
 
@@ -34,7 +35,7 @@ pub(crate) fn dataset_hash(
     // --- rules ---
     // Destructured, not accessed field by field: the exhaustive pattern stops
     // compiling the moment a field is added to the table, which is the cheapest
-    // possible reminder that A3's cost has to be paid here by hand.
+    // possible reminder that a hand-written hash has to be extended by hand.
     let Rules {
         ticks_per_month,
         months_per_year,

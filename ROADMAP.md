@@ -1,131 +1,85 @@
 # Roadmap
 
-**This file answers one question: what is next?** It holds the future and the undecided, and it is
-the **only** place that states how far the tree has got. If another document tells you what is
-implemented, that document is wrong and should be pointed here instead.
+**What is done, what is next, and what is not decided.** This is the only file that states how far the
+tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> ## Implemented through phase 14.7
->
-> Everything up to and including [phase 14](plan/14-births-deaths.md) — births and deaths — plus the
-> bug hunt that follows phase 13, the vocabulary review after that,
-> [phase 14.4](plan/14.4-building-kind.md), in which a building started declaring its role, the
-> batch of 2026-08-14 that took `Clone` off `World` ([A22](DECISIONS.md)), and
-> [phase 14.7](plan/14.7-half-numbers.md), which made this line's own number readable.
-> **M0 is complete; M1 is in progress.**
+> **Implemented through phase 14.9.6.** M0 is complete; M1 is in progress.
 
-What runs today: a grid with roads and connected components, aggregate service coverage over walked
-distance, food production and consumption, difficulty profiles, house satisfaction, house levels with
-a monthly review, and aggregated births and deaths. Six of the ten tick steps are live —
-see [ARCHITECTURE.md](ARCHITECTURE.md) for which, and [RULES.md](RULES.md) for what they do.
+## Done
 
-## How to read the numbering
+| # | What | When |
+|---|---|---|
+| 14.5.5 | [The constitution](plan/14.5.5-the-constitution.md) — D1–D7, settled before the first line of code and binding on all of it | 2026-08-08 |
+| 00–09 | [M0 — foundations](plan/00-workspace.md): workspace, core types, RNG, `sim-data`, world and tick and commands, roads, coverage, farm and food, replay hashing, invariants | 2026-08-08 |
+| 11 | [Difficulty](plan/11-difficulty.md) | 2026-08-10 |
+| 12 | [Satisfaction](plan/12-satisfaction.md) | 2026-08-10 |
+| 13 | [House levels](plan/13-house-levels.md) | 2026-08-10 |
+| — | Bug hunt — six latent findings; five were bugs and were fixed, the sixth is the open question at 14.5 | 2026-08-11 |
+| — | Vocabulary review — renames only, no hash moved; it is where the naming rule in `CLAUDE.md` comes from | 2026-08-12 |
+| 14 | [Births and deaths](plan/14-births-deaths.md) | 2026-08-12 |
+| 14.4 | [A building says what it is](plan/14.4-building-kind.md) | 2026-08-14 |
+| — | `World` stopped being `Clone` in any configuration, and a compile-time check says so | 2026-08-14 |
+| 14.7 | [A half number is read, not cut short](plan/14.7-half-numbers.md) | 2026-08-14 |
+| — | Decisions review — the register was cut down to the decisions actually taken, one task before it was removed altogether | 2026-08-15 |
+| 14.8 | [Every task says what it is](plan/14.8-every-task-says-what-it-is.md) — front matter, checked; the four unnumbered documents leave | 2026-08-15 |
+| 14.9 | [The decisions live where they are cited](plan/14.9-decisions-live-where-they-are-cited.md) — the register is gone; every rule is stated where it binds | 2026-08-15 |
+| 14.9.5 | [Writing a task is a procedure](plan/14.9.5-writing-a-task-is-a-procedure.md) — the task mechanics leave `CLAUDE.md` for a skill, whose template is checked against the code | 2026-08-15 |
+| 14.9.6 | [An id sorts the same way everywhere](plan/14.9.6-an-id-sorts-the-same-way-everywhere.md) — a number after the first is a single digit, so a listing runs the way the numbers do | 2026-08-15 |
 
-Phases are whole numbers and come from [plan/README.md](plan/README.md), and a whole number carries a
-claim: **this phase reads the state the one before it introduced.** **A half number is work that falls
-between two whole phases and makes no such claim.**
-
-Almost always that work is a **decision that has to be closed before the next whole phase can start**.
-Those are marked `TO_BE_DECIDED`, each one names its entry in [DECISIONS.md](DECISIONS.md), and
-`cargo xtask doc-check` enforces the direction that matters: every decision left open in
-`DECISIONS.md` holds a half-numbered slot here. The converse does not hold — a phase that depends on
-nothing has no place in the whole-numbered chain either, and takes a half number too.
-
-A half number is not optional work you may skip. It exists because an open decision that lives only
-as prose in a register is an open decision nobody sees until it bites — which is exactly what
-happened to A17 and A18, both of which stayed invisible while four phases were planned on top of
-them.
-
-`doc-check` reads a half number **as a number**, comparing the parts one at a time, so `14.10`
-follows `14.9` and the slots between two whole phases never run out. Until
-[phase 14.7](plan/14.7-half-numbers.md) it stopped reading at the dot, and the "implemented through"
-line above could name a phase nobody had built without anything failing.
-
-## Next — the rest of M1, a minimal game loop
+## To do — the rest of M1
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
-| **14.5** | **TO_BE_DECIDED — [A18](DECISIONS.md#a18--an-empty-house-consumes-no-capacity):** does an empty house consume provider capacity? | a decision written into A18, plus whichever test the answer implies | phase 15 |
-| **14.6** | **TO_BE_DECIDED — [A20](DECISIONS.md#a20--a-house-is-covered-by-services-its-level-does-not-require):** is a house covered by, and fed by, a service its own level does not require? | a decision written into A20, plus a test that changes its outcome rather than breaking | phase 15 |
+| **14.5** | **Open question — [An empty house consumes no capacity](plan/14.5-an-empty-house-consumes-no-capacity.md):** does an empty house consume provider capacity? | an answer written into this task, plus whichever test the answer implies | phase 15 |
+| **14.6** | **Open question — [A house is covered by services its level does not require](plan/14.6-a-house-is-covered-by-services-its-level-does-not-require.md):** is a house covered by, and fed by, a service its own level does not require? | an answer written into this task, plus a test that changes its outcome rather than breaking | phase 15 |
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 17 | [`sim-scenario`](plan/17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
-| 18 | [Invariants and closing M1](plan/18-invariants-closeout-m1.md) | the new invariants are green property tests, and A12's cost is measured and attributed | |
-| **18.5** | **TO_BE_DECIDED — [A17](DECISIONS.md#a17--the-per-tick-recomputation-cost):** what to do about the per-tick recomputation cost | a decision written into A17, and a measurement that survives it | M2 |
+| 18 | [Invariants and closing M1](plan/18-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |
+| **18.5** | **Open question — [The per-tick recomputation cost](plan/18.5-the-per-tick-recomputation-cost.md):** what to do about the per-tick recomputation cost | an answer written into this task, and a measurement that survives it | M2 |
 
-Why 14.5 leads the rest: A18 is one line to change **now** and a regeneration somebody has to
-attribute **later**. Phase 14 made zero residents reachable on every difficulty profile, including inside the
-two committed recordings, so the window in which closing it is free has already begun to shut.
+## What next
 
-Why 14.6 sits next to it: it is the same question asked about a different house. Both are about who
-consumes a provider's places, both are answered inside `pick_within_capacity` and its caller, and
-phase 15 is what turns either from a curiosity into a real claim on a farm — it fills the empty
-houses of one and multiplies the huts of the other. Answered in one pass they cost one regeneration
-instead of two.
+Beyond M1, and none of it planned in detail: a milestone is planned only once the one before it has
+closed, so the balancing is decided after watching real ticks run rather than before.
 
-Why 18.5 blocks M2: A12's cost is paid on every game and therefore on every batch of automatic
-balancing, which is the project's second non-functional requirement. Phase 14 measured it and found
-that two of the three expectations A17 was resting on were wrong — in particular the multiplier `J`,
-hoped to be small, is **1**. No countermeasure that relies on `J` being small is worth building.
+- **[Terrain: relief and cost](plan/19-terrain.md)** — the map stops being flat: tiles gain a ground
+  height, a building pays to flatten what it stands on and is refused on a cliff, and a map becomes a
+  file with a hash. **Comes before M2**, because the renderer has to be built against the map model it
+  will really draw.
+- **[Things on the ground, and the cost of clearing them](plan/20-ground-clearing.md)** — the other
+  half of *the site you chose is part of what the building costs*. Waits on the terrain.
+- **[Bridges](plan/21-bridges.md)** — a bridge makes two bank-side networks one region, and demolishing
+  it splits them again. Waits on the terrain.
+- **M2 — the two clients, in parallel.** `game-bevy` renders M1's state isometrically with placeholder
+  assets, the point being to validate the snapshot/event boundary rather than the graphics. Alongside
+  it: a heuristic bot that completes scenario 1, and an evaluator.
+- **M3 — depth.** Production chains with real logistics walkers; the `CivilizationRules` trait arrives
+  **together with** the second civilisation and not before; an LLM adapter on top of a bot that works.
 
-## Before M2 — the map stops being flat
+### How the AI is meant to drive it
 
-| # | What | Verified by | Blocks |
-|---|---|---|---|
-| 19 | [Terrain: relief and cost](plan/19-terrain.md) | the same building costs more on a hillside than on the flat, and the treasury invariant stays an **exact equality** | M2 |
+Neither milestone is planned in detail, but four constraints on the AI player are settled and shape
+both. They live here, and not in a plan file, because the phases that build them are not written.
 
-One phase sits between M1 and M2, and it is a deliberate exception to the rule below. Every map in the
-tree today is one terrain repeated: tiles gain a ground height, a building pays for the ground it has
-to flatten and is refused on a cliff, and a map becomes a file with a hash rather than a single value
-in the recording's header.
+The loop is: **the LLM produces `Intent`s → the bot compiles them into `Command`s → the core runs →
+the evaluator judges the saved state → feedback to the LLM.**
 
-It is planned ahead of its milestone because **M2's renderer depends on its shape**. A 2.5D renderer
-built for a flat map is a different renderer from one that draws relief, and building it flat and then
-reworking it puts the rework on the part of the tree with the fewest tests. What is fixed now is only
-the structure — the packing, the map format, where the rule sits in `place_building`. The numbers, what
-a step of slope costs and where the refusal falls, are set when the phase runs.
+- **The LLM never reasons in absolute coordinates.** It is bad at it and produces unplayable plans. It
+  works in intents shaped like `BuildDistrict { kind, near, size }`, `EnsureService { service, area }`,
+  `SetupProduction { chain, target_rate }` and `AdjustTax { delta }` — illustrations of the *shape* of
+  an intent, not approved spellings. The naming rule in `CLAUDE.md` binds the real names when they
+  are written.
+- **A failure is descriptive, and the failure is the feedback.** The bot returns a `Vec<Command>` or a
+  failure that says what was wrong and with which numbers — how much money was needed and how much
+  there was. That message goes back to the LLM and closes the loop.
+- **The observation is a summary, never the serialised state.** Aggregate indicators, a list of
+  problems ordered by severity, and an ASCII map downsampled to about 40×40 with one symbol per zone.
+  Far more effective than any detailed JSON.
+- **The evaluator produces a vector of metrics, not a scalar** — mandatory objectives completed,
+  optional ones, ticks taken, stability as the variance of the treasury, resilience as collapses in
+  population. The scalar is derived afterwards, so the formula can change without redoing the runs.
 
-The phase file proposes that it add **no new `Terrain` variant** — with a ground height on the tile, a
-mountain is high `Rock` and a hill is high `Plain`, so the frozen order need never move. That, and
-whether a map is an asset or a seed, are the two decisions the phase turns on. **Neither is taken.**
-They are closed *inside* phase 19 and written into [DECISIONS.md](DECISIONS.md) then, which is why
-neither holds a half-numbered slot here: nothing is planned on top of them, so neither can go
-invisible the way A17 and A18 did.
-
-## Waiting on the map — added, not scheduled
-
-| # | What | Verified by | Blocks |
-|---|---|---|---|
-| 20 | [Things on the ground, and the cost of clearing them](plan/20-ground-clearing.md) | the same building costs more on wooded ground than on bare ground, and the treasury invariant stays an **exact equality** | |
-| 21 | [Bridges](plan/21-bridges.md) | a bridge makes two bank-side networks one region, and demolishing it splits them again | |
-
-Both depend on 19 and on nothing else. **Neither has a place in the order yet:** whether they come
-before M2's renderer, alongside it, or after it is undecided, and the honest reason is that phase 19
-has not run. What relief really costs to draw and to play is the fact that decides it, and that fact
-does not exist yet.
-
-They are here rather than under "beyond" because they are not sketches of a milestone — they are two
-named phases with a dependency and a goal, taken straight out of phase 19's own "out of scope" list.
-20 is the other half of the rule phase 19 introduces: *the site you chose is part of what the building
-costs*, slope being the first half and what is standing on the ground the second. 21 is the phase that
-lets phase 19's refusal to load a severed map be relaxed — that refusal exists precisely because the
-player has no way to cross water yet.
-
-Their files hold the goal and the open questions, not a design, and say so in their headers.
-
-## Beyond M1
-
-Sketched, not planned. The rule this project follows is that a milestone is planned only once the
-previous one has closed, so that the balancing is decided after watching real ticks run rather than
-before. [plan/10-beyond-m0.md](plan/10-beyond-m0.md) is the historical sketch of M2 and M3, kept
-unrewritten so it can be compared with what the real plan turned out to be.
-
-**M2 — the two clients, in parallel.** `game-bevy` renders M1's state isometrically with placeholder
-assets, the point being to validate the snapshot/event boundary rather than the graphics. In
-parallel: a heuristic bot that completes scenario 1, and an evaluator.
-
-**M3 — depth.** Production chains with real logistics walkers. The `CivilizationRules` trait arrives
-**together with** the second civilisation and not before. An LLM adapter on top of a bot that already
-works.
-
-Six of the ten crates in [ARCHITECTURE.md](ARCHITECTURE.md) do not exist yet, deliberately: empty
-crates scaffolded in advance are surface that invites you to fill them.
+The AI player only ever plays scenarios, with explicit objectives, and the evaluator scores those
+(D7). The determinism log records the primitive `Command`s (D4); the `Intent`s are kept as metadata
+for analysis.

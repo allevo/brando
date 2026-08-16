@@ -1,7 +1,13 @@
+---
+id: 00
+kind: phase
+status: implemented
+opened: 2026-08-08
+closed: 2026-08-08
+---
+
 # Phase 00 — Workspace and guardrails
 
-> **Status: implemented — M0.**
->
 > It records how the phase was planned and how it went, frozen as it was written. It is
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).

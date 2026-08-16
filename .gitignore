@@ -1,1 +1,5 @@
 /target
+# One machine's settings and one runtime lock. Everything else under `.claude`
+# is part of how the repository is worked on and is committed with it.
+/.claude/settings.local.json
+/.claude/scheduled_tasks.lock

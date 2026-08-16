@@ -29,7 +29,7 @@ occupant never share one.
 
 Each `terrain` declares whether it is `buildable`, whether it is `walkable`, and its `road_cost`.
 `buildable` says a building may stand there; `walkable` says a road may be laid there. The two are
-separate questions, and the three terrains answer them three different ways:
+separate questions, and the terrains answer them differently:
 
 | Terrain | `buildable` | `walkable` | What it is |
 |---|---|---|---|
@@ -68,8 +68,8 @@ There are two roles, and a building has exactly one. A building whose role is `h
 its `kind`, its `range_per_level` and its `capacity_per_level`, one value per level. Declaring a
 service on a house, or none on a provider, is refused when the tables are loaded.
 
-A `house`'s `required_services` is the union of what its levels require. Three kinds of building
-exist:
+A `house`'s `required_services` is the union of what its levels require. The kinds the tables declare
+today:
 
 | Kind | Role | What it needs | What it gives |
 |---|---|---|---|
@@ -80,8 +80,7 @@ exist:
 **Producing is not a role.** The `farm` is a `provider` that also produces, so what it grows is
 declared beside its role rather than instead of it.
 
-Which kinds exist is data, not code: this list is what the tables declare today, and a table that
-adds a kind adds it to the game.
+Which kinds exist is data, not code: a table that adds a kind adds it to the game.
 
 A building's own level decides which entry of `range_per_level` and `capacity_per_level` it reads.
 Only a `house` ever changes level.
@@ -270,8 +269,8 @@ all at once, a month later.
 
 ## The order of a day
 
-What happens before what inside a tick is a rule of the game. Six things happen that a player can
-see, in this order:
+What happens before what inside a tick is a rule of the game. What a player can see happens in this
+order:
 
 - The commands are applied. An invalid one is discarded and reported, and does not interrupt the tick
   or the commands that follow it.
@@ -281,7 +280,7 @@ see, in this order:
 - On a month boundary, the houses are reviewed.
 - Deaths, then births.
 
-Three of those orderings are observable. The houses eat after the coverage is settled, so a house
+These orderings are observable. The houses eat after the coverage is settled, so a house
 covered today eats today. Satisfaction moves before the review that reads it, so a month of service
 counts at the review that closes it. Departures come before arrivals, so a house that loses somebody
 can take them back the same day.
@@ -317,7 +316,7 @@ report, not a subtle misbehaviour at run time.
 | `deaths_per_thousand_per_month_when_unserved` strictly worse than `deaths_per_thousand_per_month` | losing a service costs the city nothing |
 | No lone zero rate in `demographics` | a table somebody half filled in |
 
-Two of these are asked only of a table that describes demographics at all: every rate at zero
+Some of these are asked only of a table that describes demographics at all: every rate at zero
 switches births and deaths off, which is a configuration and not a mistake. And the comparison
 between the two rates is the **best case, and only the best case** — a city at full satisfaction with
 every house served. It guarantees that such a city grows. A city doing badly is meant to shrink.
@@ -331,7 +330,7 @@ Changing one of these changes what the game *is*, so there is nothing to tune.
 | A building that requires services and provides none is a house | `sim-core/src/data.rs` |
 | A service reaches a house by coverage over walked distance, never by a walker carrying it (D2). The walkers the player sees are decorative and live in the renderer | `sim-core/src/coverage.rs` |
 | A house is served whole or left out whole, and its residents eat whole or not at all | `sim-core/src/coverage.rs`, `sim-core/src/production.rs` |
-| Money has no fractions, and quantities do (A1) | `sim-core/src/units.rs` |
+| Money has no fractions, and quantities do | `sim-core/src/units.rs` |
 | An invalid command is discarded and reported, and does not interrupt the tick | `sim-core/src/tick.rs` |
 | Which services exist at all (D6) — kinds of building, by contrast, **are** data | `sim-core/src/service.rs` |
 | Which terrains exist at all (D6), and that the table describes every one of them | `sim-core/src/grid.rs` |
@@ -342,8 +341,8 @@ index can address, the most levels a per-level table can hold, how many thousand
 version stamped into a recording, and how often a recording writes a hash down. Each is the
 definition of a representation or of a file format, never of a rule.
 
-If you find yourself wanting to tune something on this page, that is a design change worth an entry
-in [DECISIONS.md](DECISIONS.md) — not an edit.
+If you find yourself wanting to tune something on this page, that is a design change worth a task of
+its own in [ROADMAP.md](ROADMAP.md) — not an edit.
 
 ---
 

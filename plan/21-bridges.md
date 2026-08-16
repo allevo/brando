@@ -1,7 +1,12 @@
+---
+id: 21
+kind: phase
+status: not-yet-built
+opened: 2026-08-13
+---
+
 # Phase 21 — Bridges
 
-> **Status: not yet built.**
->
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 >

@@ -1,7 +1,12 @@
+---
+id: 19
+kind: phase
+status: not-yet-built
+opened: 2026-08-13
+---
+
 # Phase 19 — Terrain: relief and cost
 
-> **Status: not yet built.**
->
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
@@ -9,11 +14,16 @@
 and the map it stands on is loaded from a file rather than being one terrain repeated.
 **Depends on:** 18.
 **Size:** L.
-**Decisions involved:** [A2](../DECISIONS.md), [A4](../DECISIONS.md), D4, D6.
+**Decisions involved:** A2, A4, D4, D6.
 **Decisions it will produce, and which are *not* taken yet:** the tile's layout and the range of a
 ground height; and whether a map is an asset with a hash or something generated from the seed. This
-document argues for an answer to each — that is what a plan is — but the entries go into
-`DECISIONS.md` when the phase runs and its answers are the real ones. Their numbers are deliberately
+document argues for an answer to each — that is what a plan is — but the answers are written down
+when the phase runs and they are the real ones.
+
+> **Amended 2026-08-15.** `DECISIONS.md` no longer exists and there are no `A<n>` tags to add: a
+> decision is recorded in full in the comment on the code it binds, and nowhere else. The paragraph's
+> point survives the change unaltered — an answer is written down once the work has settled it, and a
+> number is never reserved ahead of time. Their numbers are deliberately
 not reserved here: a reserved number is a number that goes wrong the moment other work lands first.
 Neither holds a `TO_BE_DECIDED` slot either, because nothing is planned on top of them — they are
 closed by the phase that needs them, in the same commit. The doc comments sketched below therefore

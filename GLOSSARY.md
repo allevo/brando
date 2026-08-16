@@ -2,7 +2,7 @@
 
 This file exists for one reason: so that no word in the code sends you to a dictionary.
 
-Four sections:
+Sections:
 
 1. **[Words worth a definition](#words-worth-a-definition)** — the words used in identifiers that
    are not everyday vocabulary, each with a plain explanation.
@@ -13,8 +13,8 @@ Four sections:
 4. **[Frozen strings and values](#frozen-strings-and-values)** — what is load-bearing, and why
    touching it would break something.
 
-The rule that decides which words get in at all is **A19** in
-[DECISIONS.md](DECISIONS.md): a hard word earns its place when it is the domain's
+The rule that decides which words get in at all is the naming rule in
+[CLAUDE.md](CLAUDE.md): a hard word earns its place when it is the domain's
 own word, and then it is defined here. A hard word that is merely a synonym choice does not.
 
 ---
@@ -42,7 +42,7 @@ The rule is **plain words over jargon**.
 | **thousandths** | How fractional amounts are held without floats: `Milli(i32)` counts thousandths of a unit, so 1500 means one and a half. Floats are banned in the state (D4) because they make two machines disagree; thousandths never do. |
 | **checkpoint** | A save point in a recorded game: every 30 ticks, the state's hash is written down so a later run can be compared against it. |
 | **invariant** | Something that has to be true after *every* possible sequence of moves — "population is never negative". If one breaks, there is a real bug. |
-| **absorbing state** | A situation you can get into and never get out of, no matter what you build. Hunger used to be one; it was a bug, and fixing it is written up in A5. |
+| **absorbing state** | A situation you can get into and never get out of, no matter what you build. Hunger used to be one; it was a bug, and it was fixed by making a producer's declared capacity consistent with what its output sustains. |
 | **dirty (flag)** | A note saying "this has to be recomputed next tick". Not "unclean" — the opposite of "up to date". |
 | **scratch (buffer)** | A piece of scrap memory reused between calls so it does not have to be allocated again each time. |
 | **seed** | The one number a whole game is generated from. Same seed + same commands ⇒ exactly the same game, down to the bit. |
@@ -60,15 +60,17 @@ The rule is **plain words over jargon**.
 | **flow** | One of the four ways the population moves — births, deaths, immigration, emigration. Each keeps its own running total, and the four together are what makes conservation an exact equality. |
 | **jitter** | A small random wobble added to a rate, so two games with different seeds do not play out identically. Symmetric, so it does not move the average. |
 | **eligible** | Whoever a rate is counted against. Births are counted against the residents of houses with room to spare and a satisfaction above the threshold — *not* against the whole population, which is what makes a full city stop growing on its own. |
+| **attractiveness** | One number saying how much the city draws new people in. It is what decides whether anybody moves there, and it is read for the whole city rather than for one house. |
 | **ground height** | How high the ground is on one tile, counted in **steps** rather than in any unit of length. The grid's own `height` is its size in tiles, which is a different thing — hence the longer name. A step is a unit of gameplay: the renderer multiplies it by a scale of its own to get pixels. |
 | **slope** | The difference between the highest and the lowest ground height across the tiles a building sits on. Zero means level ground. It is worked out when it is needed and never stored, so it cannot disagree with the heights it comes from. |
+| **task** | One document under `plan/`, and one piece of work: a single goal, closed by a command that answers yes or no. It is the word for the *document*, not a second word for **phase** — a phase is one kind a task can be, alongside an open question and the constitution. |
+| **front matter** | The block of `key: value` lines between two `---` lines at the very top of a task, holding its id, kind, status and dates. It is the machine-readable half of a task; everything below it is prose for the reader. |
+| **constitution** | The rules `D1`–`D7`, settled before the first line of code and binding on all of it. They are the only rules that live in a document rather than in the comment on the code they bind, because they bind code that does not exist yet. |
 
-Three words are defined here but do not exist in the code yet, because the phases that introduce them
-are not written: **attractiveness** (one number saying how much the city draws new people in), which
-arrives with phase 15, and **ground height** and **slope**, which arrive with phase 19. Until then,
-finding them in `plan/` and not in a `.rs` is expected, not a stale entry.
-**jitter** was in this note until phase 14, and is now in the table above because it is in
-`demographics.rs`.
+Some words above are defined here but do not exist in the code yet, because the phases that introduce
+them are not written: **attractiveness** arrives with phase 15, **ground height** and **slope** with
+phase 19. Until then, finding one in `plan/` and not in a `.rs` is expected, not a stale entry.
+**jitter** was in this note until phase 14, and is out of it because it is in `demographics.rs`.
 
 ---
 
@@ -103,8 +105,8 @@ under `plan/`, which are a record of decisions as they were taken and are not re
 | **desperate** / **thriving** | The bottom and top bands of a house's mood. | `Mood::Awful`, `Mood::Great` |
 
 The phase documents also name a few types by their old spelling — `RngDomain`, `InsufficientFunds`,
-`OutOfBounds`, `UnsuitableTerrain`. A19 lists every rename with its replacement, and nothing but the
-name changed in any of them. Those documents are frozen records and are not corrected, so the old
+`OutOfBounds`, `UnsuitableTerrain`. The vocabulary review of 2026-08-12 renamed them and nothing but
+the name changed in any of them. Those documents are frozen records and are not corrected, so the old
 spellings stay: where one would mislead, an amendment says so under the sentence that uses it.
 
 ---
@@ -128,5 +130,5 @@ history and breaks the recorded replays.
 | `FORMAT_VERSION` | `2` | The shape of a save file. It went to `2` in phase 11, when the header started carrying the difficulty. It goes up when the shape changes, not when a name does. |
 | `CHECKPOINT_EVERY` | `30` | How far apart the committed checkpoints are. |
 | Benchmark labels `A.`–`G.` | — | `plan/09-invariants-closeout.md` records the end-of-M0 timings against those letters, and `xtask/src/bench.rs` carries them as its reference figures. `H`–`J` were added by phase 14 and are measured with `--zero-demographics`. |
-| Design codes `D1`–`D7` | — | Defined in `CLAUDE.md`, cited by id from the `.rs` sources. `doc-check` fails on a citation whose decision does not exist. |
-| Decision codes `A<n>`, phase numbers `NN` and half numbers `NN.N` | — | Decisions are defined in `DECISIONS.md`, cited by id and **never by path**, so that moving a file breaks nothing; `doc-check` enforces both halves of that. A phase number lives in its file's name, and a half number is work falling between two whole phases — `doc-check` compares its parts one at a time, so `14.10` follows `14.9`. How far the numbers have got is `ROADMAP.md`'s answer and no other file's. |
+| Design codes `D1`–`D7` | — | The constitution: defined in the one task whose `kind` is `constitution`, and cited by id from the `.rs` sources — **never by path**, so that moving that file breaks nothing. `doc-check` enforces both halves, and refuses any other id letter: there used to be an `A<n>` namespace for implementation decisions, and it was removed because every rule in it was already stated in full at the place it binds. |
+| Task ids `NN` and half numbers `NN.N`, `NN.N.N` | — | A task's id is the number its file name opens with, stated again in its front matter and checked against the name. A half number is work falling between two whole phases — `doc-check` compares the parts one at a time, so `14.5.5` sits between `14.5` and `14.6`. The first part is written with two digits and every part after it with one, so that a listing, which compares bytes rather than numbers, runs in the same order: the slot above `14.9` is `14.9.5` and never `14.10`. How far the numbers have got is `ROADMAP.md`'s answer and no other file's. |

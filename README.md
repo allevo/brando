@@ -18,29 +18,25 @@ Read these in order.
 2. **[RULES.md](RULES.md)** — what the game actually does, and which parameter tunes each rule.
 3. **[ROADMAP.md](ROADMAP.md)** — how far the tree has got, and what comes next.
 
-Then, as you need them: **[DECISIONS.md](DECISIONS.md)** when you want to know *why* something is the
-way it is, and **[GLOSSARY.md](GLOSSARY.md)** when a word is unfamiliar — no word in this codebase
-should send you to a dictionary.
+Then **[GLOSSARY.md](GLOSSARY.md)** when a word is unfamiliar — no word in this codebase should send
+you to a dictionary.
+
+There is no separate document saying *why*. A rule the code has is explained in full in the comment
+on that code, so the answer is next to the thing you are reading. The rules taken before the
+first line of code, and binding on all of it, are the constitution in
+**[plan/14.5.5-the-constitution.md](plan/14.5.5-the-constitution.md)**.
 
 ## Which file answers which question
 
 Each document answers exactly one question, and nothing else may answer it. Two documents that can
-both answer the same question will eventually disagree — that is the whole reason for this table.
+both answer the same question will eventually disagree — which is why the table saying who owns which
+question, and how each file is updated, exists in exactly one place: **[CLAUDE.md](CLAUDE.md)**, which
+answers *how do I work here?* and is the first thing to read before changing any of them.
 
-| Question | File | Update it |
-|---|---|---|
-| Where does the code live, how does data flow? | [ARCHITECTURE.md](ARCHITECTURE.md) | in place, in the same commit |
-| What does the game do? | [RULES.md](RULES.md) | in place, in the same commit |
-| Why is it this way? | [DECISIONS.md](DECISIONS.md) | **append only** — never rewrite an entry |
-| What is next, what is undecided? | [ROADMAP.md](ROADMAP.md) | in place, freely |
-| What does this word mean? | [GLOSSARY.md](GLOSSARY.md) | in place |
-| How do I work in this repo? | [CLAUDE.md](CLAUDE.md) | in place |
-| What happened, in order? | [plan/](plan/README.md) | **frozen** — amend with a dated block, never rewrite |
-
-The distinction that matters: **`plan/` describes moments in the past and is never edited to match the
-present.** Everything at the root describes the present and is kept true. A phase document that
-contradicts the code is not a bug in the document — it is history, and it carries a status header
-saying so.
+The distinction that matters on arrival: **`plan/` describes moments in the past and is never edited
+to match the present.** Everything at the root describes the present and is kept true. A phase
+document that contradicts the code is not a bug in the document — it is history, and it carries a
+status header saying so.
 
 ## Running it
 
@@ -73,6 +69,6 @@ xtask/         headless runner, recordings, benchmarks, doc checks
 plan/          the development record, phase by phase — history, not reference
 ```
 
-Dependencies always point towards `sim-core`. Six further crates are planned and deliberately not
+Dependencies always point towards `sim-core`. Further crates are planned and deliberately not
 scaffolded yet; [ARCHITECTURE.md](ARCHITECTURE.md) lists them and [ROADMAP.md](ROADMAP.md) says when
 they arrive.

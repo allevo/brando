@@ -113,7 +113,7 @@ pub fn dataset() -> Arc<DataSet> {
 ///
 /// It exists for the one thing M0's tables could not express: a house that does
 /// **not** require a service the coverage reaches it with anyway. Coverage
-/// never reads `required_services` (the hole A9 names), so a house that requires
+/// never reads `required_services`, which is the hole, so a house that requires
 /// only water is still assigned a farm — and its food satisfaction has to stay
 /// still all the same.
 pub fn dataset_where_a_house_requires(required: &[ServiceKind]) -> Arc<DataSet> {
@@ -373,7 +373,7 @@ pub fn difficulty(data: &DataSet, id: &str) -> DifficultyId {
         .unwrap_or_else(|| panic!("the fixture must contain the '{id}' profile"))
 }
 
-/// A test world: a 32x32 grid of plain (A4), fixed seed.
+/// A test world: a 32x32 grid of plain, fixed seed.
 pub fn world() -> World {
     world_of(32, 32)
 }
@@ -418,14 +418,14 @@ pub fn world_seeded_with(data: Arc<DataSet>, w: u16, h: u16, profile: &str, seed
 /// the same seed.
 ///
 /// It is what a test uses in place of copying a world, which `World` does not
-/// allow (A22). A world is `seed + Vec<Command>` (D4), so the way to a second
+/// allow. A world is `seed + Vec<Command>` (D4), so the way to a second
 /// world holding a given state is to play the same game again — and the pair
 /// says something the copy could not: *a tick in which every command was
 /// rejected leaves the world where an empty tick would have left it*.
 ///
 /// The two share one `Arc<DataSet>`, so the tables are the same tables and not
 /// merely equal ones. That is also the reason the field is an `Arc` at all
-/// (A8): the second world costs a refcount bump.
+///: the second world costs a refcount bump.
 pub fn twins() -> (World, World) {
     twins_of(32, 32)
 }

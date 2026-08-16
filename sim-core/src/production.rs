@@ -1,7 +1,7 @@
 //! Production and consumption (step 4 of the tick).
 //!
 //! In M0 the farm is a coverage provider just like the well: it produces into a
-//! local stock and the houses it covers consume from there (A5). It is not the
+//! local stock and the houses it covers consume from there. It is not the
 //! final production chain — warehouses and real logistics walkers are M3 (D3) —
 //! but it is the smallest version that closes an observable
 //! production→consumption loop, and it introduces no concept that will have to
@@ -36,11 +36,11 @@ pub struct FoodTotals {
     /// House-ticks in which a house had a food provider assigned and still did
     /// not eat. **It has to stay zero.**
     ///
-    /// It is the observable form of *a house covered by food always eats* (A5),
+    /// It is the observable form of *a house covered by food always eats*,
     /// and it exists because phase 12 took away the other way of checking it:
     /// until then `House::served`'s food bit was written by step 4 and meant
     /// "it ate", so comparing it against the coverage was a real question. Now
-    /// step 3 writes both bits and both mean "covered" (A9), and that
+    /// step 3 writes both bits and both mean "covered", and that
     /// comparison would be `x == x`.
     ///
     /// The check that replaces it is this counter, and it is worth more than
@@ -98,10 +98,11 @@ pub(crate) fn production(world: &mut World) {
     // In HouseId order: it is a deterministic order and it is a game rule, like
     // the (distance, TileIdx) ordering of phase 06.
     //
-    // **Step 4 does not write `House::served` any more** (phase 12, A9). That
+    // **Step 4 does not write `House::served` any more** (phase 12). That
     // bit means "covered", for water and for food alike, and step 3 is the only
     // one that writes it: reading a field with two meanings depending on the
-    // bit was the trap A9 announced, and satisfaction is the first system to
+    // bit was the trap water-as-coverage always carried, and satisfaction is
+    // the first system to
     // read it. What used to be said by rewriting the bit is now said by
     // `covered_but_unfed`, which has to stay at zero.
     // Copied out before the loop rather than read through `world` inside it:
