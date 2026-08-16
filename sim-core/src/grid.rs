@@ -221,11 +221,27 @@ pub enum GridError {
 /// `width` and `height` are `u16` rather than `u8` because the maximum side is
 /// 256, which would not fit in a `u8`: the allowed values are `1..=256`. The
 /// coordinates stay `u8` (0..=255).
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+///
+/// The tiles are a boxed slice and not a `Vec` because a grid is sized once, by
+/// [`Grid::new`], and never grows or shrinks: a map does not gain a row while it
+/// is being played. [`Grid::len`] already states the tile count a second time, as
+/// `width * height`, and a `Vec` would leave the two free to drift — one `push`
+/// and every index past the seam would name a different tile than it did before,
+/// which the state hash would record as a city that had quietly changed. A boxed
+/// slice has no method that could do it, so the two agree by construction rather
+/// than by care.
+///
+/// Deliberately **not** `Serialize`/`Deserialize`. A derived `Deserialize` would
+/// be a second way to build a grid, and one that accepts a tile count disagreeing
+/// with `width * height` — the very thing the boxed slice above rules out. Nothing
+/// needs it: a save file is a seed and a list of commands rather than a dump of the
+/// state (D4), and a recording stores a grid as its width, its height and its
+/// terrain, rebuilt through [`Grid::new`] when it is replayed.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Grid {
     width: u16,
     height: u16,
-    tiles: Vec<Tile>,
+    tiles: Box<[Tile]>,
 }
 
 impl Grid {
@@ -246,7 +262,7 @@ impl Grid {
         Ok(Self {
             width,
             height,
-            tiles: vec![tile; len],
+            tiles: vec![tile; len].into_boxed_slice(),
         })
     }
 
@@ -496,6 +512,27 @@ mod tests {
             let i = g.idx(p).expect("generated pos is in bounds");
             let p2 = g.pos(i).expect("valid index");
             prop_assert_eq!(g.idx(p2), Some(i));
+        }
+
+        /// Every index the grid hands out resolves to a tile, and one past the
+        /// end does not.
+        ///
+        /// The tile count is stated twice — once by `len`, as `width * height`,
+        /// and once by the slice `get` reads — and this is the property that
+        /// says they agree. Failing it is unreachable today, because the slice
+        /// is sized from `len` and nothing can resize it afterwards, and the
+        /// property is written down anyway: a `get` answering `None` here would
+        /// be swallowed in silence by the state hash, which skips an index it
+        /// cannot resolve rather than reporting one.
+        #[test]
+        fn every_index_the_grid_hands_out_resolves((g, _p) in grid_and_pos()) {
+            prop_assert!(g.indices().all(|i| g.get(i).is_some()));
+            // On the largest map the next index wraps to 0, which is a real
+            // tile; anywhere else it is off the end.
+            prop_assert_eq!(
+                g.get(TileIdx::new(g.len() as u16)).is_some(),
+                g.len() == 65_536
+            );
         }
 
         /// Outside the edges there is no index.
