@@ -135,14 +135,15 @@ fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), 
         });
     }
 
-    let def = terrain_def(world, tile.terrain, at)?;
-    if !def.walkable {
+    // Whether a road may be laid here is a fact about the ground and the enum
+    // answers it; only the price comes from the tables.
+    if !tile.terrain.is_walkable() {
         return Err(CommandError::WrongTerrain {
             at,
             terrain: tile.terrain,
         });
     }
-    let cost = def.road_cost;
+    let cost = world.data.road_cost(tile.terrain);
     charge(world, cost)?;
 
     // From here on nothing can fail: no partial mutation.
@@ -195,8 +196,7 @@ fn place_building(
                 occupant: occ.into(),
             });
         }
-        let tdef = terrain_def(world, tile.terrain, *pos)?;
-        if !tdef.buildable {
+        if !tile.terrain.is_buildable() {
             return Err(CommandError::WrongTerrain {
                 at: *pos,
                 terrain: tile.terrain,
@@ -492,17 +492,6 @@ fn house_snapshot(world: &World) -> Vec<HouseState> {
 }
 
 // --- helpers ---------------------------------------------------------------
-
-fn terrain_def(
-    world: &World,
-    terrain: crate::grid::Terrain,
-    at: TilePos,
-) -> Result<&crate::data::TerrainDef, CommandError> {
-    world
-        .data
-        .terrain(terrain)
-        .ok_or(CommandError::WrongTerrain { at, terrain })
-}
 
 /// Takes the cost out of the treasury. A structured error, never a negative
 /// treasury.

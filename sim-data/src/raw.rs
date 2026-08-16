@@ -60,8 +60,6 @@ pub struct RawTerrainTable {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawTerrainDef {
     pub terrain: Terrain,
-    pub buildable: bool,
-    pub walkable: bool,
     pub road_cost: i32,
 }
 

@@ -61,6 +61,16 @@ fn with_rules(rules: &str) -> Result<DataSet, LoadError> {
     )
 }
 
+/// Loads the valid tables, replacing only `terrain.ron`.
+fn with_terrain(terrain: &str) -> Result<DataSet, LoadError> {
+    sim_data::from_ron_str(
+        &valid_rules(),
+        terrain,
+        &valid_buildings(),
+        &valid_difficulty(),
+    )
+}
+
 /// Loads the valid tables, replacing only `difficulty.ron`.
 fn with_difficulty(difficulty: &str) -> Result<DataSet, LoadError> {
     sim_data::from_ron_str(
@@ -81,9 +91,12 @@ fn the_production_tables_load() {
     assert_eq!(d.rules.ticks_per_year(), d.rules.ticks_per_month * 12);
     assert_eq!(d.rules.starting_treasury, Coins::new(1000));
 
-    for t in Terrain::ALL {
-        assert!(d.terrain(t).is_some(), "terrain {t:?} missing");
-    }
+    // Completeness is no longer a question the accessor can answer — it cannot
+    // fail — so assert the costs themselves. Water has no cost to read because
+    // no road reaches it, and rock is dearer than plain, which is the relation
+    // that makes a mountain pass expensive.
+    assert_eq!(d.road_cost(Terrain::Water), Coins::ZERO);
+    assert!(d.road_cost(Terrain::Rock) > d.road_cost(Terrain::Plain));
 
     let house = d.kind_by_id("house").expect("the house exists");
     let well = d.kind_by_id("well").expect("the well exists");
@@ -347,6 +360,64 @@ fn errors_of(loaded: Result<DataSet, LoadError>) -> Vec<(String, ValidationError
         Err(other) => panic!("expected a validation error, found: {other}"),
         Ok(_) => panic!("the broken table passed validation"),
     }
+}
+
+/// The completeness rule the total accessor leans on: `DataSet::road_cost`
+/// cannot fail, so the table forgetting a terrain has to be caught here or the
+/// missing cost silently becomes zero.
+#[test]
+fn a_terrain_left_out_of_the_table_is_refused() {
+    let without_rock = valid_terrain().replacen("        (terrain: Rock,  road_cost: 6),\n", "", 1);
+    let e = errors_of(with_terrain(&without_rock));
+    assert_eq!(
+        e,
+        [(
+            "terrains".to_string(),
+            ValidationErrorKind::MissingTerrain {
+                terrain: Terrain::Rock
+            }
+        )]
+    );
+}
+
+#[test]
+fn a_terrain_declared_twice_is_refused() {
+    let twice = valid_terrain().replacen(
+        "(terrain: Rock,  road_cost: 6),",
+        "(terrain: Rock,  road_cost: 6),\n        (terrain: Rock,  road_cost: 9),",
+        1,
+    );
+    let e = errors_of(with_terrain(&twice));
+    assert_eq!(
+        e,
+        [(
+            "terrains[3].terrain".to_string(),
+            ValidationErrorKind::DuplicateTerrain
+        )]
+    );
+}
+
+/// A cost on ground no road can be laid on is read by nobody. Refusing it is
+/// what stops it looking like a knob: without this, raising water's cost to
+/// make a river expensive to cross would be silently ignored.
+#[test]
+fn a_road_cost_on_ground_no_road_can_reach_is_refused() {
+    let expensive_water = valid_terrain().replacen(
+        "(terrain: Water, road_cost: 0)",
+        "(terrain: Water, road_cost: 50)",
+        1,
+    );
+    let e = errors_of(with_terrain(&expensive_water));
+    assert_eq!(
+        e,
+        [(
+            "terrains[1].road_cost".to_string(),
+            ValidationErrorKind::UnreachableRoadCost {
+                terrain: Terrain::Water,
+                found: 50
+            }
+        )]
+    );
 }
 
 #[test]

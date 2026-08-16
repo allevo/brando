@@ -1,9 +1,17 @@
-// Game properties of the terrains. The Terrain enum lives in sim-core, the
-// numbers live here (D6). Every variant must be listed exactly once.
+// What a road costs to lay on each terrain, and nothing else. Which terrains
+// exist, and which of them a building may stand on or a road may be laid on,
+// are facts about the game and live in the Terrain enum in sim-core; the one
+// thing about a terrain that is a number lives here, because every number does
+// (D6). Every variant must be listed exactly once.
+//
+// Water carries a cost of 0 and nothing ever reads it: no road can be laid on
+// water at all. The row is here because the table describes every terrain, and
+// the loader refuses a non-zero cost on ground no road can reach, so a number
+// nobody reads cannot look like a knob.
 (
     terrains: [
-        (terrain: Plain, buildable: true,  walkable: true,  road_cost: 2),
-        (terrain: Water, buildable: false, walkable: false, road_cost: 0),
-        (terrain: Rock,  buildable: false, walkable: true,  road_cost: 6),
+        (terrain: Plain, road_cost: 2),
+        (terrain: Water, road_cost: 0),
+        (terrain: Rock,  road_cost: 6),
     ],
 )

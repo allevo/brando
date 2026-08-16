@@ -28,7 +28,7 @@ pub use command::{Command, CommandError};
 pub use coverage::Coverage;
 pub use data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, DifficultyId,
-    HouseLevelDef, Inconsistency, Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    HouseLevelDef, Inconsistency, Production, Rules, SatisfactionRules, ServiceDef,
 };
 pub use demographics::{Demographics, Flow, PopulationTotals};
 pub use event::Event;

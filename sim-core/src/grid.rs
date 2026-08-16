@@ -11,8 +11,14 @@ use crate::ids::{TileIdx, TilePos};
 /// Maximum side of the grid. Beyond it, `TileIdx(u16)` would not be enough.
 pub const MAX_SIDE: u16 = 256;
 
-/// The kind of ground on a tile. The numbers that go with it (buildable? road
-/// cost?) do not live here: they come from the `sim-data` tables (D6).
+/// The kind of ground on a tile.
+///
+/// What may be *done* on it lives here, in [`Terrain::is_buildable`] and
+/// [`Terrain::is_walkable`]: those are facts about the ground and not knobs,
+/// and changing one changes what the game is rather than how it is balanced.
+/// What it *costs* does not live here — the price of laying a road on a terrain
+/// is a number, and every number in this game lives in a RON table loaded and
+/// validated at startup (D6).
 ///
 /// The three kinds, in plain terms:
 /// - `Plain` — ordinary flat ground. You can build on it and lay roads on it.
@@ -35,6 +41,50 @@ impl Terrain {
     /// Every variant, in a stable order. `sim-data` uses it to check that the
     /// terrain table is complete.
     pub const ALL: [Terrain; 3] = [Terrain::Plain, Terrain::Water, Terrain::Rock];
+
+    /// How many kinds of ground there are, for the arrays indexed by one.
+    pub const COUNT: usize = Self::ALL.len();
+
+    /// Whether a building may stand on this terrain.
+    ///
+    /// `Plain` is the only ground a building stands on. That is a rule of the
+    /// game and not a balancing knob: letting a house sit on rock would change
+    /// what the map means, where changing what a road costs to cut through rock
+    /// only changes how expensive a mountain pass is. Everything numeric lives
+    /// in the RON tables (D6); a yes or a no is not numeric and lives here.
+    ///
+    /// Written as a match over every variant rather than as a lookup, so a
+    /// terrain added later cannot compile until somebody has said whether you
+    /// can build on it. That guarantee used to come from the tables refusing to
+    /// load with a row missing; it now comes from the compiler, one step
+    /// earlier.
+    pub const fn is_buildable(self) -> bool {
+        match self {
+            Terrain::Plain => true,
+            Terrain::Water | Terrain::Rock => false,
+        }
+    }
+
+    /// Whether a road may be laid on this terrain.
+    ///
+    /// A separate question from [`Terrain::is_buildable`], and the terrains
+    /// answer the two differently on purpose: a road can be cut through `Rock`
+    /// where no building fits — you cross a mountain, you do not settle on it —
+    /// and `Water` takes neither, so a stretch of it splits the city in two
+    /// until something is built to span it. One field answering both questions
+    /// could not say that.
+    ///
+    /// It says nothing about *crossing*. Once a road is laid, every road tile
+    /// costs the same to walk whatever lies underneath it: the terrain decides
+    /// what a road costs to lay and never what it costs to use.
+    ///
+    /// Same match over every variant, for the same reason as above.
+    pub const fn is_walkable(self) -> bool {
+        match self {
+            Terrain::Plain | Terrain::Rock => true,
+            Terrain::Water => false,
+        }
+    }
 }
 
 /// Status bits of a tile. Hand-written instead of using `bitflags` so as not
@@ -288,6 +338,36 @@ impl Grid {
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    /// The whole truth table, written out. It lives here because this is where
+    /// the answers live: a match arm edited by hand should have to change a
+    /// test, and before these facts left the tables the only thing pinning them
+    /// was a `.ron` file nobody compiled.
+    #[test]
+    fn what_each_terrain_allows() {
+        assert!(Terrain::Plain.is_buildable());
+        assert!(Terrain::Plain.is_walkable());
+
+        assert!(!Terrain::Water.is_buildable());
+        assert!(!Terrain::Water.is_walkable());
+
+        // The asymmetric one: crossed, never settled on.
+        assert!(!Terrain::Rock.is_buildable());
+        assert!(Terrain::Rock.is_walkable());
+    }
+
+    /// Anything a building can stand on is something a road can reach, and the
+    /// placement rule leans on it: a building with no entrance is off the
+    /// network, so buildable ground that no road could touch would be a trap.
+    #[test]
+    fn every_buildable_terrain_is_walkable() {
+        for t in Terrain::ALL {
+            assert!(
+                !t.is_buildable() || t.is_walkable(),
+                "{t:?} can be built on but no road can reach it"
+            );
+        }
+    }
 
     #[test]
     fn tile_stays_within_budget() {
