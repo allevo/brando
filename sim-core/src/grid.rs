@@ -45,6 +45,21 @@ impl Terrain {
     /// How many kinds of ground there are, for the arrays indexed by one.
     pub const COUNT: usize = Self::ALL.len();
 
+    /// Position in the arrays indexed by terrain.
+    ///
+    /// It is also the number the hashes store for a terrain, which is why the
+    /// declaration order is frozen. Written out here rather than left to the
+    /// discriminant so there is one way to ask, and a test holds the two to
+    /// each other: reordering the variants without reordering these numbers
+    /// would put a terrain's cost under another terrain's name.
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Plain => 0,
+            Self::Water => 1,
+            Self::Rock => 2,
+        }
+    }
+
     /// Whether a building may stand on this terrain.
     ///
     /// `Plain` is the only ground a building stands on. That is a rule of the
@@ -349,6 +364,19 @@ mod tests {
         // The asymmetric one: crossed, never settled on.
         assert!(!Terrain::Rock.is_buildable());
         assert!(Terrain::Rock.is_walkable());
+    }
+
+    /// `index` gives back the position the variant is declared at.
+    ///
+    /// Two statements of one order — the declaration and the numbers in
+    /// `index` — and the hashes depend on them agreeing. Reordering the enum
+    /// without reordering the numbers would file a terrain's road cost under
+    /// another terrain's name, and nothing else would say so.
+    #[test]
+    fn index_is_the_position_in_the_declaration() {
+        for (i, t) in Terrain::ALL.into_iter().enumerate() {
+            assert_eq!(t.index(), i, "{t:?} is declared at {i}");
+        }
     }
 
     /// Anything a building can stand on is something a road can reach, and the

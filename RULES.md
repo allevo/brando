@@ -27,19 +27,11 @@ The map is a grid of tiles. A `tile` carries one terrain, at most one occupant �
 `house` — and a flag saying whether a `road` runs over it. **A tile holds one thing:** a road and an
 occupant never share one.
 
-What may be done on a `terrain` is fixed in the code and cannot be tuned; what it *costs* is in the
-table. Whether a building may stand there and whether a road may be laid there are separate
-questions, and the terrains answer them differently:
-
-| Terrain | A building may stand on it | A road may be laid on it | What it is |
+| Terrain | `buildable` | `walkable` | What it is |
 |---|---|---|---|
 | `Plain` | yes | yes | open ground, and the only terrain a building stands on |
 | `Rock` | no | yes | ground you can cross but not settle |
 | `Water` | no | no | neither, and a stretch of it splits the city in two |
-
-Which terrains exist, and what may be done on each, are fixed in the code. The table gives every one
-of them its `road_cost`, and one left out is a load error — as is a cost on ground no road can be
-laid on, which nothing would ever read.
 
 ## Roads and distance
 

@@ -513,7 +513,7 @@ fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> [Coins; Ter
                 },
             );
         }
-        let slot = &mut out[t.terrain as usize];
+        let slot = &mut out[t.terrain.index()];
         if slot.is_some() {
             rep.push(
                 format!("{path}.terrain"),
@@ -527,7 +527,7 @@ fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> [Coins; Ter
     // The table has to cover every variant: a missing terrain would become a
     // cost nobody declared on a road somebody can lay.
     for t in Terrain::ALL {
-        if out[t as usize].is_none() {
+        if out[t.index()].is_none() {
             rep.push(
                 "terrains",
                 ValidationErrorKind::MissingTerrain { terrain: t },

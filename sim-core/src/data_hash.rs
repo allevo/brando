@@ -99,8 +99,8 @@ pub(crate) fn dataset_hash(
     // into a hash of the data would only add bytes that can never move.
     h.update(&(Terrain::COUNT as u64).to_le_bytes());
     for t in Terrain::ALL {
-        h.update(&[t as u8]);
-        h.update(&road_cost_per_terrain[t as usize].get().to_le_bytes());
+        h.update(&[t.index() as u8]);
+        h.update(&road_cost_per_terrain[t.index()].get().to_le_bytes());
     }
 
     // --- buildings, in BuildingKindId order ---

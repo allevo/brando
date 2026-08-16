@@ -61,7 +61,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     // --- tiles, in TileIdx order ---
     for idx in grid.indices() {
         let Some(t) = grid.get(idx) else { continue };
-        h.update(&[t.terrain as u8, t.flags.bits()]);
+        h.update(&[t.terrain.index() as u8, t.flags.bits()]);
         // The flags already say whether there is an occupant; the origin is
         // added only when there is one, so no meaningless bytes get hashed.
         if let Some(occ) = t.occupant() {

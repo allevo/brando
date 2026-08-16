@@ -264,8 +264,8 @@ fn dataset_built_with(
     // that order. Water keeps a cost of zero, which is also what the loader
     // demands of ground no road can be laid on.
     let mut road_cost_per_terrain = [Coins::ZERO; Terrain::COUNT];
-    road_cost_per_terrain[Terrain::Plain as usize] = Coins::new(PLAIN_ROAD_COST);
-    road_cost_per_terrain[Terrain::Rock as usize] = Coins::new(ROCK_ROAD_COST);
+    road_cost_per_terrain[Terrain::Plain.index()] = Coins::new(PLAIN_ROAD_COST);
+    road_cost_per_terrain[Terrain::Rock.index()] = Coins::new(ROCK_ROAD_COST);
 
     let buildings = vec![
         BuildingDef {

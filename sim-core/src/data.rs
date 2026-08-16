@@ -521,7 +521,7 @@ impl DataSet {
     /// caller to report. Whether a road may be laid there at all is a separate
     /// question, and [`Terrain::is_walkable`] answers it without the tables.
     pub const fn road_cost(&self, t: Terrain) -> Coins {
-        self.road_cost_per_terrain[t as usize]
+        self.road_cost_per_terrain[t.index()]
     }
 
     /// The hash in hexadecimal, for error messages and replay headers.
