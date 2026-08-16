@@ -319,7 +319,7 @@ impl Grid {
     }
 
     /// Linear index of the position, `None` if off the map.
-    pub const fn idx(&self, pos: TilePos) -> Option<TileIndex> {
+    pub const fn index(&self, pos: TilePos) -> Option<TileIndex> {
         if !self.in_bounds(pos) {
             return None;
         }
@@ -348,11 +348,11 @@ impl Grid {
     }
 
     pub fn at(&self, pos: TilePos) -> Option<&Tile> {
-        self.get(self.idx(pos)?)
+        self.get(self.index(pos)?)
     }
 
     pub fn at_mut(&mut self, pos: TilePos) -> Option<&mut Tile> {
-        let idx = self.idx(pos)?;
+        let idx = self.index(pos)?;
         self.get_mut(idx)
     }
 
@@ -475,7 +475,7 @@ mod tests {
     fn the_largest_grid_can_index_its_last_tile() {
         let g = Grid::new(256, 256, Terrain::Plain).expect("256x256 is valid");
         assert_eq!(g.len(), 65_536);
-        let last = g.idx(TilePos::new(255, 255)).expect("in bounds");
+        let last = g.index(TilePos::new(255, 255)).expect("in bounds");
         assert_eq!(last.get(), u16::MAX);
         assert_eq!(g.pos(last), Some(TilePos::new(255, 255)));
     }
@@ -507,8 +507,8 @@ mod tests {
         let g = Grid::new(4, 4, Terrain::Plain).expect("valid grid");
         // The tile to the right of the first row is not a neighbour of the
         // first tile of the second row.
-        let right = g.idx(TilePos::new(3, 0)).expect("in bounds");
-        let left_of_next_row = g.idx(TilePos::new(0, 1)).expect("in bounds");
+        let right = g.index(TilePos::new(3, 0)).expect("in bounds");
+        let left_of_next_row = g.index(TilePos::new(0, 1)).expect("in bounds");
         let neighbors: Vec<_> = g.neighbors4(right).collect();
         assert!(!neighbors.contains(&left_of_next_row));
     }
@@ -517,7 +517,7 @@ mod tests {
     fn neighbor_count_by_position() {
         let g = Grid::new(5, 4, Terrain::Plain).expect("valid grid");
         let n = |x, y| {
-            g.neighbors4(g.idx(TilePos::new(x, y)).expect("in bounds"))
+            g.neighbors4(g.index(TilePos::new(x, y)).expect("in bounds"))
                 .count()
         };
         assert_eq!(n(0, 0), 2, "corner");
@@ -539,17 +539,17 @@ mod tests {
 
         /// Position -> index -> position gets you back where you started.
         #[test]
-        fn pos_to_idx_round_trips((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+        fn pos_to_index_round_trips((g, p) in grid_and_pos()) {
+            let i = g.index(p).expect("generated pos is in bounds");
             prop_assert_eq!(g.pos(i), Some(p));
         }
 
         /// And the other way round: index -> position -> index.
         #[test]
-        fn idx_to_pos_round_trips((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+        fn index_to_pos_round_trips((g, p) in grid_and_pos()) {
+            let i = g.index(p).expect("generated pos is in bounds");
             let p2 = g.pos(i).expect("valid index");
-            prop_assert_eq!(g.idx(p2), Some(i));
+            prop_assert_eq!(g.index(p2), Some(i));
         }
 
         /// Every index the grid hands out resolves to a tile, and one past the
@@ -578,7 +578,7 @@ mod tests {
         fn outside_the_edge_there_is_no_index((g, _p) in grid_and_pos()) {
             if g.width() < MAX_SIDE {
                 let outside = TilePos::new(g.width() as u8, 0);
-                prop_assert_eq!(g.idx(outside), None);
+                prop_assert_eq!(g.index(outside), None);
                 prop_assert!(!g.in_bounds(outside));
             }
             prop_assert_eq!(g.pos(TileIndex::new(u16::MAX)).is_some(), g.len() == 65_536);
@@ -588,7 +588,7 @@ mod tests {
         /// there are depends only on how many edges the tile touches.
         #[test]
         fn neighbors4_stays_on_the_map_and_does_not_wrap((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+            let i = g.index(p).expect("generated pos is in bounds");
             let neighbors: Vec<_> = g.neighbors4(i).collect();
 
             for &v in &neighbors {
@@ -611,7 +611,7 @@ mod tests {
         /// Being neighbours is a symmetric relation.
         #[test]
         fn neighbors4_is_symmetric((g, p) in grid_and_pos()) {
-            let i = g.idx(p).expect("generated pos is in bounds");
+            let i = g.index(p).expect("generated pos is in bounds");
             for v in g.neighbors4(i) {
                 prop_assert!(g.neighbors4(v).any(|w| w == i));
             }

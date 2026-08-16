@@ -53,10 +53,10 @@ fn a_farm_takes_four_tiles_and_costs_money() {
         Coins::new(STARTING_TREASURY - FARM_COST)
     );
 
-    let origin = w.grid().idx(pos(3, 3)).expect("on the map");
+    let origin = w.grid().index(pos(3, 3)).expect("on the map");
     let mut occupied = 0;
     for (x, y) in [(3, 3), (4, 3), (3, 4), (4, 4)] {
-        let idx = w.grid().idx(pos(x, y)).expect("on the map");
+        let idx = w.grid().index(pos(x, y)).expect("on the map");
         let tile = w.grid().get(idx).expect("tile");
         assert_eq!(
             tile.occupant(),
@@ -72,7 +72,7 @@ fn a_farm_takes_four_tiles_and_costs_money() {
     assert_eq!(occupied, 4);
 
     // The tiles just outside the area stay free.
-    let outside = w.grid().idx(pos(5, 3)).expect("on the map");
+    let outside = w.grid().index(pos(5, 3)).expect("on the map");
     assert_eq!(w.occupant(outside), None);
 }
 
@@ -193,7 +193,7 @@ fn demolishing_frees_every_tile_and_removes_the_id() {
     assert_eq!(w.building(id), None, "the id is no longer live");
     assert!(r.events.contains(&Event::BuildingRemoved { id }));
     for (x, y) in [(3, 3), (4, 3), (3, 4), (4, 4)] {
-        let idx = w.grid().idx(pos(x, y)).expect("on the map");
+        let idx = w.grid().index(pos(x, y)).expect("on the map");
         assert_eq!(w.occupant(idx), None, "({x},{y}) must be free again");
     }
 }
@@ -232,7 +232,7 @@ fn a_road_costs_money_sets_the_flag_and_dirties_the_network() {
         w.economy().treasury,
         Coins::new(STARTING_TREASURY - PLAIN_ROAD_COST)
     );
-    let idx = w.grid().idx(pos(2, 2)).expect("on the map");
+    let idx = w.grid().index(pos(2, 2)).expect("on the map");
     assert!(w.grid().get(idx).expect("tile").flags.has_road());
     // Step 2 has already consumed the flag within the same tick: what stays
     // observable is that the rebuild happened.

@@ -196,7 +196,7 @@ fn at_equal_distance_the_smaller_tile_wins() {
         .map(|(id, _)| id)
         .expect("house on the right");
 
-    let idx = |p| w.grid().idx(p).expect("on the map");
+    let idx = |p| w.grid().index(p).expect("on the map");
     assert!(
         idx(pos(4, 4)) < idx(pos(6, 4)),
         "the left one has the smaller TileIndex"

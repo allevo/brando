@@ -120,7 +120,7 @@ fn apply_commands(world: &mut World, cmds: &[Command], r: &mut StepReport) {
 }
 
 fn place_road(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
+    let idx = world.grid.index(at).ok_or(CommandError::OutsideMap(at))?;
     let tile = world.grid.get(idx).ok_or(CommandError::OutsideMap(at))?;
 
     if tile.flags.has_road() {
@@ -247,7 +247,7 @@ fn place_building(
 }
 
 fn demolish(world: &mut World, at: TilePos, r: &mut StepReport) -> Result<(), CommandError> {
-    let idx = world.grid.idx(at).ok_or(CommandError::OutsideMap(at))?;
+    let idx = world.grid.index(at).ok_or(CommandError::OutsideMap(at))?;
 
     if let Some(occ) = world.occupant(idx) {
         match occ {
@@ -297,7 +297,7 @@ fn remove_building(world: &mut World, id: BuildingId, r: &mut StepReport) {
         world.food.lost_to_demolition += i64::from(stock.to_millis());
     }
     clear_tiles(world, origin, size);
-    if let Some(idx) = world.grid.idx(origin) {
+    if let Some(idx) = world.grid.index(origin) {
         world.buildings_by_origin.remove(&idx);
     }
     world.dirty.forget_coverage(id);
@@ -321,7 +321,7 @@ fn remove_house(world: &mut World, id: HouseId, r: &mut StepReport) {
     world.population.lost_to_demolition += u64::from(h.residents);
     let size = world.data.house_def().map_or((1, 1), |d| d.size);
     clear_tiles(world, h.origin, size);
-    if let Some(idx) = world.grid.idx(h.origin) {
+    if let Some(idx) = world.grid.index(h.origin) {
         world.houses_by_origin.remove(&idx);
     }
     mark_all_providers_dirty(world);
@@ -534,7 +534,7 @@ fn tiles_covered(
                 .checked_add(dy)
                 .ok_or(CommandError::OutsideMap(origin))?;
             let pos = TilePos::new(x, y);
-            let idx = world.grid.idx(pos).ok_or(CommandError::OutsideMap(pos))?;
+            let idx = world.grid.index(pos).ok_or(CommandError::OutsideMap(pos))?;
             out.push((idx, pos));
         }
     }

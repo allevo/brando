@@ -20,7 +20,7 @@ fn roads(w: &mut World, cells: &[(u8, u8)]) {
 
 fn comp(w: &World, x: u8, y: u8) -> Option<sim_core::ComponentId> {
     w.roads()
-        .component(w.grid().idx(pos(x, y)).expect("on the map"))
+        .component(w.grid().index(pos(x, y)).expect("on the map"))
 }
 
 // --- 1. components ----------------------------------------------------------
@@ -51,7 +51,7 @@ fn two_separate_groups_then_joined_then_separate_again() {
 fn the_component_id_is_the_smallest_tile() {
     let mut w = world();
     roads(&mut w, &[(5, 5), (5, 4), (5, 6)]);
-    let expected = w.grid().idx(pos(5, 4)).expect("on the map");
+    let expected = w.grid().index(pos(5, 4)).expect("on the map");
     for (x, y) in [(5, 4), (5, 5), (5, 6)] {
         assert_eq!(
             comp(&w, x, y).map(sim_core::ComponentId::tile),
@@ -76,8 +76,8 @@ fn no_row_wraparound() {
     let mut w = world_of(8, 8);
     roads(&mut w, &[(7, 0), (0, 1)]);
     assert_eq!(w.roads().component_count(), 2);
-    let a = w.grid().idx(pos(7, 0)).expect("on the map");
-    let b = w.grid().idx(pos(0, 1)).expect("on the map");
+    let a = w.grid().index(pos(7, 0)).expect("on the map");
+    let b = w.grid().index(pos(0, 1)).expect("on the map");
     assert_eq!(b.get(), a.get() + 1, "they are adjacent as indices...");
     assert!(!w.roads().connected(a, b), "...but not as roads");
 }

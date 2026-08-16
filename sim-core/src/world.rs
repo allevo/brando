@@ -436,7 +436,7 @@ impl World {
                 else {
                     continue;
                 };
-                let Some(idx) = self.grid.idx(TilePos::new(x, y)) else {
+                let Some(idx) = self.grid.index(TilePos::new(x, y)) else {
                     continue;
                 };
                 for v in self.grid.neighbors4(idx) {

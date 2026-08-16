@@ -221,7 +221,7 @@ pub fn compute_from_scratch(world: &World) -> Coverage {
                 let Some(house) = world.house(*h) else {
                     continue;
                 };
-                let Some(idx) = world.grid().idx(house.origin) else {
+                let Some(idx) = world.grid().index(house.origin) else {
                     continue;
                 };
                 candidates.push((d, idx, *h));

@@ -244,7 +244,7 @@ mod tests {
     fn with_road(y: u8) -> Grid {
         let mut g = Grid::new(8, 8, Terrain::Plain).expect("valid grid");
         for x in 0..8u8 {
-            let idx = g.idx(TilePos::new(x, y)).expect("on the map");
+            let idx = g.index(TilePos::new(x, y)).expect("on the map");
             if let Some(t) = g.get_mut(idx) {
                 t.flags.set_road(true);
             }
@@ -270,8 +270,8 @@ mod tests {
     #[test]
     fn reusing_the_scratch_gives_the_same_result_as_a_fresh_one() {
         let grid = with_road(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
-        let b = grid.idx(TilePos::new(7, 3)).expect("on the map");
+        let a = grid.index(TilePos::new(0, 3)).expect("on the map");
+        let b = grid.index(TilePos::new(7, 3)).expect("on the map");
 
         let expected_a = reached(&grid, a, 4, &mut Visited::new(grid.len()));
         let expected_b = reached(&grid, b, 4, &mut Visited::new(grid.len()));
@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn wrapping_the_counter_does_not_revive_old_traces() {
         let grid = with_road(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
+        let a = grid.index(TilePos::new(0, 3)).expect("on the map");
         let expected = reached(&grid, a, 4, &mut Visited::new(grid.len()));
 
         let mut at_the_limit = Visited::new(grid.len());
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn a_wrongly_sized_scratch_gets_rebuilt() {
         let grid = with_road(3);
-        let a = grid.idx(TilePos::new(0, 3)).expect("on the map");
+        let a = grid.index(TilePos::new(0, 3)).expect("on the map");
         let expected = reached(&grid, a, 4, &mut Visited::new(grid.len()));
 
         let mut someone_elses = Visited::new(4);
