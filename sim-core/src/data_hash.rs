@@ -94,15 +94,12 @@ pub(crate) fn dataset_hash(
     // frozen declaration order at the site that depends on it: this hash and
     // the state hash both store a terrain by its position, so reordering the
     // variants silently changes every recording.
+    // Whether a terrain may be built on or walked on is not hashed: those are
+    // facts about the enum, not content of the tables, and hashing a constant
+    // into a hash of the data would only add bytes that can never move.
     h.update(&(Terrain::COUNT as u64).to_le_bytes());
     for t in Terrain::ALL {
         h.update(&[t as u8]);
-        // Buildability and walkability are hardcoded on the enum and are no
-        // longer part of the dataset. They stay in the hash for this one commit
-        // only, so that it can be proved against the recordings that moving
-        // them out of the tables changed no behaviour; the commit after this
-        // removes them and regenerates.
-        h.update(&[u8::from(t.is_buildable()), u8::from(t.is_walkable())]);
         h.update(&road_cost_per_terrain[t as usize].get().to_le_bytes());
     }
 
