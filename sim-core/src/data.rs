@@ -6,8 +6,6 @@
 //! parsing, the validation and the I/O — that is, everything the core must not
 //! do (D4).
 
-use std::collections::BTreeMap;
-
 use crate::data_hash::dataset_hash;
 use crate::grid::Terrain;
 use crate::ids::{BuildingKindId, Level};
@@ -241,13 +239,6 @@ impl Rules {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerrainDef {
-    pub buildable: bool,
-    pub walkable: bool,
-    pub road_cost: Coins,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDef {
     pub kind: ServiceKind,
     /// Range in tiles walked along the road network (D2), one value per level.
@@ -442,8 +433,13 @@ pub struct DifficultyDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataSet {
     pub rules: Rules,
-    /// A `BTreeMap` and not a `HashMap`: the iteration order is a contract (D4).
-    pub terrain: BTreeMap<Terrain, TerrainDef>,
+    /// What laying a road costs on each terrain, indexed by the terrain's own
+    /// position in its declaration — one numbering serves both this array and
+    /// the state hash, so there is no second one to drift. Whether a road may
+    /// be laid there at all is not here: that is a fact about the ground and
+    /// [`Terrain::is_walkable`] answers it. Every terrain has an entry, and the
+    /// loader refuses a table that leaves one out.
+    pub road_cost_per_terrain: [Coins; Terrain::COUNT],
     /// Indexed by [`BuildingKindId`].
     pub buildings: Vec<BuildingDef>,
     /// Indexed by [`DifficultyId`]. At most 256 of them, which is what makes
@@ -461,14 +457,14 @@ impl DataSet {
     /// `DataSet`, so the hash cannot fall out of sync with the content.
     pub fn new(
         rules: Rules,
-        terrain: BTreeMap<Terrain, TerrainDef>,
+        road_cost_per_terrain: [Coins; Terrain::COUNT],
         buildings: Vec<BuildingDef>,
         difficulties: Vec<DifficultyDef>,
     ) -> Self {
-        let hash = dataset_hash(&rules, &terrain, &buildings, &difficulties);
+        let hash = dataset_hash(&rules, &road_cost_per_terrain, &buildings, &difficulties);
         Self {
             rules,
-            terrain,
+            road_cost_per_terrain,
             buildings,
             difficulties,
             hash,
@@ -518,8 +514,14 @@ impl DataSet {
             .join(", ")
     }
 
-    pub fn terrain(&self, t: Terrain) -> Option<&TerrainDef> {
-        self.terrain.get(&t)
+    /// What laying a road on this terrain takes out of the treasury.
+    ///
+    /// It cannot fail: the array has one entry per terrain and the loader
+    /// refuses a table that leaves one out, so there is no missing row for a
+    /// caller to report. Whether a road may be laid there at all is a separate
+    /// question, and [`Terrain::is_walkable`] answers it without the tables.
+    pub const fn road_cost(&self, t: Terrain) -> Coins {
+        self.road_cost_per_terrain[t.index()]
     }
 
     /// The hash in hexadecimal, for error messages and replay headers.

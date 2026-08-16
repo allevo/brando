@@ -277,6 +277,50 @@ fn nothing_gets_built_on_the_wrong_terrain() {
 }
 
 #[test]
+fn a_road_crosses_rock_but_no_building_stands_on_it() {
+    // The asymmetric terrain, and the only one: water refuses both questions,
+    // so a test on water alone cannot tell the two apart. You cross a mountain,
+    // you do not settle on it.
+    let mut w = world();
+    assert!(w.set_terrain(pos(6, 6), Terrain::Rock));
+    let before = w.economy().treasury;
+
+    let r = tick(
+        &mut w,
+        &[
+            Command::PlaceBuilding {
+                kind: HOUSE,
+                origin: pos(6, 6),
+            },
+            Command::PlaceRoad { at: pos(6, 6) },
+        ],
+    );
+
+    assert_eq!(r.rejected.len(), 1, "only the building is refused");
+    assert!(
+        matches!(
+            r.rejected[0].1,
+            CommandError::WrongTerrain {
+                terrain: Terrain::Rock,
+                ..
+            }
+        ),
+        "{:?}",
+        r.rejected[0].1
+    );
+    assert!(w.grid().at(pos(6, 6)).expect("on the map").flags.has_road());
+
+    // Charged at rock's price and not at plain's. Every recording is uniformly
+    // plain, so this is the only thing in the tree that would catch a road
+    // that always charged for plain ground.
+    assert_eq!(
+        before.checked_sub(w.economy().treasury),
+        Some(Coins::new(ROCK_ROAD_COST)),
+        "a road on rock costs what rock costs"
+    );
+}
+
+#[test]
 fn a_house_is_a_house_not_a_building() {
     let mut w = world();
     let r = tick(

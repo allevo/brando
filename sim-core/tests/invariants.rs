@@ -250,8 +250,7 @@ fn accepted_cost(w: &World, cmd: &Command) -> Coins {
         Command::PlaceRoad { at } => w
             .grid()
             .at(*at)
-            .and_then(|t| w.data().terrain(t.terrain))
-            .map_or(Coins::ZERO, |d| d.road_cost),
+            .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain)),
         Command::PlaceBuilding { kind, .. } => w.data().def(*kind).map_or(Coins::ZERO, |d| d.cost),
     }
 }

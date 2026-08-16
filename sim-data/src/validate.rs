@@ -4,7 +4,6 @@
 //! table wants to see all the problems in one go, not recompile six times. A
 //! `?` on the first check would make the validation a sham.
 
-use std::collections::BTreeMap;
 use std::fmt;
 
 use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
@@ -12,7 +11,7 @@ use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
 use crate::raw::{RawBuildingDef, RawDataSet, RawDemographics, RawSatisfaction};
 use sim_core::data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
-    Inconsistency, Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    Inconsistency, Production, Rules, SatisfactionRules, ServiceDef,
 };
 
 /// A single problem, with the logical path of the field that causes it.
@@ -100,6 +99,9 @@ pub enum ValidationErrorKind {
 
     #[error("terrain already declared")]
     DuplicateTerrain,
+
+    #[error("no road can be laid on {terrain:?}, so its road_cost has to be 0, found {found}")]
+    UnreachableRoadCost { terrain: Terrain, found: i32 },
 
     #[error("too many buildings in the table: the maximum is {max}")]
     TooManyBuildings { max: usize },
@@ -484,8 +486,8 @@ fn validate_satisfaction(s: &RawSatisfaction, rep: &mut ValidationReport) -> Sat
     }
 }
 
-fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Terrain, TerrainDef> {
-    let mut out = BTreeMap::new();
+fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> [Coins; Terrain::COUNT] {
+    let mut out: [Option<Coins>; Terrain::COUNT] = [None; Terrain::COUNT];
 
     for (i, t) in raw.terrain.terrains.iter().enumerate() {
         let path = format!("terrains[{i}]");
@@ -497,23 +499,35 @@ fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Te
                 },
             );
         }
-        let def = TerrainDef {
-            buildable: t.buildable,
-            walkable: t.walkable,
-            road_cost: Coins::new(t.road_cost),
-        };
-        if out.insert(t.terrain, def).is_some() {
+        // A road cannot be laid on ground that is not walkable, so nothing ever
+        // reads that ground's cost. Left unchecked, a designer could raise it to
+        // make water expensive to cross and get no feedback at all, because the
+        // number is unreachable by construction. Refusing it is the difference
+        // between a rule and a comment explaining why a number is ignored.
+        if !t.terrain.is_walkable() && t.road_cost != 0 {
+            rep.push(
+                format!("{path}.road_cost"),
+                ValidationErrorKind::UnreachableRoadCost {
+                    terrain: t.terrain,
+                    found: t.road_cost,
+                },
+            );
+        }
+        let slot = &mut out[t.terrain.index()];
+        if slot.is_some() {
             rep.push(
                 format!("{path}.terrain"),
                 ValidationErrorKind::DuplicateTerrain,
             );
+        } else {
+            *slot = Some(Coins::new(t.road_cost));
         }
     }
 
-    // The table has to cover every variant: a missing terrain would become an
-    // `unwrap` in a hot path.
+    // The table has to cover every variant: a missing terrain would become a
+    // cost nobody declared on a road somebody can lay.
     for t in Terrain::ALL {
-        if !out.contains_key(&t) {
+        if out[t.index()].is_none() {
             rep.push(
                 "terrains",
                 ValidationErrorKind::MissingTerrain { terrain: t },
@@ -521,7 +535,10 @@ fn validate_terrain(raw: &RawDataSet, rep: &mut ValidationReport) -> BTreeMap<Te
         }
     }
 
-    out
+    // The zero filling a slot the table left out never reaches the simulation:
+    // the report is not empty in that case, and `validate` returns it as an
+    // error before a `DataSet` is ever built.
+    out.map(|c| c.unwrap_or(Coins::ZERO))
 }
 
 fn validate_buildings(raw: &RawDataSet, rep: &mut ValidationReport) -> Vec<BuildingDef> {

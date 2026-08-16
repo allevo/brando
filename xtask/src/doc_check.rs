@@ -11,6 +11,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use sim_core::Terrain;
+
 /// One thing that is wrong. `where_` is a path, or a path and a line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
@@ -75,6 +77,7 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
     f.extend(roadmap_agrees_with_the_tasks(root, &tasks)?);
     f.extend(frozen_orders_match_the_code(root, &sources)?);
     f.extend(skill_matches_the_task_header(root)?);
+    f.extend(rules_match_what_a_terrain_allows(root)?);
     Ok(f)
 }
 
@@ -1431,6 +1434,68 @@ fn capitalised(text: &str) -> Vec<String> {
         .into_iter()
         .filter(|t| t.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
         .collect()
+}
+
+// --- 11. what a terrain allows ---------------------------------------------
+
+/// `RULES.md` states, terrain by terrain, whether a building may stand on it
+/// and whether a road may be laid on it. Those answers used to be rows in
+/// `terrain.ron`, and the parameter check above kept the page and the table
+/// honest about each other. They are facts about the `Terrain` enum now, and
+/// nothing was left watching them: the table could say rock is buildable and
+/// every other check would pass.
+///
+/// So ask the code. This check does not parse Rust the way the frozen-order
+/// check has to — `xtask` depends on `sim-core`, so it calls the two methods
+/// and compares their answers against the page.
+fn rules_match_what_a_terrain_allows(root: &Path) -> Result<Vec<Finding>, String> {
+    let rules = read(root, "RULES.md")?;
+    let mut out = Vec::new();
+
+    for t in Terrain::ALL {
+        let name = format!("{t:?}");
+        let row = rules.lines().find(|l| {
+            l.starts_with("| `") && backticked(l).first().is_some_and(|first| *first == name)
+        });
+        let Some(row) = row else {
+            out.push(Finding {
+                check: "terrain-facts",
+                at: "RULES.md".to_string(),
+                what: format!("`{name}` exists but RULES.md has no row for it"),
+            });
+            continue;
+        };
+        let cells: Vec<&str> = row.split('|').map(str::trim).collect();
+        let (Some(buildable), Some(walkable)) = (cells.get(2), cells.get(3)) else {
+            out.push(Finding {
+                check: "terrain-facts",
+                at: "RULES.md".to_string(),
+                what: format!("`{name}`'s row does not have the two answer cells"),
+            });
+            continue;
+        };
+        for (cell, actual, what) in [
+            (buildable, t.is_buildable(), "a building may stand on it"),
+            (walkable, t.is_walkable(), "a road may be laid on it"),
+        ] {
+            let said = match *cell {
+                "yes" => Some(true),
+                "no" => Some(false),
+                _ => None,
+            };
+            if said != Some(actual) {
+                out.push(Finding {
+                    check: "terrain-facts",
+                    at: "RULES.md".to_string(),
+                    what: format!(
+                        "`{name}`: RULES.md says {cell:?} where the code says \
+                         {actual} to \"{what}\""
+                    ),
+                });
+            }
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -10,14 +10,13 @@
 //! fail. It is the deliberate cost of hashing by hand instead of delegating to
 //! serde.
 
-use std::collections::BTreeMap;
-
 use crate::grid::Terrain;
 
 use crate::data::{
     BuildingDef, BuildingRole, DemographicsRules, DifficultyDef, HouseLevelDef, Production, Rules,
-    SatisfactionRules, TerrainDef,
+    SatisfactionRules,
 };
+use crate::units::Coins;
 
 /// Hash prefix: keeps this hash apart from any other blake3 in the project.
 /// Changing it regenerates every recording.
@@ -25,7 +24,7 @@ const PREFIX: &[u8] = b"brando/dataset/v1";
 
 pub(crate) fn dataset_hash(
     rules: &Rules,
-    terrain: &BTreeMap<Terrain, TerrainDef>,
+    road_cost_per_terrain: &[Coins; Terrain::COUNT],
     buildings: &[BuildingDef],
     difficulties: &[DifficultyDef],
 ) -> [u8; 32] {
@@ -90,17 +89,18 @@ pub(crate) fn dataset_hash(
     h.update(&[*unserved_threshold, *birth_threshold]);
     h.update(&jitter_per_thousand.to_le_bytes());
 
-    // --- terrain, in Terrain order (the BTreeMap guarantees it) ---
-    h.update(&(terrain.len() as u64).to_le_bytes());
-    for (t, d) in terrain {
-        let TerrainDef {
-            buildable,
-            walkable,
-            road_cost,
-        } = d;
-        h.update(&[*t as u8]);
-        h.update(&[u8::from(*buildable), u8::from(*walkable)]);
-        h.update(&road_cost.get().to_le_bytes());
+    // --- terrain, in Terrain order ---
+    // Iterating `Terrain::ALL` rather than the array's indices states the
+    // frozen declaration order at the site that depends on it: this hash and
+    // the state hash both store a terrain by its position, so reordering the
+    // variants silently changes every recording.
+    // Whether a terrain may be built on or walked on is not hashed: those are
+    // facts about the enum, not content of the tables, and hashing a constant
+    // into a hash of the data would only add bytes that can never move.
+    h.update(&(Terrain::COUNT as u64).to_le_bytes());
+    for t in Terrain::ALL {
+        h.update(&[t.index() as u8]);
+        h.update(&road_cost_per_terrain[t.index()].get().to_le_bytes());
     }
 
     // --- buildings, in BuildingKindId order ---

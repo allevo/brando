@@ -10,12 +10,11 @@
 //! changes. The tests that really are about the production numbers live in
 //! `sim-data`.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sim_core::data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
-    Production, Rules, SatisfactionRules, ServiceDef, TerrainDef,
+    Production, Rules, SatisfactionRules, ServiceDef,
 };
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Level, Milli, ServiceKind, Terrain,
@@ -40,6 +39,10 @@ pub const HOUSE_COST: i32 = 10;
 pub const WELL_COST: i32 = 12;
 pub const FARM_COST: i32 = 40;
 pub const PLAIN_ROAD_COST: i32 = 2;
+/// What a road costs on rock: dearer than plain, which is the only thing in the
+/// tree that tells a cost read by terrain apart from one that always charges
+/// plain.
+pub const ROCK_ROAD_COST: i32 = 6;
 pub const STARTING_TREASURY: i32 = 1000;
 /// What a house holds at level 1, which is also what `easy` builds it with.
 pub const RESIDENTS_PER_HOUSE: u16 = 4;
@@ -255,31 +258,14 @@ fn dataset_built_with(
         },
     };
 
-    let mut terrain = BTreeMap::new();
-    terrain.insert(
-        Terrain::Plain,
-        TerrainDef {
-            buildable: true,
-            walkable: true,
-            road_cost: Coins::new(PLAIN_ROAD_COST),
-        },
-    );
-    terrain.insert(
-        Terrain::Water,
-        TerrainDef {
-            buildable: false,
-            walkable: false,
-            road_cost: Coins::new(0),
-        },
-    );
-    terrain.insert(
-        Terrain::Rock,
-        TerrainDef {
-            buildable: false,
-            walkable: true,
-            road_cost: Coins::new(6),
-        },
-    );
+    // Assigned by index rather than positionally: the declaration order of
+    // `Terrain` is frozen because the hashes store a terrain by its position,
+    // and naming the variant keeps this fixture readable without depending on
+    // that order. Water keeps a cost of zero, which is also what the loader
+    // demands of ground no road can be laid on.
+    let mut road_cost_per_terrain = [Coins::ZERO; Terrain::COUNT];
+    road_cost_per_terrain[Terrain::Plain.index()] = Coins::new(PLAIN_ROAD_COST);
+    road_cost_per_terrain[Terrain::Rock.index()] = Coins::new(ROCK_ROAD_COST);
 
     let buildings = vec![
         BuildingDef {
@@ -364,7 +350,12 @@ fn dataset_built_with(
         },
     ];
 
-    Arc::new(DataSet::new(rules, terrain, buildings, difficulties))
+    Arc::new(DataSet::new(
+        rules,
+        road_cost_per_terrain,
+        buildings,
+        difficulties,
+    ))
 }
 
 /// Resolves a profile in the fixture's dataset.

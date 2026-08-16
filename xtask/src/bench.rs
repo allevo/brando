@@ -652,7 +652,7 @@ fn rebuilt(real: &DataSet, edit: impl FnOnce(&mut sim_core::Rules)) -> DataSet {
     edit(&mut rules);
     DataSet::new(
         rules,
-        real.terrain.clone(),
+        real.road_cost_per_terrain,
         real.buildings.clone(),
         real.difficulties.clone(),
     )
