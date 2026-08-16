@@ -221,22 +221,6 @@ pub enum GridError {
 /// `width` and `height` are `u16` rather than `u8` because the maximum side is
 /// 256, which would not fit in a `u8`: the allowed values are `1..=256`. The
 /// coordinates stay `u8` (0..=255).
-///
-/// The tiles are a boxed slice and not a `Vec` because a grid is sized once, by
-/// [`Grid::new`], and never grows or shrinks: a map does not gain a row while it
-/// is being played. [`Grid::len`] already states the tile count a second time, as
-/// `width * height`, and a `Vec` would leave the two free to drift — one `push`
-/// and every index past the seam would name a different tile than it did before,
-/// which the state hash would record as a city that had quietly changed. A boxed
-/// slice has no method that could do it, so the two agree by construction rather
-/// than by care.
-///
-/// Deliberately **not** `Serialize`/`Deserialize`. A derived `Deserialize` would
-/// be a second way to build a grid, and one that accepts a tile count disagreeing
-/// with `width * height` — the very thing the boxed slice above rules out. Nothing
-/// needs it: a save file is a seed and a list of commands rather than a dump of the
-/// state (D4), and a recording stores a grid as its width, its height and its
-/// terrain, rebuilt through [`Grid::new`] when it is replayed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Grid {
     width: u16,
