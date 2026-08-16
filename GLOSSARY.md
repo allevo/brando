@@ -35,8 +35,8 @@ The rule is **plain words over jargon**.
 | **granary** | A store of food that has a lid: once it is full, what would go in is lost rather than queued. It is where `stock` lives and what `max_stock` bounds. |
 | **entrance** | A road tile touching a building. A building with no entrance is cut off from the network and serves nobody. |
 | **occupant** | What is standing on a tile — a building or a house. Roads are not occupants: a tile carries its road in a flag, so a road and an occupant are counted separately. |
-| **walkable** | Whether a road can be laid on this terrain. Rock is walkable, water is not. |
-| **buildable** | Whether a building can be placed on this terrain. |
+| **walkable** | Whether a road can be laid on this terrain. Rock is walkable, water is not. It is a fact about the terrain, fixed in the code, and not a number in a table. |
+| **buildable** | Whether a building can be placed on this terrain. Fixed in the code, like walkability: only plain ground is buildable. |
 | **sustainable** / **unsustainable** | Whether a farm's declared capacity matches what it actually grows. An unsustainable capacity means houses that stay hungry forever, so it is a validation error. |
 | **conservation** | Nothing appears and nothing vanishes without being counted: food produced equals food eaten plus food stored plus food explicitly written off. It is checked as an exact equality, not as "close enough". |
 | **thousandths** | How fractional amounts are held without floats: `Milli(i32)` counts thousandths of a unit, so 1500 means one and a half. Floats are banned in the state (D4) because they make two machines disagree; thousandths never do. |

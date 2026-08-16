@@ -27,18 +27,19 @@ The map is a grid of tiles. A `tile` carries one terrain, at most one occupant �
 `house` — and a flag saying whether a `road` runs over it. **A tile holds one thing:** a road and an
 occupant never share one.
 
-Each `terrain` declares whether it is `buildable`, whether it is `walkable`, and its `road_cost`.
-`buildable` says a building may stand there; `walkable` says a road may be laid there. The two are
-separate questions, and the terrains answer them differently:
+What may be done on a `terrain` is fixed in the code and cannot be tuned; what it *costs* is in the
+table. Whether a building may stand there and whether a road may be laid there are separate
+questions, and the terrains answer them differently:
 
-| Terrain | `buildable` | `walkable` | What it is |
+| Terrain | A building may stand on it | A road may be laid on it | What it is |
 |---|---|---|---|
 | `Plain` | yes | yes | open ground, and the only terrain a building stands on |
 | `Rock` | no | yes | ground you can cross but not settle |
 | `Water` | no | no | neither, and a stretch of it splits the city in two |
 
-Which terrains exist is fixed in the code; the table gives every one of them its properties, and one
-left out is a load error.
+Which terrains exist, and what may be done on each, are fixed in the code. The table gives every one
+of them its `road_cost`, and one left out is a load error — as is a cost on ground no road can be
+laid on, which nothing would ever read.
 
 ## Roads and distance
 
@@ -333,7 +334,7 @@ Changing one of these changes what the game *is*, so there is nothing to tune.
 | Money has no fractions, and quantities do | `sim-core/src/units.rs` |
 | An invalid command is discarded and reported, and does not interrupt the tick | `sim-core/src/tick.rs` |
 | Which services exist at all (D6) — kinds of building, by contrast, **are** data | `sim-core/src/service.rs` |
-| Which terrains exist at all (D6), and that the table describes every one of them | `sim-core/src/grid.rs` |
+| Which terrains exist at all, and what may be done on each — where a building may stand, where a road may be laid (D6). The table describes every terrain and gives it the one thing about it that is a number, its `road_cost` | `sim-core/src/grid.rs` |
 | What happens before what inside a tick | `sim-core/src/tick.rs` |
 
 A handful of numbers live in the code, and none of them is balancing: the largest map side a tile
@@ -348,13 +349,12 @@ its own in [ROADMAP.md](ROADMAP.md) — not an edit.
 
 ## Every parameter, and the rule it tunes
 
-**`terrain.ron`** — one row per terrain, and every terrain has one.
+**`terrain.ron`** — one row per terrain, and every terrain has one. It gives a terrain the one thing
+about it that is a number; what may be done on it is fixed in the code.
 
 | Parameter | What it decides |
 |---|---|
 | `terrain` | which terrain the row describes |
-| `buildable` | whether a building may stand on it |
-| `walkable` | whether a road may be laid on it |
 | `road_cost` | what laying a road on it takes out of the treasury |
 
 **`buildings.ron`** — one entry per kind of building.
