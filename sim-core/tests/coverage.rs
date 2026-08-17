@@ -59,7 +59,7 @@ fn base_case_a_house_within_range() {
     let house = only_house(&w);
     assert!(w.coverage().is_served(house, ServiceKind::Water));
     assert_eq!(
-        w.coverage().provider(house, ServiceKind::Water),
+        w.coverage().served_by(house, ServiceKind::Water),
         Some(only_well(&w))
     );
     // The house carries a copy of the flag.
@@ -299,7 +299,7 @@ fn the_first_provider_wins_a_contested_house() {
         .expect("the first well");
     let house = only_house(&w);
     assert_eq!(
-        w.coverage().provider(house, ServiceKind::Water),
+        w.coverage().served_by(house, ServiceKind::Water),
         Some(first)
     );
 }
@@ -442,7 +442,7 @@ proptest! {
             tick(&mut w, cmds);
             for (h, _) in w.houses() {
                 for k in ServiceKind::ALL {
-                    let Some(p) = w.coverage().provider(h, k) else { continue };
+                    let Some(p) = w.coverage().served_by(h, k) else { continue };
                     let b = w.building(p);
                     prop_assert!(b.is_some(), "dead provider for {h:?}");
                     let def = w.data().def(b.expect("alive").kind).expect("known kind");

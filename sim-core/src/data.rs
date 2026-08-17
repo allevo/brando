@@ -253,6 +253,8 @@ pub struct ServiceDef {
 
 impl ServiceDef {
     /// The range at the given level, `None` out of range.
+    /// 
+    /// The range is service radius in walking distance unit.
     pub fn range(&self, level: Level) -> Option<u16> {
         self.range_per_level.get(level.as_usize()).copied()
     }

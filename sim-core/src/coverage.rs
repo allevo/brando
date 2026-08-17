@@ -17,14 +17,21 @@ use crate::world::World;
 /// For every house and every service, who serves it.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Coverage {
+    /// HouseId -> `[BuildingId]` that serve the house.
+    ///
+    /// NB: size_of::<Option<BuildingId>>() == size_of::<BuildingId>().
+    /// See below.
     served_by: BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]>,
     /// How many times coverage has been recomputed.
     #[cfg(feature = "counters")]
     recomputes: u32,
 }
 
+const _: () = assert!(size_of::<Option<BuildingId>>() == size_of::<BuildingId>());
+
 impl Coverage {
-    pub fn provider(&self, house: HouseId, kind: ServiceKind) -> Option<BuildingId> {
+    /// The provider serving this house for that service. `None` if none does.
+    pub fn served_by(&self, house: HouseId, kind: ServiceKind) -> Option<BuildingId> {
         self.served_by.get(&house)?[kind.index()]
     }
 
@@ -37,7 +44,7 @@ impl Coverage {
 #[cfg(feature = "test-util")]
 impl Coverage {
     pub fn is_served(&self, house: HouseId, kind: ServiceKind) -> bool {
-        self.provider(house, kind).is_some()
+        self.served_by(house, kind).is_some()
     }
 
     /// The assignments, without the diagnostic counter, as the
@@ -68,18 +75,14 @@ impl Coverage {
 
 /// From a road tile to the houses that face onto it.
 ///
-/// In CSR form: the houses of tile `t` are `houses[offsets[t]..offsets[t + 1]]`.
-/// `TileIndex` is a **dense** index over the grid, so indexing it directly costs
-/// one access, against the ~13 comparisons with pointer chasing of a
-/// `BTreeMap`.
+/// The houses of tile `t` are `houses[offsets[t]..offsets[t + 1]]`.
 ///
 /// **At most four houses per tile**, because a tile has four orthogonal
 /// neighbours (`Grid::neighbors4`) and each holds at most one occupant.
 struct HousesByTile {
-    /// Length `grid.len() + 1`.
+    /// The offset of each [`HousesByTile::houses`] group
     offsets: Vec<u32>,
-    /// The houses, grouped by tile. The order **within** a group is not
-    /// promised: see [`HousesByTile::from_entrances`].
+    /// The houses list, ordered by tile.
     houses: Vec<HouseId>,
 }
 
@@ -100,8 +103,7 @@ impl HousesByTile {
     /// running sum, fill.
     ///
     /// Linear in the number of tiles plus the number of entrances, with no
-    /// comparisons at all — against the implicit ordering of a `BTreeMap`,
-    /// which would pay `log n` on every insertion and allocate a node per tile.
+    /// comparisons at all.
     fn from_entrances(tiles: usize, pairs: &[(TileIndex, HouseId)]) -> Self {
         // `offsets` carries three meanings in turn, one per pass below, and
         // reusing the one array for all three is what makes the sort read oddly.
@@ -123,20 +125,25 @@ impl HousesByTile {
         //
         // Reading back: `get(2)` is `houses[1..4]`, the three houses of tile 2;
         // `get(1)` is `houses[1..1]`, empty because start and end coincide.
+
         let mut offsets = vec![0u32; tiles + 1];
 
+        // Count: each entry becomes the number of houses facing its tile.
         for (t, _) in pairs {
             if let Some(count) = offsets.get_mut(t.as_usize()) {
                 *count += 1;
             }
         }
 
+        // Running sum: each entry becomes the end of its tile's group.
         let mut running = 0u32;
         for o in &mut offsets {
             running += *o;
             *o = running;
         }
 
+        // Fill: each house is written behind those already placed for its tile,
+        // leaving the entry on the start of the group.
         let mut houses = vec![HouseId::default(); running as usize];
         for (t, h) in pairs {
             let Some(cursor) = offsets.get_mut(t.as_usize()) else {
@@ -167,13 +174,6 @@ impl HousesByTile {
 }
 
 /// Recomputes coverage from scratch on the current state.
-///
-/// In M0 step 3 of the tick calls exactly this, for every provider, each time
-/// `dirty.coverage` is not empty. Implementing this step naively is allowed as
-/// long as the flags exist. What the dirty flag protects today is not the cost
-/// of the recomputation but its **absence** when nothing has changed; and what
-/// the equivalence test catches is a forgotten invalidation, not an algorithm
-/// mistake.
 fn compute_from_scratch(world: &World) -> Coverage {
     // The reverse map from road tile to the houses facing onto it. Built once
     // per recomputation instead of once per provider.
@@ -183,20 +183,24 @@ fn compute_from_scratch(world: &World) -> Coverage {
     // of cost: during the computation they have to be **queried** once per
     // candidate of every provider — ~100,000 times at the reference scale,
     // because `pick_within_capacity` walks every candidate and does not stop
-    // when it fills up (it skips whoever does not fit). A `BTreeMap` with
-    // 3,750 keys would pay ~13 comparisons each time; a `SecondaryMap` is dense
-    // over the slot index, so it costs one access. The `Coverage` is
+    // when it fills up (it skips whoever does not fit). The `Coverage` is
     // materialised at the end, once.
     let mut assigned: SecondaryMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]> =
         SecondaryMap::new();
-    // A time marker per candidate, so a house the BFS reaches from more than
-    // one tile is not counted twice: the value is the index of the current
-    // provider, so there is no need to clear it between providers.
+
+    // Re-used Map across buildings to avoid multiple allocations.
+    // It could be an HashSet if not shared across the buildings.
+    // If the value matches, the house id is already seen.
     let mut seen: SecondaryMap<HouseId, u32> = SecondaryMap::new();
+
+    // (distance, tile_index, house_id)
+    // Cleared for each building.
     let mut candidates: Vec<(u16, TileIndex, HouseId)> = Vec::new();
+
+    // All the entrances of the building.
+    // Cleared for each building.
     let mut entrances: Vec<TileIndex> = Vec::new();
-    // One per recomputation, reused by every provider: allocating it per
-    // provider was the last per-provider cost proportional to the map.
+
     let mut visited = Visited::new(world.grid().len());
 
     // The providers are walked in BuildingId order: it is the order that
@@ -211,8 +215,10 @@ fn compute_from_scratch(world: &World) -> Coverage {
     // described by the message of `the_hashes_match_the_committed_ones` —
     // different hashes without a balance change means stop and find the source,
     // not regenerate.
-    for (epoch, (provider, b)) in world.buildings().enumerate() {
-        let epoch = epoch as u32;
+    for (index, (provider, b)) in world.buildings().enumerate() {
+        // We use index as `epoch`. `epoch` is used to distinguish iterations,
+        // so we can re-use same objects, like `seen` and `visited`.
+        let epoch = index as u32;
         let Some(def) = world.data().def(b.kind) else {
             continue;
         };
@@ -227,8 +233,7 @@ fn compute_from_scratch(world: &World) -> Coverage {
 
         world.building_entrances_into(provider, &mut entrances);
         if entrances.is_empty() {
-            // A provider not hooked up to the network serves nobody: a house
-            // not adjacent to any road is unreachable, at any distance.
+            // A provider not hooked up to the network serves nobody.
             continue;
         }
 
@@ -242,6 +247,7 @@ fn compute_from_scratch(world: &World) -> Coverage {
         bfs_roads(world.grid(), &entrances, range, &mut visited, |tile, d| {
             for h in houses_by_tile.get(tile) {
                 if seen.get(*h) == Some(&epoch) {
+                    // we already proceed this house for the "epoch" building.
                     continue;
                 }
                 seen.insert(*h, epoch);
@@ -257,10 +263,7 @@ fn compute_from_scratch(world: &World) -> Coverage {
 
         // **Priority order**, game semantics: when the candidates exceed the
         // capacity, the nearest ones are served; at equal distance the smaller
-        // `TileIndex` wins. It is a total order — without the second criterion
-        // two equidistant houses would be ordered by the BFS's visit order,
-        // i.e. by an implementation detail, and the recorded replay would
-        // become fragile.
+        // `TileIndex` wins (just to have a stable sort).
         candidates.sort_unstable();
 
         // Contention: in M0 a house is either served or not, and the first

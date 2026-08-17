@@ -116,7 +116,7 @@ pub(crate) fn production(world: &mut World) {
             continue;
         };
         let residents = i32::from(house.residents);
-        let Some(provider) = world.coverage.provider(h, ServiceKind::Food) else {
+        let Some(provider) = world.coverage.served_by(h, ServiceKind::Food) else {
             continue;
         };
 
