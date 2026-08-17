@@ -3,10 +3,6 @@
 //! A provider serves the houses within a range measured **along the road
 //! network**, until it runs out of a capacity counted in **residents served**
 //! ([`pick_within_capacity`]).
-//!
-//! Like `RoadNetwork`, `Coverage` is derived and does not enter the state hash:
-//! what guards it is the incremental-versus-from-scratch equivalence test,
-//! which also says *where* the problem is.
 
 use std::collections::BTreeMap;
 
@@ -32,17 +28,23 @@ impl Coverage {
         self.served_by.get(&house)?[kind.index()]
     }
 
-    pub fn is_served(&self, house: HouseId, kind: ServiceKind) -> bool {
-        self.provider(house, kind).is_some()
-    }
-
     #[cfg(feature = "counters")]
     pub const fn recomputes(&self) -> u32 {
         self.recomputes
     }
+}
 
-    /// The assignments, without the diagnostic counter: this is what gets
-    /// compared between incremental coverage and coverage from scratch.
+/// Queries used only by the tests, behind the `test-util` feature: an integration
+/// test is a separate crate and can reach nothing but `pub`, so the feature is what
+/// stops that `pub` from also meaning "part of the API".
+#[cfg(feature = "test-util")]
+impl Coverage {
+    pub fn is_served(&self, house: HouseId, kind: ServiceKind) -> bool {
+        self.provider(house, kind).is_some()
+    }
+
+    /// The assignments, without the diagnostic counter, as the
+    /// incremental-versus-from-scratch test compares them.
     pub const fn assignments(
         &self,
     ) -> &BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]> {
@@ -346,7 +348,7 @@ pub(crate) fn propagate_coverage(world: &mut World) {
     for (_, h) in houses.iter_mut() {
         h.served = crate::service::ServiceFlags::empty();
     }
-    for (id, services) in coverage.assignments() {
+    for (id, services) in &coverage.served_by {
         let Some(h) = houses.get_mut(*id) else {
             continue;
         };
