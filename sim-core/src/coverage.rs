@@ -34,9 +34,6 @@ impl Coverage {
     }
 }
 
-/// Queries used only by the tests, behind the `test-util` feature: an integration
-/// test is a separate crate and can reach nothing but `pub`, so the feature is what
-/// stops that `pub` from also meaning "part of the API".
 #[cfg(feature = "test-util")]
 impl Coverage {
     pub fn is_served(&self, house: HouseId, kind: ServiceKind) -> bool {
@@ -61,11 +58,6 @@ impl Coverage {
     }
 }
 
-/// The recomputation from scratch, behind the `from-scratch` feature: the tick
-/// reaches it from inside the module, and its two readers outside — the test that
-/// compares the incremental coverage against it and the benchmark that measures it —
-/// are separate crates and can reach nothing but `pub`, so the feature is what stops
-/// that `pub` from also meaning "part of the API".
 #[cfg(feature = "from-scratch")]
 impl Coverage {
     /// Coverage recomputed from scratch on the current state, ignoring the dirty flags.
@@ -79,66 +71,88 @@ impl Coverage {
 /// In CSR form: the houses of tile `t` are `houses[offsets[t]..offsets[t + 1]]`.
 /// `TileIndex` is a **dense** index over the grid, so indexing it directly costs
 /// one access, against the ~13 comparisons with pointer chasing of a
-/// `BTreeMap`. That is not a detail: it is the most frequent operation of the
-/// whole recomputation — one per reached tile, per provider, i.e. ~100,000
-/// times at the reference scale.
+/// `BTreeMap`.
 ///
 /// **At most four houses per tile**, because a tile has four orthogonal
-/// neighbours (`Grid::neighbors4`) and each holds at most one occupant. The
-/// bound holds even when houses grow beyond 1x1 in M1: it comes from the tile's
-/// neighbours, not from the size of the house.
+/// neighbours (`Grid::neighbors4`) and each holds at most one occupant.
 struct HousesByTile {
     /// Length `grid.len() + 1`.
     offsets: Vec<u32>,
-    /// The houses, grouped by tile and in `HouseId` order within each group.
+    /// The houses, grouped by tile. The order **within** a group is not
+    /// promised: see [`HousesByTile::from_entrances`].
     houses: Vec<HouseId>,
 }
 
 impl HousesByTile {
-    /// A counting sort in three passes: count, prefix-sum, fill.
-    ///
-    /// Linear in the number of tiles plus the number of entrances, with no
-    /// comparisons at all — against the implicit ordering of a `BTreeMap`,
-    /// which would pay `log n` on every insertion and allocate a node per tile.
     fn new(world: &World) -> Self {
-        let tiles = world.grid().len() as usize;
-        let mut offsets = vec![0u32; tiles + 1];
-
-        // The pairs are collected in `HouseId` order: that is the order that
-        // then shows up inside each group.
         let mut pairs: Vec<(TileIndex, HouseId)> = Vec::new();
         let mut entrances = Vec::new();
         for (id, _) in world.houses() {
             world.house_entrances_into(id, &mut entrances);
             for t in &entrances {
                 pairs.push((*t, id));
-                offsets[t.as_usize()] += 1;
+            }
+        }
+        Self::from_entrances(world.grid().len() as usize, &pairs)
+    }
+
+    /// A counting sort over the `(tile, house)` pairs, in three passes: count,
+    /// running sum, fill.
+    ///
+    /// Linear in the number of tiles plus the number of entrances, with no
+    /// comparisons at all — against the implicit ordering of a `BTreeMap`,
+    /// which would pay `log n` on every insertion and allocate a node per tile.
+    fn from_entrances(tiles: usize, pairs: &[(TileIndex, HouseId)]) -> Self {
+        // `offsets` carries three meanings in turn, one per pass below, and
+        // reusing the one array for all three is what makes the sort read oddly.
+        // Five tiles, with the pairs arriving as (2,A) (0,B) (2,C) (4,D) (2,E):
+        //
+        //   index         0   1   2   3   4   5
+        //   after count   1   0   3   0   1   0   how many houses face the tile
+        //   after sum     1   1   4   4   5   5   the end of the tile's group
+        //   after fill    0   1   1   4   4   5   its start, which `get` reads
+        //
+        //   houses        B   E   C   A   D
+        //   index         0   1   2   3   4
+        //
+        // Follow tile 2: its slot starts at 4 and is stepped down to 3, 2, 1 as
+        // A, C and E are written behind it. Stepped down once per house of its
+        // own tile, it lands on the start of its run. Tile 1 has no houses, is
+        // never touched, and keeps what the sum left there — which is both the
+        // end of tile 0's group and the start of its own empty one.
+        //
+        // Reading back: `get(2)` is `houses[1..4]`, the three houses of tile 2;
+        // `get(1)` is `houses[1..1]`, empty because start and end coincide.
+        let mut offsets = vec![0u32; tiles + 1];
+
+        for (t, _) in pairs {
+            if let Some(count) = offsets.get_mut(t.as_usize()) {
+                *count += 1;
             }
         }
 
-        // Exclusive prefix sum: `offsets[t]` becomes the start of the group.
         let mut running = 0u32;
         for o in &mut offsets {
-            let count = *o;
+            running += *o;
             *o = running;
-            running += count;
         }
 
-        // Forward fill, with `offsets[t]` acting as a cursor. At the end every
-        // cursor has arrived at the end of its own group, i.e. at the start of
-        // the next one: shifting everything one place to the right is enough.
-        let mut houses = vec![HouseId::default(); pairs.len()];
+        let mut houses = vec![HouseId::default(); running as usize];
         for (t, h) in pairs {
-            let i = t.as_usize();
-            if let Some(slot) = houses.get_mut(offsets[i] as usize) {
-                *slot = h;
+            let Some(cursor) = offsets.get_mut(t.as_usize()) else {
+                continue;
+            };
+            // A cursor cannot run past the start of its own group, because the
+            // pass above counted the very same pairs. It is written as a check
+            // rather than a subtraction because nothing in the core panics.
+            let Some(start) = cursor.checked_sub(1) else {
+                continue;
+            };
+            *cursor = start;
+            if let Some(slot) = houses.get_mut(start as usize) {
+                *slot = *h;
             }
-            offsets[i] += 1;
         }
-        for i in (1..=tiles).rev() {
-            offsets[i] = offsets[i - 1];
-        }
-        offsets[0] = 0;
 
         Self { offsets, houses }
     }
@@ -373,7 +387,69 @@ pub(crate) fn propagate_coverage(world: &mut World) {
 
 #[cfg(test)]
 mod tests {
-    use super::pick_within_capacity;
+    use slotmap::SlotMap;
+
+    use super::{HousesByTile, pick_within_capacity};
+    use crate::grid::TileIndex;
+    use crate::ids::HouseId;
+
+    /// The counting sort, against the grouping done the obvious way.
+    ///
+    /// The recordings already cover this, but only as "a hash moved": a cursor
+    /// off by one files a house under the neighbouring tile, and every provider
+    /// on that street then serves the wrong set of houses. This says which tile.
+    ///
+    /// The two sides are compared **sorted**, because the order within a group
+    /// is deliberately not promised — see [`HousesByTile::from_entrances`].
+    #[test]
+    fn a_group_holds_exactly_the_houses_of_its_tile() {
+        let mut ids: SlotMap<HouseId, ()> = SlotMap::with_key();
+        let h: Vec<HouseId> = (0..8).map(|_| ids.insert(())).collect();
+        let at = |t: u16, i: usize| (TileIndex::new(t), h[i]);
+
+        // The first tile, the last one, a tile carrying the full four, empty
+        // tiles either side, and a walk whose pairs do not arrive in tile order.
+        let cases: &[(usize, Vec<(TileIndex, HouseId)>)] = &[
+            (9, Vec::new()),
+            (1, vec![at(0, 0)]),
+            (
+                9,
+                vec![
+                    at(4, 0),
+                    at(0, 1),
+                    at(8, 2),
+                    at(4, 3),
+                    at(4, 4),
+                    at(0, 5),
+                    at(4, 6),
+                    at(8, 7),
+                ],
+            ),
+        ];
+
+        for (tiles, pairs) in cases {
+            let index = HousesByTile::from_entrances(*tiles, pairs);
+
+            let mut total = 0;
+            for t in 0..*tiles {
+                let mut expected: Vec<HouseId> = pairs
+                    .iter()
+                    .filter(|(p, _)| p.as_usize() == t)
+                    .map(|(_, id)| *id)
+                    .collect();
+                let mut got = index.get(TileIndex::new(t as u16)).to_vec();
+                expected.sort_unstable();
+                got.sort_unstable();
+                assert_eq!(got, expected, "tile {t} of {tiles}");
+                total += got.len();
+            }
+            // Nothing is stranded in the backing array outside every group.
+            // The loop above cannot see that: a running sum that started
+            // somewhere other than zero would leave a gap no tile reaches,
+            // while each group it does reach still held the right houses.
+            assert_eq!(total, index.houses.len(), "{tiles} tiles");
+        }
+    }
 
     /// The filling rule, row by row.
     ///
