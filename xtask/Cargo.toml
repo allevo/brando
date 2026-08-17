@@ -4,7 +4,7 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-sim-core = { path = "../sim-core", features = ["counters"] }
+sim-core = { path = "../sim-core", features = ["counters", "from-scratch"] }
 sim-data = { path = "../sim-data" }
 sim-replay = { path = "../sim-replay" }
 

@@ -60,7 +60,7 @@ use sim_core::{
 /// | `A` empty tick, nothing dirty | 248 µs |
 /// | `C` tick, 10,000 rejected commands | 274 µs — 2 ns/command |
 /// | `D` tick, 1 accepted command | 3.35 ms |
-/// | `G` `compute_from_scratch` alone | 3.05 ms — 2.5 µs/provider |
+/// | `G` `Coverage::from_scratch` alone | 3.05 ms — 2.5 µs/provider |
 ///
 /// `A` is the number to watch: it is paid on **every** tick, while `D` is paid
 /// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
@@ -149,7 +149,7 @@ fn preset(
         &sim_replay::hash_hex(&sim_replay::hash_world(&w))[..16]
     );
     println!();
-    println!("  {:<38} {:>12} {:>12}", "", "median", "worst");
+    println!("  {:<40} {:>12} {:>12}", "", "median", "worst");
 
     // A. An empty tick with nothing dirty: this is what you pay in the ticks
     //    where the player does not build, i.e. the vast majority.
@@ -281,11 +281,11 @@ fn preset(
     //    it is the one to watch when optimising coverage: D also contains
     //    production, events and command validation.
     let g = measure(reps, |_| {
-        let _ = sim_core::coverage::compute_from_scratch(&w);
+        let _ = sim_core::Coverage::from_scratch(&w);
     });
     let per_provider = g.median / w.building_count().max(1) as u128;
     row(
-        "G. compute_from_scratch only (step 3)",
+        "G. Coverage::from_scratch only (step 3)",
         &g,
         Some(format!("{per_provider} ns/provider")),
     );
@@ -704,7 +704,7 @@ fn time_it(f: impl FnOnce()) -> u128 {
 
 fn row(name: &str, m: &Measurement, note: Option<String>) {
     println!(
-        "  {:<38} {:>12} {:>12}  {}",
+        "  {:<40} {:>12} {:>12}  {}",
         name,
         format_duration(m.median),
         format_duration(m.worst),

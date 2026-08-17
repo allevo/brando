@@ -15,7 +15,12 @@ blake3 = { workspace = true }
 
 [features]
 counters = []
-test-util = ["counters"]
+# The recomputation of coverage from scratch. It is its own feature, and not part
+# of `test-util`, because one of the two readers outside the crate is `xtask`,
+# which reaches it over a normal dependency edge — where `test-util` would compile
+# the direct-mutation hooks on `World` into every plain workspace build.
+from-scratch = []
+test-util = ["counters", "from-scratch"]
 
 [dev-dependencies]
 proptest = { workspace = true }

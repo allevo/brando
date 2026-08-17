@@ -421,7 +421,7 @@ proptest! {
         let mut w = world_without_demographics();
         for cmds in &p {
             tick(&mut w, cmds);
-            let from_scratch = sim_core::coverage::compute_from_scratch(&w);
+            let from_scratch = sim_core::Coverage::from_scratch(&w);
             prop_assert_eq!(
                 w.coverage().assignments(),
                 from_scratch.assignments(),

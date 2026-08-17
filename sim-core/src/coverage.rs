@@ -61,6 +61,19 @@ impl Coverage {
     }
 }
 
+/// The recomputation from scratch, behind the `from-scratch` feature: the tick
+/// reaches it from inside the module, and its two readers outside — the test that
+/// compares the incremental coverage against it and the benchmark that measures it —
+/// are separate crates and can reach nothing but `pub`, so the feature is what stops
+/// that `pub` from also meaning "part of the API".
+#[cfg(feature = "from-scratch")]
+impl Coverage {
+    /// Coverage recomputed from scratch on the current state, ignoring the dirty flags.
+    pub fn from_scratch(world: &World) -> Self {
+        compute_from_scratch(world)
+    }
+}
+
 /// From a road tile to the houses that face onto it.
 ///
 /// In CSR form: the houses of tile `t` are `houses[offsets[t]..offsets[t + 1]]`.
@@ -147,7 +160,7 @@ impl HousesByTile {
 /// of the recomputation but its **absence** when nothing has changed; and what
 /// the equivalence test catches is a forgotten invalidation, not an algorithm
 /// mistake.
-pub fn compute_from_scratch(world: &World) -> Coverage {
+fn compute_from_scratch(world: &World) -> Coverage {
     // The reverse map from road tile to the houses facing onto it. Built once
     // per recomputation instead of once per provider.
     let houses_by_tile = HousesByTile::new(world);
