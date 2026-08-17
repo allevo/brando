@@ -2,10 +2,7 @@
 //!
 //! A provider serves the houses within a range measured **along the road
 //! network**, until it runs out of a capacity counted in **residents served**
-//! ([`pick_within_capacity`]). There are no walkers: the water carriers the
-//! player will see wandering around are decorative, live in the renderer and
-//! are derived from this structure. **If a `Walker` shows up in this module,
-//! it is a bug.**
+//! ([`pick_within_capacity`]).
 //!
 //! Like `RoadNetwork`, `Coverage` is derived and does not enter the state hash:
 //! what guards it is the incremental-versus-from-scratch equivalence test,
@@ -25,8 +22,7 @@ use crate::world::World;
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Coverage {
     served_by: BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]>,
-    /// How many times coverage has been recomputed. It serves the dirty-flag
-    /// tests, not the game.
+    /// How many times coverage has been recomputed.
     #[cfg(feature = "counters")]
     recomputes: u32,
 }
