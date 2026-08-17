@@ -27,6 +27,19 @@ pub struct Coverage {
     served_by: BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]>,
     /// How many times coverage has been recomputed. It serves the dirty-flag
     /// tests, not the game.
+    ///
+    /// It is compiled only under `counters`, because nothing in the tick reads
+    /// it: in a build that only plays the game it is a field kept up to date
+    /// for a reader who is not there. With the feature off it is gone rather
+    /// than ignored, so `PartialEq` compares two coverages on their assignments
+    /// alone.
+    ///
+    /// `counters` is its own feature rather than part of `test-util` — which
+    /// turns it on — because the one reader that is not a test is `xtask`, and
+    /// giving `xtask` `test-util` would put [`World`]'s direct-mutation hooks on
+    /// a normal dependency edge, where a plain workspace build compiles them in
+    /// for every crate.
+    #[cfg(feature = "counters")]
     recomputes: u32,
 }
 
@@ -39,6 +52,7 @@ impl Coverage {
         self.provider(house, kind).is_some()
     }
 
+    #[cfg(feature = "counters")]
     pub const fn recomputes(&self) -> u32 {
         self.recomputes
     }
@@ -320,9 +334,17 @@ pub(crate) fn propagate_coverage(world: &mut World) {
     if !world.dirty.coverage_needs_recompute() {
         return;
     }
+    // The counter is carried across by hand because the recomputation replaces
+    // the whole structure, and it is carried only where it exists: without
+    // `counters` these two statements compile to nothing, which is the point of
+    // putting it behind a feature.
+    #[cfg(feature = "counters")]
     let recomputes = world.coverage.recomputes;
     world.coverage = compute_from_scratch(world);
-    world.coverage.recomputes = recomputes.wrapping_add(1);
+    #[cfg(feature = "counters")]
+    {
+        world.coverage.recomputes = recomputes.wrapping_add(1);
+    }
     world.dirty.coverage.clear();
     world.dirty.coverage_invalidated = false;
 
