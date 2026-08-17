@@ -27,18 +27,6 @@ pub struct Coverage {
     served_by: BTreeMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]>,
     /// How many times coverage has been recomputed. It serves the dirty-flag
     /// tests, not the game.
-    ///
-    /// It is compiled only under `counters`, because nothing in the tick reads
-    /// it: in a build that only plays the game it is a field kept up to date
-    /// for a reader who is not there. With the feature off it is gone rather
-    /// than ignored, so `PartialEq` compares two coverages on their assignments
-    /// alone.
-    ///
-    /// `counters` is its own feature rather than part of `test-util` — which
-    /// turns it on — because the one reader that is not a test is `xtask`, and
-    /// giving `xtask` `test-util` would put [`World`]'s direct-mutation hooks on
-    /// a normal dependency edge, where a plain workspace build compiles them in
-    /// for every crate.
     #[cfg(feature = "counters")]
     recomputes: u32,
 }

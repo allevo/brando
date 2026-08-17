@@ -4,11 +4,6 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-# `counters`, and deliberately not `test-util`: `bench` reads the count of
-# coverage recomputations to print J alongside the cost of an empty tick. This is
-# a normal dependency edge, so whatever it turns on is compiled into `sim-core`
-# for every crate in a plain workspace build — which the read-only counters may
-# do and the direct-mutation hooks may not.
 sim-core = { path = "../sim-core", features = ["counters"] }
 sim-data = { path = "../sim-data" }
 sim-replay = { path = "../sim-replay" }

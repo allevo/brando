@@ -14,25 +14,7 @@ rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
 [features]
-# The diagnostic counters kept beside the derived structures — today the one on
-# `Coverage`, which counts recomputations. Nothing in the tick reads them, so
-# they are compiled only where something does: the tests, and `xtask bench`,
-# which prints how many recomputations a run of empty ticks cost.
 counters = []
-
-# Hooks on the state, for tests — other crates' since phase 08, this crate's own
-# since phase 13. Mostly direct mutation, and not an extension of the API: the
-# only write channel into the core is still the Command queue. Since `World` stopped
-# being `Clone` in any configuration, it also
-# holds one **read-only** member, `first_difference`, which compares two worlds
-# that played the same game — what the tests do instead of copying one, `World`
-# being no longer Clone.
-#
-# It turns `counters` on, so no test asks for both: `first_difference` compares
-# the counters along with everything else, and a test reading one already needs
-# this feature for its setup. The two stay separate because only this one is
-# confined to dev-dependency edges, where a plain workspace build cannot reach
-# the mutation hooks; `counters` is read-only and may travel further.
 test-util = ["counters"]
 
 [dev-dependencies]

@@ -37,6 +37,7 @@ pub struct RoadNetwork {
     component: Vec<Option<ComponentId>>,
     /// How many full rebuilds have been performed. It serves the dirty-flag
     /// tests, not the game.
+    #[cfg(feature = "counters")]
     rebuilds: u32,
 }
 
@@ -44,6 +45,7 @@ impl RoadNetwork {
     pub fn new(tiles: u32) -> Self {
         Self {
             component: vec![None; tiles as usize],
+            #[cfg(feature = "counters")]
             rebuilds: 0,
         }
     }
@@ -52,6 +54,7 @@ impl RoadNetwork {
         self.component.get(idx.as_usize()).copied().flatten()
     }
 
+    #[cfg(feature = "counters")]
     pub const fn rebuilds(&self) -> u32 {
         self.rebuilds
     }
@@ -86,7 +89,10 @@ impl RoadNetwork {
     pub(crate) fn rebuild(&mut self, grid: &Grid) {
         self.component.clear();
         self.component.resize(grid.len() as usize, None);
-        self.rebuilds = self.rebuilds.wrapping_add(1);
+        #[cfg(feature = "counters")]
+        {
+            self.rebuilds = self.rebuilds.wrapping_add(1);
+        }
 
         let mut queue: Vec<TileIndex> = Vec::new();
         for root in grid.indices() {
