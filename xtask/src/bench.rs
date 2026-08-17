@@ -79,6 +79,14 @@ use sim_core::{
 /// The table above it stays as the end-of-M0 baseline and is not rewritten:
 /// what these two say side by side is that the whole of phase 14's 13× is not
 /// yet paid back, and where the rest of it has to come from is still slot 18.5.
+///
+/// **`A` and not `G` is the honest measure of a change to the rules.** `G` runs
+/// after the several hundred ticks the measures above it take, so two builds
+/// that decide anything differently are timed on cities that have drifted
+/// apart, and the difference between them is partly the algorithm and partly a
+/// different city. `A` starts from the state whose hash is printed. Phase 14.9.9
+/// found this the hard way: measured on `G`, its rule change looked 5.3% slower;
+/// measured on `A`, it costs exactly nothing.
 const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are
