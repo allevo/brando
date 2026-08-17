@@ -254,6 +254,13 @@ fn compute_from_scratch(world: &World) -> Coverage {
                 let Some(house) = world.house(*h) else {
                     continue;
                 };
+                // **A house with nobody in it is not served.** A service exists
+                // to reach residents, and a house with none has nobody to
+                // reach: it is not a candidate, at any distance, for any
+                // provider.
+                if house.residents == 0 {
+                    continue;
+                }
                 let Some(idx) = world.grid().index(house.origin) else {
                     continue;
                 };

@@ -239,26 +239,24 @@ fn the_capacity_runs_out_in_residents() {
     assert_eq!(residents, SMALL_WELL_CAPACITY, "the capacity is full");
 }
 
-/// And what that same rule does when a house weighs nothing.
+/// And what that same rule does when a house weighs nothing: it does not get
+/// the chance to, because a house with nobody in it is not a candidate at all.
 ///
-/// Capacity is counted in residents, and the `hard` difficulty profile builds
-/// every house with zero of them. Where the two meet, `pick_within_capacity`'s
-/// `left.checked_sub(residents)` can never fail, so a provider serves however
-/// many empty houses are in range — here a well declared for four residents
-/// takes seven, and it would take any number.
+/// The `hard` difficulty profile builds every house with zero residents, so
+/// this is the case where the whole district is empty at once. Nobody is
+/// served, whatever the capacity says, and it stays that way until somebody
+/// moves in.
 ///
-/// Defensible on its own terms: an empty house genuinely consumes nothing. But
-/// coverage feeds satisfaction, so on the profile meant to be the hard one a
-/// single small well carries a whole district to the top level for
-/// free. It is a decision and not a bug, and it is the open question at slot
-/// 14.5; this test is here to pin what the game does today so the decision has
-/// something concrete to overturn: when 14.5 is answered in any direction but
-/// "accept it", this goes red, and that is the point of it.
+/// This assertion used to run the other way — seven empty houses all served by
+/// a well declared for four residents, and any number would have been — because
+/// the capacity is counted in residents and `left.checked_sub(0)` never fails.
+/// Coverage feeds satisfaction, so on the profile meant to be the hard one that
+/// carried a whole district to the top level for free.
 ///
 /// It is also the only test in the suite that runs on `hard` other than the
 /// one in `commands.rs` that checks the knob itself.
 #[test]
-fn on_hard_an_empty_house_consumes_no_capacity() {
+fn on_hard_an_empty_house_is_not_served() {
     let mut w = world_at(32, 32, HARD);
     roads(
         &mut w,
@@ -275,10 +273,10 @@ fn on_hard_an_empty_house_consumes_no_capacity() {
         .next()
         .map(|(id, _)| id)
         .expect("the small well");
-    assert_eq!(
-        w.coverage().houses_served_by(small_well).len(),
-        7,
-        "capacity {SMALL_WELL_CAPACITY} residents, and seven houses of nobody all get in"
+    assert!(
+        w.coverage().houses_served_by(small_well).is_empty(),
+        "capacity {SMALL_WELL_CAPACITY} residents, and seven houses of nobody: \
+         none of them is a candidate for it"
     );
 }
 
