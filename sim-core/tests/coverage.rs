@@ -208,6 +208,51 @@ fn at_equal_distance_the_smaller_tile_wins() {
     );
 }
 
+/// The same rule where the two orders **disagree**, which is the only place it
+/// can be observed at all.
+///
+/// [`at_equal_distance_the_smaller_tile_wins`] puts its two houses south of two
+/// road tiles, so the houses come out in the same order as the tiles they face
+/// and either rule gives the same answer. Here one house faces its road from
+/// below and the other from above: the road tiles run (4,5) then (6,5), and the
+/// houses run (6,4) then (4,6). Whoever wins says which of the two orders the
+/// game really uses.
+///
+/// It is the reason the walk hands over a whole distance at a time rather than
+/// a tile at a time. Filling as each tile arrived would serve the house at
+/// (4,6), because its road tile is reached first — an answer that depends on
+/// which side of the street a house happens to stand on.
+#[test]
+fn at_equal_distance_the_order_is_the_houses_and_not_the_road_tiles() {
+    let mut w = world();
+    roads(&mut w, &[(4, 5), (5, 5), (6, 5)]);
+    build(&mut w, SMALL_WELL, 5, 6); // its only entrance is (5,5)
+
+    build(&mut w, HOUSE, 4, 6); // entrance (4,5), below the street
+    build(&mut w, HOUSE, 6, 4); // entrance (6,5), above the street
+
+    let at = |p| {
+        w.houses()
+            .find(|(_, h)| h.origin == p)
+            .map(|(id, _)| id)
+            .expect("a house there")
+    };
+    let idx = |p| w.grid().index(p).expect("on the map");
+
+    assert!(
+        idx(pos(4, 5)) < idx(pos(6, 5)) && idx(pos(6, 4)) < idx(pos(4, 6)),
+        "the road tiles and the houses they carry run in opposite orders"
+    );
+    assert!(
+        w.coverage().is_served(at(pos(6, 4)), ServiceKind::Water),
+        "the smaller house tile wins, though its road tile is the later one"
+    );
+    assert!(
+        !w.coverage().is_served(at(pos(4, 6)), ServiceKind::Water),
+        "the small well's capacity is one house only"
+    );
+}
+
 /// Capacity is counted in residents, and this test observes that from the
 /// outside: the small well declares four of them, i.e. exactly one house, and
 /// the second candidate house does not fit even though it is the only one left.
@@ -391,6 +436,30 @@ fn any_command() -> impl Strategy<Value = Command> {
     ]
 }
 
+/// Two long streets joined at one end, with room for buildings on either side
+/// of each: whatever is placed on a plot has an entrance, and the houses are
+/// strung out along the corridor instead of bunched against the provider.
+fn two_streets() -> World {
+    let mut w = world();
+    let mut cells: Vec<(u8, u8)> = Vec::new();
+    for x in 0..14 {
+        cells.push((x, 5));
+        cells.push((x, 9));
+    }
+    for y in 6..=8 {
+        cells.push((0, y));
+    }
+    roads(&mut w, &cells);
+    w
+}
+
+/// A plot beside one of [`two_streets`]'s streets. The rows are the ones a 1x1
+/// building can take without standing on a road, and the ones a 2x2 can take
+/// with its far half still touching one.
+fn a_plot() -> impl Strategy<Value = TilePos> {
+    (1u8..14, prop::sample::select(vec![3u8, 4, 6, 7, 8, 10])).prop_map(|(x, y)| TilePos::new(x, y))
+}
+
 proptest! {
     /// **The** test of the phase: given a random sequence of commands, the
     /// `Coverage` obtained by following the dirty flags is identical to the one
@@ -424,6 +493,56 @@ proptest! {
                 w.coverage().assignments(),
                 from_scratch.assignments(),
                 "incremental coverage differs from the from-scratch one at tick {}",
+                w.tick()
+            );
+        }
+    }
+
+    /// A provider that stops where its capacity ran out serves exactly whom it
+    /// would have served walking its whole range.
+    ///
+    /// **The oracle for the stop, and the reason `coverage_equivalence` is not
+    /// it.** That test holds the stored coverage against `Coverage::from_scratch`,
+    /// and both of those stop: a stop that ended one distance too early would
+    /// give the same wrong answer on either side and leave it green. This is the
+    /// only comparison in the suite where one side walks the whole way.
+    ///
+    /// **Its own generator, and the streets are laid before it runs.** The one
+    /// `coverage_equivalence` uses scatters roads and buildings over the same
+    /// window at random, and what comes out is mostly buildings with no road
+    /// beside them: a provider that reaches nobody past its own doorstep
+    /// exercises no stop at all, and this test was green against a stop
+    /// deliberately broken to end after the first distance until the streets
+    /// were put in. With them, every building has an entrance and the houses
+    /// are spread along a corridor, which is what makes the walk have somewhere
+    /// to go.
+    ///
+    /// It builds small wells for the same reason: the stop only happens to a
+    /// provider whose capacity really runs out, and a well declared for eight
+    /// houses rarely fills up inside a fourteen-tile window. The small one
+    /// holds a single house, so the capacity bites almost at once.
+    #[test]
+    fn stopping_when_full_serves_the_same_houses_as_walking_the_whole_range(
+        p in prop::collection::vec(prop::collection::vec(prop_oneof![
+            4 => a_plot().prop_map(|origin| Command::PlaceBuilding { kind: HOUSE, origin }),
+            2 => a_plot().prop_map(|origin| Command::PlaceBuilding { kind: SMALL_WELL, origin }),
+            1 => a_plot().prop_map(|origin| Command::PlaceBuilding { kind: WELL, origin }),
+            1 => a_plot().prop_map(|origin| Command::PlaceBuilding { kind: FARM, origin }),
+            1 => a_plot().prop_map(|at| Command::Demolish { at }),
+        ], 0..5), 1..10)
+    ) {
+        // On the real rates, so that houses of different sizes — and houses
+        // that empty — are in the mix: a capacity counted in residents runs out
+        // at a different distance for each of them.
+        let mut w = two_streets();
+        for cmds in &p {
+            tick(&mut w, cmds);
+            let stopping = sim_core::Coverage::from_scratch(&w);
+            let whole = sim_core::Coverage::from_scratch_walking_the_whole_range(&w);
+            prop_assert_eq!(
+                stopping.assignments(),
+                whole.assignments(),
+                "stopping when full differs from the whole walk at tick {}",
                 w.tick()
             );
         }

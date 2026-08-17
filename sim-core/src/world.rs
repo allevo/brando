@@ -468,10 +468,15 @@ impl World {
         // A local scratch buffer: this is not the hot path — step 3 uses its
         // own, reused across providers.
         let mut visited = crate::network::Visited::new(self.grid.len());
-        crate::network::bfs_roads(&self.grid, &starts, max, &mut visited, |t, d| {
-            if targets.binary_search(&t).is_ok() && best.is_none_or(|m| d < m) {
+        crate::network::bfs_roads(&self.grid, &starts, max, &mut visited, |tiles, d| {
+            // The first distance that holds a target is the answer, and there
+            // is nothing left to look for: the walk goes outwards, so anything
+            // still unvisited is further away than what has just been found.
+            if tiles.iter().any(|t| targets.binary_search(t).is_ok()) {
                 best = Some(d);
+                return false;
             }
+            true
         });
         best
     }

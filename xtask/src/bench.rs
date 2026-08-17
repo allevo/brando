@@ -66,6 +66,19 @@ use sim_core::{
 /// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
 /// making the coverage recompute almost every tick, which is the whole
 /// subject of the open question at slot 18.5.
+///
+/// **Where they stand now**, same scale, after phase 14.9.9 stopped a provider
+/// walking once its capacity has run out:
+///
+/// | | |
+/// |---|---|
+/// | `A` empty tick, nothing dirty | 2.059 ms |
+/// | `D` tick, 1 accepted command | 1.955 ms |
+/// | `G` `Coverage::from_scratch` alone | 1.601 ms — 1.3 µs/provider |
+///
+/// The table above it stays as the end-of-M0 baseline and is not rewritten:
+/// what these two say side by side is that the whole of phase 14's 13× is not
+/// yet paid back, and where the rest of it has to come from is still slot 18.5.
 const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are

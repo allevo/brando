@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use slotmap::SecondaryMap;
 
+use crate::House;
 use crate::grid::TileIndex;
 use crate::ids::{BuildingId, HouseId};
 use crate::network::{Visited, bfs_roads};
@@ -69,7 +70,22 @@ impl Coverage {
 impl Coverage {
     /// Coverage recomputed from scratch on the current state, ignoring the dirty flags.
     pub fn from_scratch(world: &World) -> Self {
-        compute_from_scratch(world)
+        compute_from_scratch::<YesStopWhenFull>(world)
+    }
+}
+
+#[cfg(feature = "test-util")]
+impl Coverage {
+    /// The same coverage, with every provider walked to its full range instead
+    /// of stopping where its capacity ran out.
+    ///
+    /// **The oracle for the stop, and the only one there can be.** The
+    /// equivalence property test holds the incremental coverage against
+    /// [`Coverage::from_scratch`], and both of those stop: a stop that ended one
+    /// distance too early would give the same wrong answer on either side and
+    /// leave the test green. This walks the whole way, so it disagrees.
+    pub fn from_scratch_walking_the_whole_range(world: &World) -> Self {
+        compute_from_scratch::<NoStopWhenFull>(world)
     }
 }
 
@@ -173,18 +189,45 @@ impl HousesByTile {
     }
 }
 
+trait StopWhenFull {
+    fn should_stop() -> bool;
+}
+struct NoStopWhenFull;
+impl StopWhenFull for NoStopWhenFull {
+    fn should_stop() -> bool {
+        false
+    }
+}
+struct YesStopWhenFull;
+impl StopWhenFull for YesStopWhenFull {
+    fn should_stop() -> bool {
+        true
+    }
+}
+
 /// Recomputes coverage from scratch on the current state.
-fn compute_from_scratch(world: &World) -> Coverage {
+///
+/// `stop_when_full` is `true` everywhere the game runs: a provider whose
+/// capacity has run out stops walking, because no house beyond the distance it
+/// ran out at can be served — every candidate weighs at least one resident, so
+/// nothing fits into nothing. Passing `false` walks every provider to its full
+/// range, which is what the `test-util` oracle
+/// `Coverage::from_scratch_walking_the_whole_range` does.
+///
+/// **The oracle exists because the usual one cannot see this.** The equivalence
+/// property test compares the incremental coverage against the from-scratch
+/// one, and both are this function: a wrong stop would give the same wrong
+/// answer on both sides and the test would stay green. The exhaustive walk is
+/// the only thing that disagrees with a stop that ends too early.
+fn compute_from_scratch<T: StopWhenFull>(world: &World) -> Coverage {
     // The reverse map from road tile to the houses facing onto it. Built once
     // per recomputation instead of once per provider.
     let houses_by_tile = HousesByTile::new(world);
 
     // The assignments accumulate here, not in the `Coverage`, and for a reason
     // of cost: during the computation they have to be **queried** once per
-    // candidate of every provider — ~100,000 times at the reference scale,
-    // because `pick_within_capacity` walks every candidate and does not stop
-    // when it fills up (it skips whoever does not fit). The `Coverage` is
-    // materialised at the end, once.
+    // candidate of every provider. The `Coverage` is materialised at the end,
+    // once.
     let mut assigned: SecondaryMap<HouseId, [Option<BuildingId>; ServiceKind::COUNT]> =
         SecondaryMap::new();
 
@@ -193,9 +236,10 @@ fn compute_from_scratch(world: &World) -> Coverage {
     // If the value matches, the house id is already seen.
     let mut seen: SecondaryMap<HouseId, u32> = SecondaryMap::new();
 
-    // (distance, tile_index, house_id)
-    // Cleared for each building.
-    let mut candidates: Vec<(u16, TileIndex, HouseId)> = Vec::new();
+    // The free candidates at the distance being walked, as
+    // `(the house's origin tile, the house)`. Cleared for each distance, of
+    // each building.
+    let mut at_this_distance: Vec<(TileIndex, HouseId)> = Vec::new();
 
     // All the entrances of the building.
     // Cleared for each building.
@@ -237,75 +281,85 @@ fn compute_from_scratch(world: &World) -> Coverage {
             continue;
         }
 
-        // The candidates, with the smallest distance they were reached at.
+        // **Priority order, game semantics.** Nearest first, and among the
+        // houses at one distance, the one whose **own** tile comes first on
+        // the map.
         //
-        // The minimum does not need searching for: `bfs_roads` visits by
-        // increasing distance, so **the first sighting of a house is already
-        // its minimum**. It is enough to ignore later sightings, which arrive
-        // when the house faces onto more than one reached tile.
-        candidates.clear();
-        bfs_roads(world.grid(), &entrances, range, &mut visited, |tile, d| {
-            for h in houses_by_tile.get(tile) {
-                if seen.get(*h) == Some(&epoch) {
-                    // we already proceed this house for the "epoch" building.
-                    continue;
+        // Walking the road tiles in
+        // order therefore does not meet the houses in order. On a grid 32 wide,
+        // with a well whose only entrance is (5,5):
+        //
+        //       x=4    x=5    x=6
+        //   y=4  .      .      B     B = house (6,4), north of its street: 134
+        //   y=5 road   road   road   (4,5) = 164, (5,5) = 165, (6,5) = 166
+        //   y=6  A     well    .     A = house (4,6), south of its street: 196
+        //
+        // Both houses are one step away. The walk reaches 164 before 166, so it
+        // meets A first; the rule serves B first, because 134 comes before 196.
+        let mut left = capacity;
+        bfs_roads(world.grid(), &entrances, range, &mut visited, |tiles, _| {
+            at_this_distance.clear();
+            for tile in tiles {
+                for h in houses_by_tile.get(*tile) {
+                    if seen.get(*h) == Some(&epoch) {
+                        // we already proceed this house for the "epoch" building.
+                        continue;
+                    }
+                    seen.insert(*h, epoch);
+                    // A house already served for this service by an earlier
+                    // provider is dropped here, before any place is counted.
+                    // Left in, it would eat places this provider could have
+                    // given to a house that is still free.
+                    if assigned
+                        .get(*h)
+                        .is_some_and(|services| services[kind.index()].is_some())
+                    {
+                        continue;
+                    }
+                    let Some(house) = world.house(*h) else {
+                        continue;
+                    };
+                    // **A house with nobody in it is not served.** A service
+                    // exists to reach residents, and a house with none has
+                    // nobody to reach: it is not a candidate, at any distance,
+                    // for any provider.
+                    if house.residents == 0 {
+                        continue;
+                    }
+                    let Some(idx) = world.grid().index(house.origin) else {
+                        continue;
+                    };
+                    at_this_distance.push((idx, *h));
                 }
-                seen.insert(*h, epoch);
-                let Some(house) = world.house(*h) else {
-                    continue;
-                };
-                // **A house with nobody in it is not served.** A service exists
-                // to reach residents, and a house with none has nobody to
-                // reach: it is not a candidate, at any distance, for any
-                // provider.
-                if house.residents == 0 {
-                    continue;
+            }
+            at_this_distance.sort_unstable();
+
+            let picked = pick_within_capacity(
+                at_this_distance
+                    .iter()
+                    .filter_map(|(_, h)| Some((*h, world.house(*h)?))),
+                &mut left,
+            );
+            for h in picked {
+                if assigned.get(h).is_none() {
+                    assigned.insert(h, [None; ServiceKind::COUNT]);
                 }
-                let Some(idx) = world.grid().index(house.origin) else {
-                    continue;
-                };
-                candidates.push((d, idx, *h));
+                if let Some(services) = assigned.get_mut(h) {
+                    services[kind.index()] = Some(provider);
+                }
             }
+
+            // Out of capacity is the end of the walk: every candidate weighs at
+            // least one resident, so from here nothing fits, however near it
+            // stands.
+            left > 0 || !T::should_stop()
         });
-
-        // **Priority order**, game semantics: when the candidates exceed the
-        // capacity, the nearest ones are served; at equal distance the smaller
-        // `TileIndex` wins (just to have a stable sort).
-        candidates.sort_unstable();
-
-        // Contention: in M0 a house is either served or not, and the first
-        // provider in iteration order wins. Houses already taken are removed
-        // **before** the filling, not inside it: a contested house must not
-        // consume the capacity of whoever comes second.
-        let free = candidates.iter().filter_map(|(_, _, h)| {
-            let taken = assigned
-                .get(*h)
-                .is_some_and(|services| services[kind.index()].is_some());
-            if taken {
-                return None;
-            }
-            Some((*h, world.house(*h)?.residents))
-        });
-        let picked: Vec<HouseId> = pick_within_capacity(free, capacity).collect();
-
-        for h in picked {
-            if assigned.get(h).is_none() {
-                assigned.insert(h, [None; ServiceKind::COUNT]);
-            }
-            if let Some(services) = assigned.get_mut(h) {
-                services[kind.index()] = Some(provider);
-            }
-        }
     }
 
-    // Final materialisation. **Only** houses with at least one service get in:
-    // it is the same condition as before, when the entry was created by the
-    // `entry().or_default()` inside the loop over the picks. Inserting houses
-    // without services too would change the set of keys returned by
-    // `assignments()` and `houses_served_by()` — no test would catch it,
-    // because both sides of the comparison would change.
+    // Final materialisation.
     let mut cov = Coverage::default();
     for (h, services) in &assigned {
+        // Only houses with at least one service get in
         if services.iter().any(Option::is_some) {
             cov.served_by.insert(h, *services);
         }
@@ -315,6 +369,10 @@ fn compute_from_scratch(world: &World) -> Coverage {
 
 /// Fills up a provider's capacity by walking the candidates **already sorted by
 /// priority**, and returns the ones that get served.
+///
+/// `left` is what the provider has still to give, and it is carried in and out
+/// because the candidates arrive one distance at a time and the capacity runs
+/// across all of them.
 ///
 /// The capacity is counted in **residents**, not houses: with house levels (M1)
 /// the population varies from house to house, and a capacity in houses would no
@@ -341,14 +399,20 @@ fn compute_from_scratch(world: &World) -> Coverage {
 /// preference, only out of impossibility.
 ///
 /// [`CapacityBeyondOutput`]: crate::data::Inconsistency::CapacityBeyondOutput
-fn pick_within_capacity<T>(
-    candidates: impl IntoIterator<Item = (T, u16)>,
-    capacity: u16,
+fn pick_within_capacity<'h, T>(
+    candidates: impl IntoIterator<Item = (T, &'h House)>,
+    left: &mut u16,
 ) -> impl Iterator<Item = T> {
-    let mut left = capacity;
-    candidates.into_iter().filter_map(move |(id, residents)| {
-        left = left.checked_sub(residents)?;
-        Some(id)
+    candidates.into_iter().filter_map(move |(id, house)| {
+        let residents = house.residents;
+        match left.checked_sub(residents) {
+            // if the resident count is not filled entirely, we skip the house.
+            None => None,
+            Some(r) => {
+                *left = r;
+                Some(id)
+            }
+        }
     })
 }
 
@@ -363,7 +427,7 @@ pub(crate) fn propagate_coverage(world: &mut World) {
     // putting it behind a feature.
     #[cfg(feature = "counters")]
     let recomputes = world.coverage.recomputes;
-    world.coverage = compute_from_scratch(world);
+    world.coverage = compute_from_scratch::<YesStopWhenFull>(world);
     #[cfg(feature = "counters")]
     {
         world.coverage.recomputes = recomputes.wrapping_add(1);
@@ -400,6 +464,7 @@ mod tests {
     use slotmap::SlotMap;
 
     use super::{HousesByTile, pick_within_capacity};
+    use crate::{House, Level, ServiceFlags, TilePos};
     use crate::grid::TileIndex;
     use crate::ids::HouseId;
 
@@ -491,11 +556,51 @@ mod tests {
         ];
 
         for (capacity, candidates, served) in cases {
-            let picked: Vec<u8> =
-                pick_within_capacity(candidates.iter().copied(), *capacity).collect();
+            // `pick_within_capacity` now reads residents off a `&House`, so
+            // the houses have to be built and owned here, kept alongside
+            // their id, and then borrowed for the call.
+            let houses: Vec<(u8, House)> = candidates
+                .iter()
+                .copied()
+                .map(|(id, residents)| {
+                    (
+                        id,
+                        House {
+                            level: Level::new(1).unwrap(),
+                            origin: TilePos { x: 0, y: 0 },
+                            residents,
+                            satisfaction: [0, 0],
+                            served: ServiceFlags::empty(),
+                        },
+                    )
+                })
+                .collect();
+
+            let mut left = *capacity;
+            let picked: Vec<u8> = pick_within_capacity(
+                houses.iter().map(|(id, house)| (*id, house)),
+                &mut left,
+            )
+            .collect();
             assert_eq!(
                 picked, *served,
                 "capacity {capacity}, candidates {candidates:?}"
+            );
+
+            // Handed the same candidates one at a time, as the walk really
+            // does, it fills to exactly the same set: the capacity is carried
+            // across the calls and nothing is granted afresh at each one.
+            let mut left = *capacity;
+            let one_at_a_time: Vec<u8> = houses
+                .iter()
+                .flat_map(|(id, house)| {
+                    pick_within_capacity(std::iter::once((*id, house)), &mut left)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            assert_eq!(
+                one_at_a_time, *served,
+                "one at a time: capacity {capacity}, candidates {candidates:?}"
             );
         }
     }
