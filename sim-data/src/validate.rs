@@ -39,17 +39,6 @@ pub enum ValidationErrorKind {
     #[error("expected one value per level: levels = {levels}, values = {found}")]
     WrongLengthPerLevel { levels: u8, found: usize },
 
-    /// A game year longer than a `u32`. Its own variant rather than a reused
-    /// one: the report is what somebody reads when the tables will not load,
-    /// and this used to arrive as `TooSmall { min: 1, found: 0 }` against
-    /// `rules.months_per_year` — a message describing a different problem, and
-    /// blaming one of the two fields when either or neither may be at fault.
-    #[error("a year of {ticks_per_month} × {months_per_year} ticks does not fit in a u32")]
-    YearTooLong {
-        ticks_per_month: u32,
-        months_per_year: u32,
-    },
-
     #[error("unknown service: {name:?} (known: {known})")]
     UnknownService { name: String, known: String },
 
@@ -230,36 +219,6 @@ fn path_of(i: &Inconsistency) -> String {
 fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
     let r = &raw.rules;
 
-    if r.ticks_per_month < 1 {
-        rep.push(
-            "rules.ticks_per_month",
-            ValidationErrorKind::TooSmall {
-                min: 1,
-                found: i64::from(r.ticks_per_month),
-            },
-        );
-    }
-    if r.months_per_year < 1 {
-        rep.push(
-            "rules.months_per_year",
-            ValidationErrorKind::TooSmall {
-                min: 1,
-                found: i64::from(r.months_per_year),
-            },
-        );
-    }
-    if r.ticks_per_month.checked_mul(r.months_per_year).is_none() {
-        // `rules` and not one of the two fields: the product is what overflows,
-        // and naming either operand points at a number that may be perfectly
-        // reasonable on its own.
-        rep.push(
-            "rules",
-            ValidationErrorKind::YearTooLong {
-                ticks_per_month: r.ticks_per_month,
-                months_per_year: r.months_per_year,
-            },
-        );
-    }
     if r.food_per_resident < 0 {
         rep.push(
             "rules.food_per_resident",
@@ -270,8 +229,6 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
     }
 
     Rules {
-        ticks_per_month: r.ticks_per_month,
-        months_per_year: r.months_per_year,
         starting_treasury: Coins::new(r.starting_treasury),
         house_levels: validate_house_levels(raw, rep),
         food_per_resident: Milli::from_millis(r.food_per_resident),

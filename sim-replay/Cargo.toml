@@ -4,7 +4,9 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-sim-core = { path = "../sim-core" }
+# tick-number: hash.rs, recording.rs and replay.rs all read a tick's raw number
+# (to hash it, to compare it against the wire format, to stride checkpoints).
+sim-core = { path = "../sim-core", features = ["tick-number"] }
 sim-data = { path = "../sim-data" }
 serde = { workspace = true }
 thiserror = { workspace = true }

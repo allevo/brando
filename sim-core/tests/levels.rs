@@ -15,7 +15,9 @@ mod common;
 mod levels {
     use super::common::*;
     use proptest::prelude::*;
-    use sim_core::{BuildingKindId, Command, Event, HouseId, Level, ServiceKind, Tick, World};
+    use sim_core::{
+        BuildingKindId, Calendar, Command, Event, HouseId, Level, ServiceKind, Tick, World,
+    };
     use std::collections::BTreeMap;
 
     // --- helpers ------------------------------------------------------------
@@ -113,7 +115,7 @@ mod levels {
     /// inside it, so the earliest review that can act is the first month
     /// boundary at or after `now + steps - 1`.
     fn review_after(w: &World, steps: u32) -> Tick {
-        let month = w.data().rules.ticks_per_month;
+        let month = Calendar::TICKS_PER_MONTH;
         let ready = w.tick().get() + steps.saturating_sub(1);
         Tick::new(ready.div_ceil(month) * month)
     }
@@ -195,7 +197,7 @@ mod levels {
             "the fixture has to make level 3 reachable in one climb"
         );
 
-        let month = w.data().rules.ticks_per_month;
+        let month = Calendar::TICKS_PER_MONTH;
         tick(&mut w, &[]);
         assert_eq!(house_level(&w, house), level(2), "one level, not two");
         let eve = Tick::new(w.tick().get() + month - 1);
@@ -214,7 +216,7 @@ mod levels {
     #[test]
     fn the_level_only_changes_at_a_review() {
         let (mut w, house) = a_served_house();
-        let month = w.data().rules.ticks_per_month;
+        let month = Calendar::TICKS_PER_MONTH;
         let mut previous = house_level(&w, house);
 
         for _ in 0..month * 4 {
@@ -223,7 +225,7 @@ mod levels {
             let now = house_level(&w, house);
             if now != previous {
                 assert!(
-                    at.is_multiple_of(month),
+                    Calendar::is_month_boundary(at),
                     "the level moved at tick {at}, off a review"
                 );
                 previous = now;
@@ -284,7 +286,7 @@ mod levels {
 
         // And it stops there: level 1 has no level 0 to fall to, and a house
         // that empties out is phase 14's business.
-        let two_months = Tick::new(w.tick().get() + w.data().rules.ticks_per_month * 2);
+        let two_months = Tick::new(w.tick().get() + Calendar::TICKS_PER_MONTH * 2);
         run_to(&mut w, two_months);
         assert_eq!(house_level(&w, house), level(1));
     }
@@ -356,7 +358,7 @@ mod levels {
 
             let mut seen: BTreeMap<HouseId, Level> =
                 w.houses().map(|(id, h)| (id, h.level)).collect();
-            let year = w.data().rules.ticks_per_year();
+            let year = Calendar::TICKS_PER_YEAR;
             for _ in 0..year {
                 tick(&mut w, &[]);
                 for (id, h) in w.houses() {
@@ -437,7 +439,7 @@ mod levels {
         build(&mut w, HOUSE, 8, 5);
         let house = w.houses().next().map(|(id, _)| id).expect("the house");
 
-        let a_year = Tick::new(w.data().rules.ticks_per_year());
+        let a_year = Tick::new(Calendar::TICKS_PER_YEAR);
         run_to(&mut w, a_year);
         assert_eq!(
             satisfaction(&w, house, ServiceKind::Water),
@@ -536,7 +538,7 @@ mod levels {
     #[test]
     fn coming_down_from_a_level_off_the_table_evicts_nobody() {
         let (mut w, house) = a_served_house();
-        let month = w.data().rules.ticks_per_month;
+        let month = Calendar::TICKS_PER_MONTH;
         let top = w
             .data()
             .rules

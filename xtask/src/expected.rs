@@ -3,15 +3,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use sim_core::{DataSet, Tick};
+use sim_core::{Calendar, DataSet, Tick};
 use sim_replay::{CHECKPOINT_EVERY, GridSpec, Header, Recording, checkpoints};
 
 use crate::scenario::{self, Scenario};
-
-/// How many ticks each recording covers: one game year.
-pub fn expected_ticks(data: &DataSet) -> u32 {
-    data.rules.ticks_per_year()
-}
 
 pub fn record(sc: &Scenario, data: &DataSet) -> Recording {
     // The textual id and not the index: reordering the table must not silently
@@ -62,7 +57,8 @@ pub fn regen(data: &Arc<DataSet>, check: bool) -> Result<Vec<String>, String> {
             .map_err(|e| format!("serialising {name}: {e}"))?;
         compare_or_write(&dir.join(format!("{name}.ron")), &ron, check, &mut changed)?;
 
-        let until = expected_ticks(data);
+        // One game year.
+        let until = Calendar::TICKS_PER_YEAR;
         let cps = checkpoints(&rec, Arc::clone(data), Tick::new(until), CHECKPOINT_EVERY)
             .map_err(|e| format!("replaying {name}: {e}"))?;
         let hashes = sim_replay::expected::render(&cps, name, CHECKPOINT_EVERY);

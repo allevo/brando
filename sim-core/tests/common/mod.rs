@@ -81,10 +81,6 @@ pub const SMALL_WELL_CAPACITY: u16 = 4;
 pub const SATISFACTION_MAX: u8 = 100;
 pub const SATISFACTION_STEP_UP: u8 = 4;
 pub const SATISFACTION_STEP_DOWN: u8 = 10;
-/// The cadence of the level review (phase 13). Divisible by nothing in
-/// particular: what the tests compute from it is *the first review after* a
-/// horizon, never a fixed tick.
-pub const TICKS_PER_MONTH: u32 = 30;
 
 // --- the demographics (phase 14) -------------------------------------------
 //
@@ -244,8 +240,6 @@ fn dataset_built_with(
     union.dedup();
 
     let rules = Rules {
-        ticks_per_month: TICKS_PER_MONTH,
-        months_per_year: 12,
         starting_treasury: Coins::new(STARTING_TREASURY),
         house_levels,
         food_per_resident: Milli::from_millis(20),

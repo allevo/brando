@@ -41,7 +41,7 @@ mod common;
 
 use common::*;
 use proptest::prelude::*;
-use sim_core::{Coins, Command, CommandError, Occupant, TilePos, World};
+use sim_core::{Calendar, Coins, Command, CommandError, Occupant, TilePos, World};
 
 /// The side of the test grid.
 const SIDE: u8 = 32;
@@ -378,7 +378,7 @@ proptest! {
     #[test]
     fn residents_stay_within_the_house_capacity(p in a_game()) {
         let mut w = world();
-        let month = w.data().rules.ticks_per_month;
+        let month = Calendar::TICKS_PER_MONTH;
         for cmds in &p {
             tick(&mut w, cmds);
             if let Err(e) = residents_within_capacity(&w) {

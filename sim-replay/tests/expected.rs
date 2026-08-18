@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use sim_core::{Coins, DataSet, Level, Tick, TilePos, World};
+use sim_core::{Calendar, Coins, DataSet, Level, Tick, TilePos, World};
 use sim_replay::{CHECKPOINT_EVERY, Recording, ReplayError, checkpoints, hash_hex, hash_world};
 
 const SCENARIOS: [&str; 2] = ["minimal", "hunger"];
@@ -26,8 +26,8 @@ fn committed_hashes(name: &str) -> Vec<(Tick, String)> {
     sim_replay::expected::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }
 
-fn until(data: &DataSet) -> Tick {
-    Tick::new(data.rules.ticks_per_year())
+fn until() -> Tick {
+    Tick::new(Calendar::TICKS_PER_YEAR)
 }
 
 // --- 1. determinism within one process --------------------------------------
@@ -37,10 +37,10 @@ fn the_same_replay_twice_gives_the_same_hashes() {
     let data = data();
     for name in SCENARIOS {
         let rec = recording(name);
-        let a = checkpoints(&rec, Arc::clone(&data), until(&data), CHECKPOINT_EVERY)
-            .expect("valid replay");
-        let b = checkpoints(&rec, Arc::clone(&data), until(&data), CHECKPOINT_EVERY)
-            .expect("valid replay");
+        let a =
+            checkpoints(&rec, Arc::clone(&data), until(), CHECKPOINT_EVERY).expect("valid replay");
+        let b =
+            checkpoints(&rec, Arc::clone(&data), until(), CHECKPOINT_EVERY).expect("valid replay");
         assert_eq!(a, b, "scenario {name}");
         assert!(!a.is_empty(), "scenario {name} produces no checkpoints");
     }
@@ -58,8 +58,8 @@ fn the_hashes_match_the_committed_ones() {
     let data = data();
     for name in SCENARIOS {
         let rec = recording(name);
-        let computed = checkpoints(&rec, Arc::clone(&data), until(&data), CHECKPOINT_EVERY)
-            .expect("valid replay");
+        let computed =
+            checkpoints(&rec, Arc::clone(&data), until(), CHECKPOINT_EVERY).expect("valid replay");
         let expected = committed_hashes(name);
 
         assert_eq!(
@@ -88,12 +88,12 @@ fn stopping_halfway_and_resuming_gives_the_same_state() {
     let data = data();
     for name in SCENARIOS {
         let rec = recording(name);
-        let halfway = Tick::new(until(&data).get() / 2);
+        let halfway = Tick::new(until().get() / 2);
 
-        let one_run = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
+        let one_run = sim_replay::replay(&rec, Arc::clone(&data), until()).expect("replay");
 
         let mut split = sim_replay::replay(&rec, Arc::clone(&data), halfway).expect("replay");
-        sim_replay::advance(&mut split, &rec, until(&data));
+        sim_replay::advance(&mut split, &rec, until());
 
         assert_eq!(
             hash_hex(&hash_world(&one_run)),
@@ -238,7 +238,7 @@ fn easy_fills_a_house_the_way_m0_did() {
 
     for name in SCENARIOS {
         let rec = recording(name);
-        let w = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
+        let w = sim_replay::replay(&rec, Arc::clone(&data), until()).expect("replay");
 
         assert!(w.house_count() > 0, "scenario {name} builds no houses");
 
@@ -449,8 +449,8 @@ fn different_seeds_give_different_hashes() {
     let mut other = rec.clone();
     other.header.seed = rec.header.seed + 1;
 
-    let a = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
-    let b = sim_replay::replay(&other, Arc::clone(&data), until(&data)).expect("replay");
+    let a = sim_replay::replay(&rec, Arc::clone(&data), until()).expect("replay");
+    let b = sim_replay::replay(&other, Arc::clone(&data), until()).expect("replay");
     assert_ne!(hash_hex(&hash_world(&a)), hash_hex(&hash_world(&b)));
 }
 

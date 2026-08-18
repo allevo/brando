@@ -29,10 +29,10 @@
 //! houses touches no stream, the same sentence it has asserted since phase 04,
 //! now true for a reason instead of by absence.
 
-use crate::data::Rules;
 use crate::event::Event;
 use crate::ids::HouseId;
 use crate::rng::RngKind;
+use crate::tick::Calendar;
 use crate::world::World;
 
 /// The four flows of population.
@@ -169,22 +169,14 @@ impl PopulationTotals {
 /// house, not by the city's total. That is why this returns a flag instead of
 /// the caller comparing populations.
 pub(crate) fn run(world: &mut World, r: &mut StepReportEvents<'_>) -> bool {
-    let divisor = divisor(&world.data.rules);
-    if divisor == 0 {
-        // `ticks_per_month == 0`: a table can say it, and the core does not
-        // panic on data. The same guard `Rules::is_month_boundary` has.
-        return false;
-    }
-    let deaths = deaths(world, divisor, r);
-    let births = births(world, divisor);
+    let deaths = deaths(world, DIVISOR, r);
+    let births = births(world, DIVISOR);
     deaths || births
 }
 
 /// `1000` (rates are per thousand) × `1000` (the jitter's base) × the ticks in
-/// a month. A function of the tables, so it is computed and not written down.
-fn divisor(rules: &Rules) -> i64 {
-    i64::from(rules.ticks_per_month) * 1_000 * 1_000
-}
+/// a month.
+const DIVISOR: i64 = Calendar::TICKS_PER_MONTH as i64 * 1_000 * 1_000;
 
 /// The jitter on a rate: one draw, symmetric about zero, in `-J..=J`.
 ///

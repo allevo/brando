@@ -32,6 +32,13 @@ impl Tick {
         Self(v)
     }
 
+    /// The raw tick number. Gated: `sim-core`'s own production code never reads
+    /// a tick as a plain number — a `Tick` is compared, advanced or checked for
+    /// a month boundary through its own methods instead. This exists for the
+    /// consumers outside the simulation that serialise, hash, print or stride by
+    /// one — `sim-replay` and `xtask`, over a normal (non-test) dependency edge,
+    /// and the tests.
+    #[cfg(feature = "tick-number")]
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -40,14 +47,6 @@ impl Tick {
     /// does not panic on an unreachable overflow.
     pub const fn next(self) -> Self {
         Self(self.0.saturating_add(1))
-    }
-
-    /// Whether this tick lands on a boundary every `n` ticks — [`Rules::is_month_boundary`]'s
-    /// arithmetic, named instead of exposed as `Rem`.
-    ///
-    /// [`Rules::is_month_boundary`]: crate::data::Rules::is_month_boundary
-    pub const fn is_multiple_of(self, n: u32) -> bool {
-        self.0.is_multiple_of(n)
     }
 }
 
@@ -70,16 +69,46 @@ mod tick_tests {
     }
 
     #[test]
-    fn is_multiple_of_agrees_with_the_month_boundary_check() {
-        assert!(Tick::ZERO.is_multiple_of(30));
-        assert!(Tick::new(30).is_multiple_of(30));
-        assert!(!Tick::new(31).is_multiple_of(30));
-    }
-
-    #[test]
     fn display_prints_the_bare_number() {
         assert_eq!(Tick::new(42).to_string(), "42");
         assert_eq!(Tick::ZERO.to_string(), "0");
+    }
+}
+
+/// The fixed shape of game time: how many ticks make a month, and how many
+/// months make a year.
+pub struct Calendar;
+
+impl Calendar {
+    /// One month, in ticks — one game day per tick, thirty days to the month.
+    pub const TICKS_PER_MONTH: u32 = 30;
+    /// One year, in months.
+    pub const MONTHS_PER_YEAR: u32 = 12;
+    /// One year, in ticks.
+    pub const TICKS_PER_YEAR: u32 = Self::TICKS_PER_MONTH * Self::MONTHS_PER_YEAR;
+
+    /// Whether this tick is a month boundary — when the level review happens
+    /// (step 6.2).
+    pub const fn is_month_boundary(tick: Tick) -> bool {
+        tick.0.is_multiple_of(Self::TICKS_PER_MONTH)
+    }
+}
+
+#[cfg(test)]
+mod calendar_tests {
+    use super::*;
+
+    #[test]
+    fn is_month_boundary_agrees_with_the_month_length() {
+        assert!(Calendar::is_month_boundary(Tick::ZERO));
+        assert!(Calendar::is_month_boundary(Tick::new(30)));
+        assert!(!Calendar::is_month_boundary(Tick::new(29)));
+        assert!(!Calendar::is_month_boundary(Tick::new(31)));
+    }
+
+    #[test]
+    fn ticks_per_year_is_the_product_of_the_two() {
+        assert_eq!(Calendar::TICKS_PER_YEAR, 360);
     }
 }
 
@@ -436,10 +465,10 @@ fn step_walkers(_world: &mut World) {}
 /// 6.2 runs only on a month boundary. The cadence is what makes the absence of
 /// oscillation structural rather than a consequence of the thresholds, and it
 /// makes the recordings readable: a level that can only change at multiples of
-/// `ticks_per_month` can be followed by eye.
+/// `Calendar::TICKS_PER_MONTH` can be followed by eye.
 fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     crate::satisfaction::update(world); // 6.1
-    if world.data.rules.is_month_boundary(world.tick) {
+    if Calendar::is_month_boundary(world.tick) {
         crate::levels::review(world, r); // 6.2
     }
     // 6.3 deaths, then 6.5 births. Phase 15's emigration (6.4) and immigration

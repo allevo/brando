@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use sim_core::data::Inconsistency;
-use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
+use sim_core::{Calendar, Coins, Level, Milli, ServiceKind, Terrain};
 
 /// A level from its number, so a test can go on saying "level 2".
 fn level(number: u8) -> Level {
@@ -87,8 +87,6 @@ fn with_difficulty(difficulty: &str) -> Result<DataSet, LoadError> {
 fn the_production_tables_load() {
     let d = sim_data::load_default().expect("the production tables must load");
 
-    assert!(d.rules.ticks_per_month >= 1);
-    assert_eq!(d.rules.ticks_per_year(), d.rules.ticks_per_month * 12);
     assert_eq!(d.rules.starting_treasury, Coins::new(1000));
 
     // Completeness is no longer a question the accessor can answer — it cannot
@@ -255,7 +253,7 @@ fn the_satisfaction_curve_has_the_shape_the_balancing_means() {
 
     let climb = u32::from(s.max).div_ceil(u32::from(s.step_up));
     assert!(
-        climb > 1 && climb < d.rules.ticks_per_month,
+        climb > 1 && climb < Calendar::TICKS_PER_MONTH,
         "a house has to earn its satisfaction over days, not in one tick and \
          not in more than a month: {climb} ticks"
     );
@@ -306,7 +304,7 @@ fn the_house_levels_have_the_shape_the_balancing_means() {
         if level > Level::FIRST {
             let climb = u32::from(l.level_up_threshold).div_ceil(u32::from(s.step_up));
             assert!(
-                climb < d.rules.ticks_per_month,
+                climb < Calendar::TICKS_PER_MONTH,
                 "level {level} is earned in {climb} ticks, more than the month \
                  that separates two reviews: it would take two reviews to gain \
                  one level, and the reason would be invisible"
@@ -811,32 +809,6 @@ fn a_level_that_asks_for_nothing() {
         [(
             "rules.house_levels[0].required_services".to_string(),
             ValidationErrorKind::Empty
-        )]
-    );
-}
-
-/// A year that does not fit in a `u32`, reported as itself.
-///
-/// The branch had no test at all, which is how it kept reporting an overflow as
-/// `expected at least 1, found 0` against `rules.months_per_year` — a message
-/// about a different problem, blaming a field that is fine. Both operands are
-/// legitimate on their own here; it is the product that is not, and that is why
-/// the error is filed under `rules` rather than either of them.
-#[test]
-fn a_year_that_does_not_fit_in_a_u32() {
-    let e = errors_of(with_rules(&replaced(
-        &valid_rules(),
-        "ticks_per_month: 30,",
-        "ticks_per_month: 4294967295,",
-    )));
-    assert_eq!(
-        e,
-        [(
-            "rules".to_string(),
-            ValidationErrorKind::YearTooLong {
-                ticks_per_month: u32::MAX,
-                months_per_year: 12
-            }
         )]
     );
 }
