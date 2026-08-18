@@ -46,7 +46,7 @@ pub fn hash_world(w: &World) -> [u8; 32] {
     let mut h = blake3::Hasher::new();
     h.update(PREFIX);
 
-    h.update(&w.tick().to_le_bytes());
+    h.update(&w.tick().get().to_le_bytes());
     h.update(&w.data().hash);
     // The difficulty is state, not a parameter of the run: it changes the
     // simulation, so it enters the hash from tick 0. Two games with the

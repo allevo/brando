@@ -39,6 +39,6 @@ pub use production::FoodTotals;
 pub use rng::{RngKind, RngSet};
 pub use satisfaction::Mood;
 pub use service::{ServiceFlags, ServiceKind};
-pub use tick::{StepReport, step};
+pub use tick::{StepReport, Tick, step};
 pub use units::{Coins, Milli};
 pub use world::{Building, DirtyFlags, Economy, House, Occupant, Walker, World};

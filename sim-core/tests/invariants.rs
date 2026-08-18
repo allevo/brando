@@ -524,7 +524,7 @@ fn no_panic_on_ten_thousand_commands() {
     }
     covered_houses_are_fed(&w).expect("no house stayed covered and hungry over 1,000 ticks");
 
-    assert_eq!(w.tick(), TICKS as u32);
+    assert_eq!(w.tick().get(), TICKS as u32);
     assert_eq!(issued, COMMANDS, "the test has to issue every command");
     assert_eq!(accepted + rejected, issued);
     assert!(rejected > 0, "the generator produces no bad commands");

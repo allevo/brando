@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use sim_core::{DataSet, Grid, World};
+use sim_core::{DataSet, Grid, Tick, World};
 
 use crate::hash::hash_world;
 use crate::recording::Recording;
@@ -35,7 +35,7 @@ pub enum ReplayError {
 /// A checkpoint: the tick and the state hash at that tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Checkpoint {
-    pub tick: u32,
+    pub tick: Tick,
     pub hash: [u8; 32],
 }
 
@@ -72,7 +72,7 @@ pub fn initial_world(rec: &Recording, data: Arc<DataSet>) -> Result<World, Repla
 
 /// Replays up to tick `until` (exclusive: after the call `world.tick()` equals
 /// `until`).
-pub fn replay(rec: &Recording, data: Arc<DataSet>, until: u32) -> Result<World, ReplayError> {
+pub fn replay(rec: &Recording, data: Arc<DataSet>, until: Tick) -> Result<World, ReplayError> {
     let mut w = initial_world(rec, data)?;
     advance(&mut w, rec, until);
     Ok(w)
@@ -83,7 +83,7 @@ pub fn replay(rec: &Recording, data: Arc<DataSet>, until: u32) -> Result<World, 
 /// Kept separate from [`replay`] because it is what makes the determinism of
 /// **partial** execution checkable: stopping halfway and picking back up has to
 /// give the same state as one single run.
-pub fn advance(world: &mut World, rec: &Recording, until: u32) {
+pub fn advance(world: &mut World, rec: &Recording, until: Tick) {
     while world.tick() < until {
         let cmds = rec.commands_at_tick(world.tick());
         sim_core::step(world, &cmds);
@@ -97,16 +97,16 @@ pub fn advance(world: &mut World, rec: &Recording, until: u32) {
 pub fn checkpoints(
     rec: &Recording,
     data: Arc<DataSet>,
-    until: u32,
+    until: Tick,
     every: u32,
 ) -> Result<Vec<Checkpoint>, ReplayError> {
     let mut w = initial_world(rec, data)?;
     let mut out = Vec::new();
     let stride = every.max(1);
     while w.tick() < until {
-        let next = (w.tick() / stride + 1) * stride;
+        let next = Tick::new((w.tick().get() / stride + 1) * stride);
         advance(&mut w, rec, next.min(until));
-        if w.tick() % stride == 0 || w.tick() == until {
+        if w.tick().is_multiple_of(stride) || w.tick() == until {
             out.push(Checkpoint {
                 tick: w.tick(),
                 hash: hash_world(&w),

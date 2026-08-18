@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use sim_core::{Coins, DataSet, Level, TilePos, World};
+use sim_core::{Coins, DataSet, Level, Tick, TilePos, World};
 use sim_replay::{CHECKPOINT_EVERY, Recording, ReplayError, checkpoints, hash_hex, hash_world};
 
 const SCENARIOS: [&str; 2] = ["minimal", "hunger"];
@@ -20,14 +20,14 @@ fn recording(name: &str) -> Recording {
     Recording::load(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }
 
-fn committed_hashes(name: &str) -> Vec<(u32, String)> {
+fn committed_hashes(name: &str) -> Vec<(Tick, String)> {
     let p = sim_replay::expected_dir().join(format!("{name}.hashes"));
     let text = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
     sim_replay::expected::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }
 
-fn until(data: &DataSet) -> u32 {
-    data.rules.ticks_per_year()
+fn until(data: &DataSet) -> Tick {
+    Tick::new(data.rules.ticks_per_year())
 }
 
 // --- 1. determinism within one process --------------------------------------
@@ -88,7 +88,7 @@ fn stopping_halfway_and_resuming_gives_the_same_state() {
     let data = data();
     for name in SCENARIOS {
         let rec = recording(name);
-        let halfway = until(&data) / 2;
+        let halfway = Tick::new(until(&data).get() / 2);
 
         let one_run = sim_replay::replay(&rec, Arc::clone(&data), until(&data)).expect("replay");
 
@@ -127,7 +127,7 @@ fn a_different_dataset_fails_with_datasetmismatch() {
     );
 
     let rec = recording("minimal");
-    match sim_replay::replay(&rec, altered, 10) {
+    match sim_replay::replay(&rec, altered, Tick::new(10)) {
         Err(ReplayError::DatasetMismatch { expected, found }) => {
             assert_eq!(expected, rec.header.dataset_hash);
             assert_ne!(found, expected);
@@ -142,7 +142,7 @@ fn an_unknown_format_version_is_an_error() {
     let mut rec = recording("minimal");
     rec.header.format_version = sim_replay::FORMAT_VERSION + 1;
     assert!(matches!(
-        sim_replay::replay(&rec, data, 1),
+        sim_replay::replay(&rec, data, Tick::new(1)),
         Err(ReplayError::UnsupportedFormat { .. })
     ));
 }
@@ -155,7 +155,7 @@ fn the_previous_format_version_is_refused() {
     let mut rec = recording("minimal");
     rec.header.format_version = 1;
     assert!(matches!(
-        sim_replay::replay(&rec, data, 1),
+        sim_replay::replay(&rec, data, Tick::new(1)),
         Err(ReplayError::UnsupportedFormat { found: 1, .. })
     ));
 }
@@ -185,13 +185,13 @@ fn the_difficulty_acts_on_new_houses_and_nowhere_else() {
 
     // The scenario builds its houses at tick 2, so `until = 2` is the last
     // state in which no house exists yet.
-    const BEFORE_THE_HOUSES: u32 = 2;
-    const AFTER_THE_HOUSES: u32 = 3;
+    const BEFORE_THE_HOUSES: Tick = Tick::new(2);
+    const AFTER_THE_HOUSES: Tick = Tick::new(3);
 
     // 1. The byte travels in the hash: different from tick 0, before anything
     //    at all has happened.
-    let a = sim_replay::replay(&easy, Arc::clone(&data), 0).expect("replay");
-    let b = sim_replay::replay(&hard, Arc::clone(&data), 0).expect("replay");
+    let a = sim_replay::replay(&easy, Arc::clone(&data), Tick::ZERO).expect("replay");
+    let b = sim_replay::replay(&hard, Arc::clone(&data), Tick::ZERO).expect("replay");
     assert_ne!(
         hash_hex(&hash_world(&a)),
         hash_hex(&hash_world(&b)),
@@ -283,7 +283,7 @@ fn the_header_carries_the_profile_by_name() {
 
     let mut unknown = rec.clone();
     unknown.header.difficulty = "impossible".into();
-    match sim_replay::replay(&unknown, data, 1) {
+    match sim_replay::replay(&unknown, data, Tick::new(1)) {
         Err(ReplayError::UnknownDifficulty { found, known }) => {
             assert_eq!(found, "impossible");
             assert!(known.contains("easy"), "the known ones are listed: {known}");
@@ -308,7 +308,7 @@ fn the_hash_covers_the_whole_state() {
     // `Clone`, and a world is `seed + Vec<Command>` played out (D4). That
     // replaying it really does give back the same world is what
     // `the_same_replay_twice_gives_the_same_hashes` says, one test above.
-    let again = || sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");
+    let again = || sim_replay::replay(&rec, Arc::clone(&data), Tick::new(100)).expect("replay");
     let base = again();
     let h0 = hash_world(&base);
 
@@ -415,12 +415,12 @@ fn the_hash_covers_the_whole_state() {
 fn the_derived_structures_stay_out_of_the_hash() {
     let data = data();
     let rec = recording("minimal");
-    let a = sim_replay::replay(&rec, Arc::clone(&data), 100).expect("replay");
+    let a = sim_replay::replay(&rec, Arc::clone(&data), Tick::new(100)).expect("replay");
 
     // The same state, but with different diagnostic counters: the network has
     // been rebuilt more times because the game was split in two.
-    let mut b = sim_replay::replay(&rec, Arc::clone(&data), 50).expect("replay");
-    sim_replay::advance(&mut b, &rec, 100);
+    let mut b = sim_replay::replay(&rec, Arc::clone(&data), Tick::new(50)).expect("replay");
+    sim_replay::advance(&mut b, &rec, Tick::new(100));
 
     assert_eq!(hash_hex(&hash_world(&a)), hash_hex(&hash_world(&b)));
 }

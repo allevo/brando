@@ -11,7 +11,7 @@ mod scenario;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use sim_core::{ServiceKind, World};
+use sim_core::{ServiceKind, Tick, World};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -138,7 +138,7 @@ fn run(args: &[String]) -> Result<(), String> {
     let mut w = sc.world(Arc::clone(&data));
     let mut rejected = 0usize;
     for t in 0..ticks {
-        let cmds = sc.commands_at_tick(t);
+        let cmds = sc.commands_at_tick(Tick::new(t));
         let r = sim_core::step(&mut w, &cmds);
         rejected += r.rejected.len();
         for (i, e) in &r.rejected {
@@ -162,7 +162,7 @@ fn table_header() {
 }
 
 fn row(w: &World) {
-    let months = w.tick() / w.data().rules.ticks_per_month;
+    let months = w.tick().get() / w.data().rules.ticks_per_month;
     let with_water = w
         .houses()
         .filter(|(_, h)| h.served.get(ServiceKind::Water))

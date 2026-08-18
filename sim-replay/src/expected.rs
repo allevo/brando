@@ -6,6 +6,8 @@
 
 use std::fmt::Write as _;
 
+use sim_core::Tick;
+
 use crate::replay::Checkpoint;
 
 #[derive(Debug, thiserror::Error)]
@@ -34,7 +36,7 @@ pub fn render(checkpoints: &[Checkpoint], scenario: &str, every: u32) -> String 
     s
 }
 
-pub fn parse(text: &str) -> Result<Vec<(u32, String)>, ExpectedError> {
+pub fn parse(text: &str) -> Result<Vec<(Tick, String)>, ExpectedError> {
     let mut out = Vec::new();
     for (i, line) in text.lines().enumerate() {
         let line = line.trim();
@@ -47,11 +49,11 @@ pub fn parse(text: &str) -> Result<Vec<(u32, String)>, ExpectedError> {
                 line: i + 1,
                 content: line.to_string(),
             })?;
-        let tick = t.trim().parse().map_err(|_| ExpectedError::MalformedLine {
+        let tick: u32 = t.trim().parse().map_err(|_| ExpectedError::MalformedLine {
             line: i + 1,
             content: line.to_string(),
         })?;
-        out.push((tick, h.trim().to_string()));
+        out.push((Tick::new(tick), h.trim().to_string()));
     }
     Ok(out)
 }

@@ -18,6 +18,7 @@ use crate::network::RoadNetwork;
 use crate::production::FoodTotals;
 use crate::rng::RngSet;
 use crate::service::{ServiceFlags, ServiceKind};
+use crate::tick::Tick;
 use crate::units::{Coins, Milli};
 
 /// A building that provides a service or produces goods.
@@ -146,7 +147,7 @@ impl DirtyFlags {
 /// The complete state of a game.
 #[derive(Debug)]
 pub struct World {
-    pub(crate) tick: u32,
+    pub(crate) tick: Tick,
     pub(crate) grid: Grid,
     /// Iterating a `SlotMap` goes by slot index, so it is deterministic given
     /// the same sequence of insertions and removals — which the command log
@@ -240,7 +241,7 @@ impl World {
         let treasury = data.rules.starting_treasury;
         let tiles = grid.len();
         Self {
-            tick: 0,
+            tick: Tick::ZERO,
             grid,
             buildings: SlotMap::with_key(),
             houses: SlotMap::with_key(),
@@ -260,7 +261,7 @@ impl World {
         }
     }
 
-    pub const fn tick(&self) -> u32 {
+    pub const fn tick(&self) -> Tick {
         self.tick
     }
 

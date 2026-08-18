@@ -16,7 +16,7 @@ fn an_empty_tick_only_advances_the_tick() {
 
     let r = tick(&mut w, &[]);
 
-    assert_eq!(w.tick(), before.tick() + 1);
+    assert_eq!(w.tick(), before.tick().next());
     assert!(r.rejected.is_empty());
     assert!(r.events.is_empty());
     assert_eq!(w.grid(), before.grid());

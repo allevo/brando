@@ -15,7 +15,7 @@ mod common;
 mod levels {
     use super::common::*;
     use proptest::prelude::*;
-    use sim_core::{BuildingKindId, Command, Event, HouseId, Level, ServiceKind, World};
+    use sim_core::{BuildingKindId, Command, Event, HouseId, Level, ServiceKind, Tick, World};
     use std::collections::BTreeMap;
 
     // --- helpers ------------------------------------------------------------
@@ -84,7 +84,7 @@ mod levels {
     }
 
     /// Steps, with no commands, until the world is about to run `tick_no`.
-    fn run_to(w: &mut World, tick_no: u32) {
+    fn run_to(w: &mut World, tick_no: Tick) {
         while w.tick() < tick_no {
             tick(w, &[]);
         }
@@ -112,10 +112,10 @@ mod levels {
     /// The step for tick T is the `T - now + 1`-th, and 6.2 runs after 6.1
     /// inside it, so the earliest review that can act is the first month
     /// boundary at or after `now + steps - 1`.
-    fn review_after(w: &World, steps: u32) -> u32 {
+    fn review_after(w: &World, steps: u32) -> Tick {
         let month = w.data().rules.ticks_per_month;
-        let ready = w.tick() + steps.saturating_sub(1);
-        ready.div_ceil(month) * month
+        let ready = w.tick().get() + steps.saturating_sub(1);
+        Tick::new(ready.div_ceil(month) * month)
     }
 
     fn threshold_up(w: &World, at: Level) -> u8 {
@@ -198,7 +198,7 @@ mod levels {
         let month = w.data().rules.ticks_per_month;
         tick(&mut w, &[]);
         assert_eq!(house_level(&w, house), level(2), "one level, not two");
-        let eve = w.tick() + month - 1;
+        let eve = Tick::new(w.tick().get() + month - 1);
         run_to(&mut w, eve);
         assert_eq!(
             house_level(&w, house),
@@ -222,7 +222,10 @@ mod levels {
             tick(&mut w, &[]);
             let now = house_level(&w, house);
             if now != previous {
-                assert_eq!(at % month, 0, "the level moved at tick {at}, off a review");
+                assert!(
+                    at.is_multiple_of(month),
+                    "the level moved at tick {at}, off a review"
+                );
                 previous = now;
             }
         }
@@ -281,7 +284,7 @@ mod levels {
 
         // And it stops there: level 1 has no level 0 to fall to, and a house
         // that empties out is phase 14's business.
-        let two_months = w.tick() + w.data().rules.ticks_per_month * 2;
+        let two_months = Tick::new(w.tick().get() + w.data().rules.ticks_per_month * 2);
         run_to(&mut w, two_months);
         assert_eq!(house_level(&w, house), level(1));
     }
@@ -434,7 +437,7 @@ mod levels {
         build(&mut w, HOUSE, 8, 5);
         let house = w.houses().next().map(|(id, _)| id).expect("the house");
 
-        let a_year = w.data().rules.ticks_per_year();
+        let a_year = Tick::new(w.data().rules.ticks_per_year());
         run_to(&mut w, a_year);
         assert_eq!(
             satisfaction(&w, house, ServiceKind::Water),
@@ -555,7 +558,7 @@ mod levels {
 
         // Two reviews: the first lands on a level that is still off the table,
         // the second on the top one, which exists and holds them all.
-        let after_two_reviews = (w.tick() / month + 2) * month + 1;
+        let after_two_reviews = Tick::new((w.tick().get() / month + 2) * month + 1);
         run_to(&mut w, after_two_reviews);
 
         assert_eq!(

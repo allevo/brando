@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use sim_core::DataSet;
+use sim_core::{DataSet, Tick};
 use sim_replay::{CHECKPOINT_EVERY, GridSpec, Header, Recording, checkpoints};
 
 use crate::scenario::{self, Scenario};
@@ -33,7 +33,10 @@ pub fn record(sc: &Scenario, data: &DataSet) -> Recording {
             },
             dataset_hash: data.hash_hex(),
         },
-        commands: sc.commands.clone(),
+        // `Recording::commands` is the wire format and stays a bare `u32` (see
+        // its doc comment); `Scenario::commands` is `Tick`-typed, so this is
+        // the one explicit crossing of that boundary.
+        commands: sc.commands.iter().map(|(t, c)| (t.get(), *c)).collect(),
     }
 }
 
@@ -60,7 +63,7 @@ pub fn regen(data: &Arc<DataSet>, check: bool) -> Result<Vec<String>, String> {
         compare_or_write(&dir.join(format!("{name}.ron")), &ron, check, &mut changed)?;
 
         let until = expected_ticks(data);
-        let cps = checkpoints(&rec, Arc::clone(data), until, CHECKPOINT_EVERY)
+        let cps = checkpoints(&rec, Arc::clone(data), Tick::new(until), CHECKPOINT_EVERY)
             .map_err(|e| format!("replaying {name}: {e}"))?;
         let hashes = sim_replay::expected::render(&cps, name, CHECKPOINT_EVERY);
         compare_or_write(

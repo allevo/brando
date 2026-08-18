@@ -8,6 +8,8 @@
 //!
 //! Unit of time: 1 tick = 1 game day.
 
+use std::fmt;
+
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::data::BuildingDef;
 use crate::event::Event;
@@ -17,6 +19,69 @@ use crate::satisfaction::Mood;
 use crate::service::{ServiceFlags, ServiceKind};
 use crate::units::Coins;
 use crate::world::{Building, House, Occupant, World};
+
+/// A point in simulated time: the number of ticks since the game began.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct Tick(u32);
+
+impl Tick {
+    /// The first tick of the game.
+    pub const ZERO: Self = Self(0);
+
+    pub const fn new(v: u32) -> Self {
+        Self(v)
+    }
+
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+
+    /// The tick after this one. Saturating, the same as `step`'s advance always has been: the core
+    /// does not panic on an unreachable overflow.
+    pub const fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+
+    /// Whether this tick lands on a boundary every `n` ticks — [`Rules::is_month_boundary`]'s
+    /// arithmetic, named instead of exposed as `Rem`.
+    ///
+    /// [`Rules::is_month_boundary`]: crate::data::Rules::is_month_boundary
+    pub const fn is_multiple_of(self, n: u32) -> bool {
+        self.0.is_multiple_of(n)
+    }
+}
+
+impl fmt::Display for Tick {
+    /// Prints the bare number: the `.hashes` format's `tick,hex_hash` line and the headless
+    /// runner's table both depend on this printing exactly what `Tick::get` returns.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tick_tests {
+    use super::*;
+
+    #[test]
+    fn next_advances_by_one_and_saturates() {
+        assert_eq!(Tick::ZERO.next(), Tick::new(1));
+        assert_eq!(Tick::new(u32::MAX).next(), Tick::new(u32::MAX));
+    }
+
+    #[test]
+    fn is_multiple_of_agrees_with_the_month_boundary_check() {
+        assert!(Tick::ZERO.is_multiple_of(30));
+        assert!(Tick::new(30).is_multiple_of(30));
+        assert!(!Tick::new(31).is_multiple_of(30));
+    }
+
+    #[test]
+    fn display_prints_the_bare_number() {
+        assert_eq!(Tick::new(42).to_string(), "42");
+        assert_eq!(Tick::ZERO.to_string(), "0");
+    }
+}
 
 /// What happened during a tick.
 ///
@@ -77,7 +142,7 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     check_objectives(world, &mut r); // 9
     emit_events(world, &before, &mut r); // 10
     r.summary = summarise(world, flows_before);
-    world.tick = world.tick.saturating_add(1);
+    world.tick = world.tick.next();
     r
 }
 
