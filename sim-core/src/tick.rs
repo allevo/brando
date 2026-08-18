@@ -85,17 +85,6 @@ mod tick_tests {
 
 /// The fixed shape of game time: how many ticks make a month, and how many
 /// months make a year.
-///
-/// **Hardcoded, not a table `Rules` loads.** `D6` puts "everything numeric" in
-/// a validated RON table, and on the letter of it these two numbers belong
-/// there like any other — they are the one deliberate exception, amended into
-/// `D6` for this reason: every other number `Rules` carries (a cost, a range,
-/// a threshold) is something a designer tunes to make the game harder or
-/// easier, and `D6` exists so that tuning it never needs a recompile. Nobody
-/// tunes what a month **is**. A month of forty-five ticks is not a harder
-/// game, it is ticks that have stopped meaning a day, so there is no
-/// balancing row here to protect and no reason to pay a table lookup for a
-/// number that can never change.
 pub struct Calendar;
 
 impl Calendar {
@@ -103,19 +92,11 @@ impl Calendar {
     pub const TICKS_PER_MONTH: u32 = 30;
     /// One year, in months.
     pub const MONTHS_PER_YEAR: u32 = 12;
-    /// One year, in ticks. `30 * 12` cannot overflow a `u32`: unlike the
-    /// table-loaded values this replaced, there is no designer input here
-    /// that validation ever had to refuse for not fitting.
+    /// One year, in ticks.
     pub const TICKS_PER_YEAR: u32 = Self::TICKS_PER_MONTH * Self::MONTHS_PER_YEAR;
 
     /// Whether this tick is a month boundary — when the level review happens
     /// (step 6.2).
-    ///
-    /// The cadence is what makes the absence of oscillation **structural**
-    /// rather than a consequence of the thresholds: thirty ticks pass between
-    /// two decisions, so a house cannot change level more than twelve times a
-    /// year whatever the balancing does. Tick 0 is a boundary and the review
-    /// there is a no-op: every accumulator is still at zero.
     pub const fn is_month_boundary(tick: Tick) -> bool {
         tick.is_multiple_of(Self::TICKS_PER_MONTH)
     }

@@ -175,9 +175,7 @@ pub(crate) fn run(world: &mut World, r: &mut StepReportEvents<'_>) -> bool {
 }
 
 /// `1000` (rates are per thousand) × `1000` (the jitter's base) × the ticks in
-/// a month. `Calendar::TICKS_PER_MONTH` is a compile-time constant, so unlike
-/// the table-loaded value this replaced, `DIVISOR` needs no zero-guard: there
-/// is no data path left that could make it zero.
+/// a month.
 const DIVISOR: i64 = Calendar::TICKS_PER_MONTH as i64 * 1_000 * 1_000;
 
 /// The jitter on a rate: one draw, symmetric about zero, in `-J..=J`.

@@ -35,12 +35,8 @@ pub(crate) fn dataset_hash(
     // Destructured, not accessed field by field: the exhaustive pattern stops
     // compiling the moment a field is added to the table, which is the cheapest
     // possible reminder that a hand-written hash has to be extended by hand.
-    // `ticks_per_month`/`months_per_year` are not among these fields any more:
-    // `Calendar`'s constants are compile-time now, not loaded data, so there is
-    // no table value here to protect against silent drift. Changing `Calendar`
-    // still moves every recorded hash — through the tick's own behaviour, the
-    // same way changing the ten-step order does — `regen-expected --check`
-    // catches it exactly as it catches any other source change.
+    // `ticks_per_month`/`months_per_year` are gone: `Calendar`'s constants are
+    // compile-time now, not loaded data.
     let Rules {
         starting_treasury,
         house_levels,

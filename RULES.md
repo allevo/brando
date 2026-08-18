@@ -18,9 +18,9 @@ refused at load with a full report.
 
 ## Time
 
-One tick is one game day. The month and year lengths are fixed by `Calendar`, not by a table — nobody
-tunes what a month **is** the way the rest of this file's parameters get tuned. Scenario objectives
-are expressed in months and years, never in ticks.
+One tick is one game day. The month and year lengths are fixed by `Calendar` — thirty ticks and twelve
+months, respectively — not by a table. Scenario objectives are expressed in months and years, never in
+ticks.
 
 ## The map and its terrain
 
