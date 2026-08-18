@@ -70,7 +70,7 @@ impl Coverage {
 impl Coverage {
     /// Coverage recomputed from scratch on the current state, ignoring the dirty flags.
     pub fn from_scratch(world: &World) -> Self {
-        compute_from_scratch::<YesStopWhenFull>(world)
+        compute_from_scratch::<StopsAtCapacity>(world)
     }
 }
 
@@ -85,7 +85,7 @@ impl Coverage {
     /// distance too early would give the same wrong answer on either side and
     /// leave the test green. This walks the whole way, so it disagrees.
     pub fn from_scratch_walking_the_whole_range(world: &World) -> Self {
-        compute_from_scratch::<NoStopWhenFull>(world)
+        compute_from_scratch::<WalksToTheEnd>(world)
     }
 }
 
@@ -189,17 +189,17 @@ impl HousesByTile {
     }
 }
 
-trait StopWhenFull {
+trait WalkBehavior {
     fn should_stop() -> bool;
 }
-struct NoStopWhenFull;
-impl StopWhenFull for NoStopWhenFull {
+struct WalksToTheEnd;
+impl WalkBehavior for WalksToTheEnd {
     fn should_stop() -> bool {
         false
     }
 }
-struct YesStopWhenFull;
-impl StopWhenFull for YesStopWhenFull {
+struct StopsAtCapacity;
+impl WalkBehavior for StopsAtCapacity {
     fn should_stop() -> bool {
         true
     }
@@ -207,19 +207,20 @@ impl StopWhenFull for YesStopWhenFull {
 
 /// Recomputes coverage from scratch on the current state.
 ///
-/// `stop_when_full` is `true` everywhere the game runs: a provider whose
-/// capacity has run out stops walking, because no house beyond the distance it
-/// ran out at can be served — every candidate weighs at least one resident, so
-/// nothing fits into nothing. Passing `false` walks every provider to its full
-/// range, which is what the `test-util` oracle
-/// `Coverage::from_scratch_walking_the_whole_range` does.
+/// `T` picks the walk's stop, at compile time: [`StopsAtCapacity`] is what the
+/// game runs everywhere — a provider whose capacity has run out stops
+/// walking, because no house beyond the distance it ran out at can be
+/// served, since every candidate weighs at least one resident, so nothing
+/// fits into nothing. [`WalksToTheEnd`] walks every provider to its full
+/// range regardless, which is what the `test-util` oracle
+/// [`Coverage::from_scratch_walking_the_whole_range`] uses it for.
 ///
 /// **The oracle exists because the usual one cannot see this.** The equivalence
 /// property test compares the incremental coverage against the from-scratch
 /// one, and both are this function: a wrong stop would give the same wrong
 /// answer on both sides and the test would stay green. The exhaustive walk is
 /// the only thing that disagrees with a stop that ends too early.
-fn compute_from_scratch<T: StopWhenFull>(world: &World) -> Coverage {
+fn compute_from_scratch<T: WalkBehavior>(world: &World) -> Coverage {
     // The reverse map from road tile to the houses facing onto it. Built once
     // per recomputation instead of once per provider.
     let houses_by_tile = HousesByTile::new(world);
@@ -427,7 +428,7 @@ pub(crate) fn propagate_coverage(world: &mut World) {
     // putting it behind a feature.
     #[cfg(feature = "counters")]
     let recomputes = world.coverage.recomputes;
-    world.coverage = compute_from_scratch::<YesStopWhenFull>(world);
+    world.coverage = compute_from_scratch::<StopsAtCapacity>(world);
     #[cfg(feature = "counters")]
     {
         world.coverage.recomputes = recomputes.wrapping_add(1);
