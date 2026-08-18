@@ -21,16 +21,21 @@ counters = []
 # the direct-mutation hooks on `World` into every plain workspace build.
 from-scratch = []
 test-util = ["counters", "from-scratch"]
+# Tick::get(). Its own feature, not part of `test-util`, for the same reason
+# `from-scratch` is: sim-replay and xtask read a tick's raw number over a normal
+# dependency edge, where `test-util` would pull in far more than that.
+tick-number = []
 
 [dev-dependencies]
 proptest = { workspace = true }
 # A dependency on itself, which is how a crate turns one of its own features on
-# for its own tests. It exists for the eviction tests of phase 13: decay sends
-# away whoever no longer fits, and under a dataset that passes validation no
+# for its own tests. `test-util` exists for the eviction tests of phase 13: decay
+# sends away whoever no longer fits, and under a dataset that passes validation no
 # house can ever be over its capacity — so the only honest way to reach that
 # branch is to put the residents there by hand, which is what `house_mut` is for.
-# Phase 14 makes the branch live and this dependency ordinary.
-sim-core = { path = ".", features = ["test-util"] }
+# Phase 14 makes the branch live and this dependency ordinary. `tick-number` is
+# here so the integration tests can read a tick's raw number too.
+sim-core = { path = ".", features = ["test-util", "tick-number"] }
 
 [lints]
 workspace = true

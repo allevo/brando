@@ -32,6 +32,13 @@ impl Tick {
         Self(v)
     }
 
+    /// The raw tick number. Gated: `sim-core`'s own production code never reads
+    /// a tick as a plain number — a `Tick` is compared, advanced or checked for
+    /// a month boundary through its own methods instead. This exists for the
+    /// consumers outside the simulation that serialise, hash, print or stride by
+    /// one — `sim-replay` and `xtask`, over a normal (non-test) dependency edge,
+    /// and the tests.
+    #[cfg(feature = "tick-number")]
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -40,14 +47,6 @@ impl Tick {
     /// does not panic on an unreachable overflow.
     pub const fn next(self) -> Self {
         Self(self.0.saturating_add(1))
-    }
-
-    /// Whether this tick lands on a boundary every `n` ticks — [`Calendar::is_month_boundary`]'s
-    /// arithmetic, named instead of exposed as `Rem`.
-    ///
-    /// [`Calendar::is_month_boundary`]: Calendar::is_month_boundary
-    pub const fn is_multiple_of(self, n: u32) -> bool {
-        self.0.is_multiple_of(n)
     }
 }
 
@@ -67,13 +66,6 @@ mod tick_tests {
     fn next_advances_by_one_and_saturates() {
         assert_eq!(Tick::ZERO.next(), Tick::new(1));
         assert_eq!(Tick::new(u32::MAX).next(), Tick::new(u32::MAX));
-    }
-
-    #[test]
-    fn is_multiple_of_agrees_with_the_month_boundary_check() {
-        assert!(Tick::ZERO.is_multiple_of(30));
-        assert!(Tick::new(30).is_multiple_of(30));
-        assert!(!Tick::new(31).is_multiple_of(30));
     }
 
     #[test]
@@ -98,7 +90,7 @@ impl Calendar {
     /// Whether this tick is a month boundary — when the level review happens
     /// (step 6.2).
     pub const fn is_month_boundary(tick: Tick) -> bool {
-        tick.is_multiple_of(Self::TICKS_PER_MONTH)
+        tick.0.is_multiple_of(Self::TICKS_PER_MONTH)
     }
 }
 

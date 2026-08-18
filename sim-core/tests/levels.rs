@@ -225,7 +225,7 @@ mod levels {
             let now = house_level(&w, house);
             if now != previous {
                 assert!(
-                    at.is_multiple_of(month),
+                    Calendar::is_month_boundary(at),
                     "the level moved at tick {at}, off a review"
                 );
                 previous = now;

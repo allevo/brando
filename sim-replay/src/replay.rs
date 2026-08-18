@@ -106,7 +106,7 @@ pub fn checkpoints(
     while w.tick() < until {
         let next = Tick::new((w.tick().get() / stride + 1) * stride);
         advance(&mut w, rec, next.min(until));
-        if w.tick().is_multiple_of(stride) || w.tick() == until {
+        if w.tick().get().is_multiple_of(stride) || w.tick() == until {
             out.push(Checkpoint {
                 tick: w.tick(),
                 hash: hash_world(&w),
