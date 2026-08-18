@@ -11,7 +11,7 @@ mod scenario;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use sim_core::{ServiceKind, Tick, World};
+use sim_core::{Calendar, ServiceKind, Tick, World};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -162,7 +162,7 @@ fn table_header() {
 }
 
 fn row(w: &World) {
-    let months = w.tick().get() / w.data().rules.ticks_per_month;
+    let months = w.tick().get() / Calendar::TICKS_PER_MONTH;
     let with_water = w
         .houses()
         .filter(|(_, h)| h.served.get(ServiceKind::Water))

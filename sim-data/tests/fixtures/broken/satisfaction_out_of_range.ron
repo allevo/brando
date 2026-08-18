@@ -10,8 +10,6 @@
 // satisfaction of zero always Awful is that it is above zero, and that part
 // is fine here.
 (
-    ticks_per_month: 30,
-    months_per_year: 12,
     starting_treasury: 1000,
     // A single level, matching the house in the production buildings.ron: this
     // fixture is about the satisfaction curve, and a table of levels that also disagreed

@@ -175,8 +175,6 @@ mod tests {
             taxable_per_resident: Milli::ZERO,
         };
         Rules {
-            ticks_per_month: 30,
-            months_per_year: 12,
             starting_treasury: Coins::ZERO,
             house_levels: vec![
                 def(4, &[ServiceKind::Water]),

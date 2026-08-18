@@ -37,7 +37,7 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | Module | Responsibility |
 |---|---|
 | `world.rs` | The game state: a concrete struct of `SlotMap`s and `Vec`s, not an ECS (D1). |
-| `tick.rs` | The ten-step tick, whose order is game semantics. |
+| `tick.rs` | The ten-step tick, whose order is game semantics. Also `Calendar`, the fixed month/year lengths (D6). |
 | `data.rs` | The validated dataset the core consumes, plus every **cross-table** consistency check. `BuildingRole` is an enum over the **roles** a building can play — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty. |
 | `grid.rs` | The tile grid. `Tile` fits in 4 bytes so 40,000 tiles stay in cache. |
 | `rng.rs` | One seeded PCG64 stream per kind, derived from the kind's **name**, not its index. |

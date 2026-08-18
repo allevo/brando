@@ -10,8 +10,6 @@ use sim_core::{Mood, Terrain};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawRules {
-    pub ticks_per_month: u32,
-    pub months_per_year: u32,
     pub starting_treasury: i32,
     pub house_levels: Vec<RawHouseLevelDef>,
     pub food_per_resident: i32,

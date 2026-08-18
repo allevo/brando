@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 14.9.9.2.** M0 is complete; M1 is in progress.
+> **Implemented through phase 14.9.9.3.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -30,6 +30,7 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.5 | [An empty house consumes no capacity](plan/14.5-an-empty-house-consumes-no-capacity.md) — answered: a house with nobody in it is not served, so it gathers no satisfaction and cannot be promoted on one | 2026-08-17 |
 | 14.9.9 | [A provider stops looking once it is full](plan/14.9.9-a-provider-stops-looking-once-it-is-full.md) — the walk ends where the capacity does, and step 3 costs half what it did | 2026-08-17 |
 | 14.9.9.2 | [A tick cannot be mistaken for any other number](plan/14.9.9.2-a-tick-cannot-be-mistaken-for-any-other-number.md) — the simulation's current tick is a `Tick`, not a bare `u32`; every recorded replay hash comes out byte-identical | 2026-08-18 |
+| 14.9.9.3 | [Nobody tunes what a month is](plan/14.9.9.3-nobody-tunes-what-a-month-is.md) — `ticks_per_month`/`months_per_year` leave `rules.ron` for a hardcoded `Calendar`; `D6`'s first amendment | 2026-08-18 |
 
 ## To do — the rest of M1
 

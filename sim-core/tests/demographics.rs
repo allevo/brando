@@ -11,7 +11,7 @@ mod common;
 /// in — the trap phase 12 fell into and phase 13 recorded.
 mod demographics {
     use super::common::*;
-    use sim_core::{Command, Event, Flow, HouseId, RngKind, ServiceKind, World};
+    use sim_core::{Calendar, Command, Event, Flow, HouseId, RngKind, ServiceKind, World};
 
     // --- helpers ------------------------------------------------------------
 
@@ -93,7 +93,7 @@ mod demographics {
         let mut w = a_served_city(1);
         let start = w.population();
 
-        let year = w.data().rules.ticks_per_year();
+        let year = Calendar::TICKS_PER_YEAR;
         run(&mut w, year);
         let grown = w.population();
         assert!(
@@ -125,7 +125,7 @@ mod demographics {
     #[test]
     fn a_city_that_loses_its_food_empties_out() {
         let mut w = a_served_city(3);
-        let year = w.data().rules.ticks_per_year();
+        let year = Calendar::TICKS_PER_YEAR;
         run(&mut w, year);
         let peak = w.population();
         assert!(peak > 0);
@@ -158,7 +158,7 @@ mod demographics {
         // No well and no farm: level 1 asks for water, so this house is going
         // without from the first tick and dies at the raised rate.
         let mut abandoned = 0;
-        for _ in 0..w.data().rules.ticks_per_year() * 3 {
+        for _ in 0..Calendar::TICKS_PER_YEAR * 3 {
             let r = tick(&mut w, &[]);
             abandoned += r
                 .events
@@ -262,7 +262,7 @@ mod demographics {
             // The city is identical for every seed at this point: the tick has
             // not run yet, so nothing has diverged.
             residents = i64::from(w.population());
-            let divisor = i64::from(w.data().rules.ticks_per_month) * 1_000 * 1_000;
+            let divisor = i64::from(Calendar::TICKS_PER_MONTH) * 1_000 * 1_000;
             // The **delta**, not the accumulator: building the city took five
             // ticks and each of them added its own numerator. And if a death
             // matured on this tick the accumulator wrapped, so the events it
@@ -362,7 +362,7 @@ mod demographics {
         let mut saw_a_move = false;
         let mut saw_a_still_tick = false;
 
-        for _ in 0..w.data().rules.ticks_per_year() {
+        for _ in 0..Calendar::TICKS_PER_YEAR {
             // The **flows**, not the net balance. A birth and a death in the
             // same tick leave the balance where it was and still move two
             // people between houses, and the coverage is decided by each
@@ -415,7 +415,7 @@ mod demographics {
         }
 
         let mut w = a_served_city(3);
-        let year = w.data().rules.ticks_per_year();
+        let year = Calendar::TICKS_PER_YEAR;
 
         assert_eq!(
             u32::from(residents_served(&w)),

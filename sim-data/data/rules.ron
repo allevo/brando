@@ -1,11 +1,9 @@
 // Global simulation constants. Everything numeric lives in these tables, so none
 // of these numbers may appear in a .rs file (D6).
 (
-    // 1 tick = 1 day, 30 ticks = 1 month, 12 months = 1 year (360 ticks).
-    // Scenario objectives are expressed in months/years (M1).
-    ticks_per_month: 30,
-    months_per_year: 12,
-
+    // The month/year lengths used to be here (30 ticks, 12 months) and are now
+    // `Calendar` in sim-core: fixed by the code, not tuned by this table (D6,
+    // amended). Scenario objectives are expressed in months/years (M1).
     starting_treasury: 1000,
 
     // The house levels (phase 13). One entry per level, level 1 first, and the

@@ -42,10 +42,10 @@ impl Tick {
         Self(self.0.saturating_add(1))
     }
 
-    /// Whether this tick lands on a boundary every `n` ticks — [`Rules::is_month_boundary`]'s
+    /// Whether this tick lands on a boundary every `n` ticks — [`Calendar::is_month_boundary`]'s
     /// arithmetic, named instead of exposed as `Rem`.
     ///
-    /// [`Rules::is_month_boundary`]: crate::data::Rules::is_month_boundary
+    /// [`Calendar::is_month_boundary`]: Calendar::is_month_boundary
     pub const fn is_multiple_of(self, n: u32) -> bool {
         self.0.is_multiple_of(n)
     }
@@ -80,6 +80,62 @@ mod tick_tests {
     fn display_prints_the_bare_number() {
         assert_eq!(Tick::new(42).to_string(), "42");
         assert_eq!(Tick::ZERO.to_string(), "0");
+    }
+}
+
+/// The fixed shape of game time: how many ticks make a month, and how many
+/// months make a year.
+///
+/// **Hardcoded, not a table `Rules` loads.** `D6` puts "everything numeric" in
+/// a validated RON table, and on the letter of it these two numbers belong
+/// there like any other — they are the one deliberate exception, amended into
+/// `D6` for this reason: every other number `Rules` carries (a cost, a range,
+/// a threshold) is something a designer tunes to make the game harder or
+/// easier, and `D6` exists so that tuning it never needs a recompile. Nobody
+/// tunes what a month **is**. A month of forty-five ticks is not a harder
+/// game, it is ticks that have stopped meaning a day, so there is no
+/// balancing row here to protect and no reason to pay a table lookup for a
+/// number that can never change.
+pub struct Calendar;
+
+impl Calendar {
+    /// One month, in ticks — one game day per tick, thirty days to the month.
+    pub const TICKS_PER_MONTH: u32 = 30;
+    /// One year, in months.
+    pub const MONTHS_PER_YEAR: u32 = 12;
+    /// One year, in ticks. `30 * 12` cannot overflow a `u32`: unlike the
+    /// table-loaded values this replaced, there is no designer input here
+    /// that validation ever had to refuse for not fitting.
+    pub const TICKS_PER_YEAR: u32 = Self::TICKS_PER_MONTH * Self::MONTHS_PER_YEAR;
+
+    /// Whether this tick is a month boundary — when the level review happens
+    /// (step 6.2).
+    ///
+    /// The cadence is what makes the absence of oscillation **structural**
+    /// rather than a consequence of the thresholds: thirty ticks pass between
+    /// two decisions, so a house cannot change level more than twelve times a
+    /// year whatever the balancing does. Tick 0 is a boundary and the review
+    /// there is a no-op: every accumulator is still at zero.
+    pub const fn is_month_boundary(tick: Tick) -> bool {
+        tick.is_multiple_of(Self::TICKS_PER_MONTH)
+    }
+}
+
+#[cfg(test)]
+mod calendar_tests {
+    use super::*;
+
+    #[test]
+    fn is_month_boundary_agrees_with_the_month_length() {
+        assert!(Calendar::is_month_boundary(Tick::ZERO));
+        assert!(Calendar::is_month_boundary(Tick::new(30)));
+        assert!(!Calendar::is_month_boundary(Tick::new(29)));
+        assert!(!Calendar::is_month_boundary(Tick::new(31)));
+    }
+
+    #[test]
+    fn ticks_per_year_is_the_product_of_the_two() {
+        assert_eq!(Calendar::TICKS_PER_YEAR, 360);
     }
 }
 
@@ -436,10 +492,10 @@ fn step_walkers(_world: &mut World) {}
 /// 6.2 runs only on a month boundary. The cadence is what makes the absence of
 /// oscillation structural rather than a consequence of the thresholds, and it
 /// makes the recordings readable: a level that can only change at multiples of
-/// `ticks_per_month` can be followed by eye.
+/// `Calendar::TICKS_PER_MONTH` can be followed by eye.
 fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     crate::satisfaction::update(world); // 6.1
-    if world.data.rules.is_month_boundary(world.tick) {
+    if Calendar::is_month_boundary(world.tick) {
         crate::levels::review(world, r); // 6.2
     }
     // 6.3 deaths, then 6.5 births. Phase 15's emigration (6.4) and immigration

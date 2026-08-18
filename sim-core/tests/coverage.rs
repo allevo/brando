@@ -5,7 +5,7 @@ mod common;
 
 use common::*;
 use proptest::prelude::*;
-use sim_core::{BuildingId, Command, HouseId, ServiceKind, TilePos, World};
+use sim_core::{BuildingId, Calendar, Command, HouseId, ServiceKind, TilePos, World};
 
 fn roads(w: &mut World, cells: &[(u8, u8)]) {
     let cmds: Vec<_> = cells
@@ -405,7 +405,7 @@ fn nothing_is_recomputed_while_the_population_does_not_move() {
     let recomputes = w.coverage().recomputes();
     let rebuilds = w.roads().rebuilds();
 
-    for _ in 0..w.data().rules.ticks_per_month * 2 + 1 {
+    for _ in 0..Calendar::TICKS_PER_MONTH * 2 + 1 {
         tick(&mut w, &[]);
     }
 

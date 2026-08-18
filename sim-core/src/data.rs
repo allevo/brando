@@ -11,14 +11,11 @@ use crate::grid::Terrain;
 use crate::ids::{BuildingKindId, Level};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
-use crate::tick::Tick;
 use crate::units::{Coins, Milli};
 
 /// Global simulation constants.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rules {
-    pub ticks_per_month: u32,
-    pub months_per_year: u32,
     pub starting_treasury: Coins,
     /// Indexed by house level (level 1 = index 0).
     pub house_levels: Vec<HouseLevelDef>,
@@ -30,8 +27,8 @@ pub struct Rules {
 /// The rates that drive births and deaths (phase 14).
 ///
 /// **Per month and per thousand residents**, because that is the form you read
-/// and reason in. The conversion to ticks divides by `ticks_per_month` and
-/// loses nothing: what does not mature this tick stays in
+/// and reason in. The conversion to ticks divides by `Calendar::TICKS_PER_MONTH`
+/// and loses nothing: what does not mature this tick stays in
 /// [`Demographics::remainder`].
 ///
 /// [`Demographics::remainder`]: crate::demographics::Demographics
@@ -157,20 +154,6 @@ pub struct SatisfactionRules {
 }
 
 impl Rules {
-    /// Ticks in a game year. Scenario objectives are expressed in months and
-    /// years, never in ticks (M1).
-    ///
-    /// Saturating for [`is_month_boundary`]'s reason: both operands come from a
-    /// table, and the core does not panic on data. Tables loaded through
-    /// `sim-data` cannot overflow it — `validate_rules` refuses them — but the
-    /// hand-built fixtures (`sim-core/tests/common/mod.rs`, `xtask`'s bench)
-    /// never go through that door.
-    ///
-    /// [`is_month_boundary`]: Self::is_month_boundary
-    pub const fn ticks_per_year(&self) -> u32 {
-        self.ticks_per_month.saturating_mul(self.months_per_year)
-    }
-
     /// The definition of a house level, `None` out of range.
     pub fn house_level(&self, level: Level) -> Option<&HouseLevelDef> {
         self.house_levels.get(level.as_usize())
@@ -221,21 +204,6 @@ impl Rules {
             .len()
             .checked_sub(1)
             .map(Level::from_index)
-    }
-
-    /// Whether this tick is a month boundary — when the level review happens
-    /// (step 6.2).
-    ///
-    /// The cadence is what makes the absence of oscillation **structural**
-    /// rather than a consequence of the thresholds: thirty ticks pass between
-    /// two decisions, so a house cannot change level more than twelve times a
-    /// year whatever the balancing does. Tick 0 is a boundary and the review
-    /// there is a no-op: every accumulator is still at zero.
-    ///
-    /// The guard on zero is not defensive noise: `ticks_per_month` comes from a
-    /// table, a modulo by zero is a panic, and the core does not panic on data.
-    pub const fn is_month_boundary(&self, tick: Tick) -> bool {
-        self.ticks_per_month != 0 && tick.is_multiple_of(self.ticks_per_month)
     }
 }
 

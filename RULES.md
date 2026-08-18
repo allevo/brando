@@ -18,8 +18,9 @@ refused at load with a full report.
 
 ## Time
 
-One tick is one game day. A month is `ticks_per_month` ticks, a year is `months_per_year` months.
-Scenario objectives are expressed in months and years, never in ticks.
+One tick is one game day. The month and year lengths are fixed by `Calendar`, not by a table — nobody
+tunes what a month **is** the way the rest of this file's parameters get tuned. Scenario objectives
+are expressed in months and years, never in ticks.
 
 ## The map and its terrain
 
@@ -379,8 +380,6 @@ about it that is a number; what may be done on it is fixed in the code.
 
 | Parameter | What it decides |
 |---|---|
-| `ticks_per_month` | how many days make a month |
-| `months_per_year` | how many months make a year |
 | `starting_treasury` | the city's money on its first day |
 | `house_levels` | one entry per house level, holding the five below |
 | `max_residents` | how many residents the level holds |
