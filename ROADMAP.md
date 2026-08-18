@@ -34,6 +34,7 @@ tree has got — if another document tells you what is built, it is wrong and sh
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
+| 14.9.9.1 | [How well served the city is becomes a knob](plan/14.9.9.1-how-well-served-the-city-is-becomes-a-knob.md) | `--places 100` prints today's state hash unchanged, and 70 and 150 move the served share the way they say | 18.5 |
 | **14.6** | **Open question — [A house is covered by services its level does not require](plan/14.6-a-house-is-covered-by-services-its-level-does-not-require.md):** is a house covered by, and fed by, a service its own level does not require? | an answer written into this task, plus a test that changes its outcome rather than breaking | phase 15 |
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
