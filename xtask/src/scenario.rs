@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use sim_core::{Command, DataSet, DifficultyId, Grid, Terrain, TilePos, World};
+use sim_core::{Command, DataSet, DifficultyId, Grid, Terrain, Tick, TilePos, World};
 
 pub struct Scenario {
     pub name: &'static str,
@@ -18,7 +18,7 @@ pub struct Scenario {
     /// recording's header and goes into the hash.
     pub difficulty: DifficultyId,
     /// The commands to apply, each with the tick it belongs to.
-    pub commands: Vec<(u32, Command)>,
+    pub commands: Vec<(Tick, Command)>,
 }
 
 /// The profile the committed recordings are recorded on.
@@ -60,17 +60,17 @@ fn minimal(data: &DataSet) -> Scenario {
 
     let mut commands = Vec::new();
     for x in 1..=16u8 {
-        commands.push((0, Command::PlaceRoad { at: pos(x, 8) }));
+        commands.push((Tick::ZERO, Command::PlaceRoad { at: pos(x, 8) }));
     }
     commands.push((
-        1,
+        Tick::new(1),
         Command::PlaceBuilding {
             kind: well,
             origin: pos(2, 7),
         },
     ));
     commands.push((
-        1,
+        Tick::new(1),
         Command::PlaceBuilding {
             kind: farm,
             origin: pos(4, 6),
@@ -78,7 +78,7 @@ fn minimal(data: &DataSet) -> Scenario {
     ));
     for i in 0..4u8 {
         commands.push((
-            2,
+            Tick::new(2),
             Command::PlaceBuilding {
                 kind: house,
                 origin: pos(8 + i, 9),
@@ -110,7 +110,7 @@ fn hunger(data: &DataSet) -> Scenario {
     s.description = "more houses than the providers can cover";
     for i in 4..8u8 {
         s.commands.push((
-            2,
+            Tick::new(2),
             Command::PlaceBuilding {
                 kind: house,
                 origin: pos(8 + i, 9),
@@ -133,7 +133,7 @@ impl Scenario {
 
     /// The commands to apply at a given tick, in the order they were added:
     /// the order is part of the determinism contract (D4).
-    pub fn commands_at_tick(&self, tick: u32) -> Vec<Command> {
+    pub fn commands_at_tick(&self, tick: Tick) -> Vec<Command> {
         self.commands
             .iter()
             .filter(|(t, _)| *t == tick)

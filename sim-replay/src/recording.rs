@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use sim_core::{Command, Terrain};
+use sim_core::{Command, Terrain, Tick};
 
 /// Version of the format. It goes up when the shape of the file changes, not
 /// when the balancing does: that is what `dataset_hash` is for.
@@ -44,6 +44,12 @@ pub struct Recording {
     /// Sorted by increasing tick. Several commands within the same tick keep
     /// the order they were added in: that order is part of the determinism
     /// contract, not a detail of the file.
+    ///
+    /// A bare `u32` and not `sim_core::Tick`: this field is this struct's
+    /// `Serialize`/`Deserialize`, and `Tick` deliberately has neither — the one
+    /// place a tick is allowed to be a plain number is the wire format it
+    /// travels in. [`Recording::last_tick`] and [`Recording::commands_at_tick`]
+    /// are `Tick`-typed; they are the only things that should ever read this.
     pub commands: Vec<(u32, Command)>,
 }
 
@@ -97,15 +103,19 @@ impl Recording {
     }
 
     /// The last tick that holds a command.
-    pub fn last_tick(&self) -> u32 {
-        self.commands.iter().map(|(t, _)| *t).max().unwrap_or(0)
+    pub fn last_tick(&self) -> Tick {
+        self.commands
+            .iter()
+            .map(|(t, _)| Tick::new(*t))
+            .max()
+            .unwrap_or(Tick::ZERO)
     }
 
     /// The commands of one tick, in the order they were added.
-    pub fn commands_at_tick(&self, tick: u32) -> Vec<Command> {
+    pub fn commands_at_tick(&self, tick: Tick) -> Vec<Command> {
         self.commands
             .iter()
-            .filter(|(t, _)| *t == tick)
+            .filter(|(t, _)| *t == tick.get())
             .map(|(_, c)| *c)
             .collect()
     }

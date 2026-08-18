@@ -11,6 +11,7 @@ use crate::grid::Terrain;
 use crate::ids::{BuildingKindId, Level};
 use crate::satisfaction::Mood;
 use crate::service::ServiceKind;
+use crate::tick::Tick;
 use crate::units::{Coins, Milli};
 
 /// Global simulation constants.
@@ -233,7 +234,7 @@ impl Rules {
     ///
     /// The guard on zero is not defensive noise: `ticks_per_month` comes from a
     /// table, a modulo by zero is a panic, and the core does not panic on data.
-    pub const fn is_month_boundary(&self, tick: u32) -> bool {
+    pub const fn is_month_boundary(&self, tick: Tick) -> bool {
         self.ticks_per_month != 0 && tick.is_multiple_of(self.ticks_per_month)
     }
 }
