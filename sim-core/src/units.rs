@@ -6,28 +6,21 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
-
 /// Thousandths in one unit.
 const MILLI_PER_UNIT: i32 = 1000;
 
-/// A quantity in thousandths of a unit. No floats in the state (D4).
+/// A quantity in thousandths of a unit. No floats in the state.
 ///
-/// Covers roughly +/- 2,147,483 units: enough for food and population at D5's
-/// target scale. Money is deliberately left out, see [`Coins`].
-///
-/// Does not implement `Add`/`Sub`: the operator invites you to ignore
-/// overflow, and in a core that must not panic a silent overflow is worse than
-/// the visual noise of `checked_add`.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
+/// Covers roughly +/- 2,147,483 units: enough for food and population.
+/// Money is deliberately left out, see [`Coins`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Milli(i32);
 
 impl Milli {
     /// Zero units.
     pub const ZERO: Self = Self(0);
 
-    /// Builds from whole units. `None` if the value does not fit: 3,000,000
-    /// units are not representable.
+    /// Builds from whole units. `None` if the value does not fit.
     pub const fn from_units(units: i32) -> Option<Self> {
         match units.checked_mul(MILLI_PER_UNIT) {
             Some(v) => Some(Self(v)),
@@ -129,9 +122,8 @@ impl fmt::Debug for Milli {
 }
 
 /// Money. A whole number, with no thousandths: the treasury has no in-game
-/// fractions, and using thousandths would halve the useful range for nothing
-///.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
+/// fractions.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Coins(i32);
 
 impl Coins {
