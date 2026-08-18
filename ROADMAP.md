@@ -31,13 +31,13 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.9.9 | [A provider stops looking once it is full](plan/14.9.9-a-provider-stops-looking-once-it-is-full.md) — the walk ends where the capacity does, and step 3 costs half what it did | 2026-08-17 |
 | 14.9.9.2 | [A tick cannot be mistaken for any other number](plan/14.9.9.2-a-tick-cannot-be-mistaken-for-any-other-number.md) — the simulation's current tick is a `Tick`, not a bare `u32`; every recorded replay hash comes out byte-identical | 2026-08-18 |
 | 14.9.9.3 | [Nobody tunes what a month is](plan/14.9.9.3-nobody-tunes-what-a-month-is.md) — `ticks_per_month`/`months_per_year` leave `rules.ron` for a hardcoded `Calendar`; `D6`'s first amendment | 2026-08-18 |
+| 14.6 | [A house is covered by services its level does not require](plan/14.6-a-house-is-covered-by-services-its-level-does-not-require.md) — answered: yes, and by design; stopping it would strand every house on the level it was built at | 2026-08-18 |
 
 ## To do — the rest of M1
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
 | 14.9.9.1 | [How well served the city is becomes a knob](plan/14.9.9.1-how-well-served-the-city-is-becomes-a-knob.md) | `--places 100` prints today's state hash unchanged, and 70 and 150 move the served share the way they say | 18.5 |
-| **14.6** | **Open question — [A house is covered by services its level does not require](plan/14.6-a-house-is-covered-by-services-its-level-does-not-require.md):** is a house covered by, and fed by, a service its own level does not require? | an answer written into this task, plus a test that changes its outcome rather than breaking | phase 15 |
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 17 | [`sim-scenario`](plan/17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
