@@ -93,12 +93,12 @@ residents of a demolished `house` leave the city and are counted as lost; the `s
 A `house` holds residents, up to its level's `max_residents`.
 
 A newly built house stands at the first level, with `starting_residents_per_house` residents and at
-zero satisfaction on every service. A provider within reach covers it the very day it is placed, so
-it begins gaining satisfaction at once. But it begins at zero and nothing is granted in advance, so
-its first rise costs the whole climb.
+zero satisfaction on every service. If it is born with anybody in it, a provider within reach covers
+it the very day it is placed, so it begins gaining satisfaction at once. But it begins at zero and
+nothing is granted in advance, so its first rise costs the whole climb.
 
-A house with nobody left in it still stands and still holds its tile. It takes no places from any
-provider, nobody is born in it, and nobody in it dies.
+A house with nobody left in it still stands and still holds its tile. No provider serves it, nobody
+is born in it, and nobody in it dies.
 
 ## Coverage
 
@@ -109,6 +109,10 @@ house without an entrance is out of reach at any distance.
 **Capacity is counted in residents, not in houses.** A provider takes houses until
 `capacity_per_level` runs out: a house of two residents takes two places, a house of eight takes
 eight, and the same `well` therefore reaches fewer houses as the district fills up.
+
+**A house with nobody in it is not served.** A service exists to reach residents, so a house with
+none is no candidate for one, however close it stands. A house emptied by deaths therefore loses its
+coverage, and gets it back when somebody moves in.
 
 A house is served whole or left out whole. A house that does not fit is skipped and the next
 candidate is considered, so one large house near a provider does not shut out everything behind it.

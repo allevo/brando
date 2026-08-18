@@ -60,12 +60,33 @@ use sim_core::{
 /// | `A` empty tick, nothing dirty | 248 µs |
 /// | `C` tick, 10,000 rejected commands | 274 µs — 2 ns/command |
 /// | `D` tick, 1 accepted command | 3.35 ms |
-/// | `G` `compute_from_scratch` alone | 3.05 ms — 2.5 µs/provider |
+/// | `G` `Coverage::from_scratch` alone | 3.05 ms — 2.5 µs/provider |
 ///
 /// `A` is the number to watch: it is paid on **every** tick, while `D` is paid
 /// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
 /// making the coverage recompute almost every tick, which is the whole
 /// subject of the open question at slot 18.5.
+///
+/// **Where they stand now**, same scale, after phase 14.9.9 stopped a provider
+/// walking once its capacity has run out:
+///
+/// | | |
+/// |---|---|
+/// | `A` empty tick, nothing dirty | 2.059 ms |
+/// | `D` tick, 1 accepted command | 1.955 ms |
+/// | `G` `Coverage::from_scratch` alone | 1.601 ms — 1.3 µs/provider |
+///
+/// The table above it stays as the end-of-M0 baseline and is not rewritten:
+/// what these two say side by side is that the whole of phase 14's 13× is not
+/// yet paid back, and where the rest of it has to come from is still slot 18.5.
+///
+/// **`A` and not `G` is the honest measure of a change to the rules.** `G` runs
+/// after the several hundred ticks the measures above it take, so two builds
+/// that decide anything differently are timed on cities that have drifted
+/// apart, and the difference between them is partly the algorithm and partly a
+/// different city. `A` starts from the state whose hash is printed. Phase 14.9.9
+/// found this the hard way: measured on `G`, its rule change looked 5.3% slower;
+/// measured on `A`, it costs exactly nothing.
 const BENCH_DIFFICULTY: &str = "easy";
 
 /// The two sizes measured by default. They are not balancing numbers: they are
@@ -149,7 +170,7 @@ fn preset(
         &sim_replay::hash_hex(&sim_replay::hash_world(&w))[..16]
     );
     println!();
-    println!("  {:<38} {:>12} {:>12}", "", "median", "worst");
+    println!("  {:<40} {:>12} {:>12}", "", "median", "worst");
 
     // A. An empty tick with nothing dirty: this is what you pay in the ticks
     //    where the player does not build, i.e. the vast majority.
@@ -281,11 +302,11 @@ fn preset(
     //    it is the one to watch when optimising coverage: D also contains
     //    production, events and command validation.
     let g = measure(reps, |_| {
-        let _ = sim_core::coverage::compute_from_scratch(&w);
+        let _ = sim_core::Coverage::from_scratch(&w);
     });
     let per_provider = g.median / w.building_count().max(1) as u128;
     row(
-        "G. compute_from_scratch only (step 3)",
+        "G. Coverage::from_scratch only (step 3)",
         &g,
         Some(format!("{per_provider} ns/provider")),
     );
@@ -704,7 +725,7 @@ fn time_it(f: impl FnOnce()) -> u128 {
 
 fn row(name: &str, m: &Measurement, note: Option<String>) {
     println!(
-        "  {:<38} {:>12} {:>12}  {}",
+        "  {:<40} {:>12} {:>12}  {}",
         name,
         format_duration(m.median),
         format_duration(m.worst),

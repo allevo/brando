@@ -403,13 +403,10 @@ mod demographics {
     /// build is that somebody has stopped being served.
     #[test]
     fn the_coverage_follows_a_city_that_outgrows_it() {
-        // Counted in **residents**, not in houses. Houses would be the wrong
-        // unit twice over: the capacity is in residents, and an emptied
-        // house weighs nothing and goes on being served for free, so the count
-        // of served houses can go *up* while the city outgrows its farm. That
-        // is not a bug in the coverage, it is the thing the open question at
-        // slot 14.5 is about, and measuring in houses here would have quietly
-        // hidden it.
+        // Counted in **residents**, not in houses: the capacity is in
+        // residents, so houses are the unit that cannot say whether the farm
+        // is full. Three houses of two and one house of six both fit a farm
+        // declared for six, and only one of the two counts tells you so.
         fn residents_served(w: &World) -> u16 {
             w.houses()
                 .filter(|(_, h)| h.served.get(ServiceKind::Food))
@@ -443,18 +440,21 @@ mod demographics {
 
     // --- 15. what this phase hands to slot 14.5 -----------------------------
 
-    /// A house emptied by deaths keeps its coverage and goes on consuming no
-    /// capacity.
+    /// A house emptied by deaths loses its coverage, and the place it held goes
+    /// back to the provider.
     ///
-    /// **Written to change its outcome, not to break.** The open question at
-    /// slot 14.5 — does an empty house consume provider capacity? — was first
-    /// noticed on `hard`, where a house is *born* empty. Deaths make zero
-    /// residents reachable on every profile, `easy` included, so the behaviour
-    /// is now inside the committed recordings. This states it as it is today;
-    /// when phase 15 answers 14.5, the assertion below is what has to be
-    /// flipped, deliberately, rather than discovered.
+    /// This is the case that makes the rule bite on every profile and not only
+    /// on `hard`, where a house is *born* empty: deaths get any house down to
+    /// zero and the house stays standing. Neither recorded scenario reaches it
+    /// — 360 ticks is not long enough for one of their houses to empty — so
+    /// this test is the only thing covering it.
+    ///
+    /// The assertion used to run the other way — the emptied house kept its
+    /// coverage and weighed nothing while it had it — and the second half is
+    /// what made it worth changing: it went on gathering satisfaction with
+    /// nobody in it, against a capacity it did not consume.
     #[test]
-    fn an_emptied_house_still_consumes_no_capacity() {
+    fn an_emptied_house_loses_its_coverage() {
         let mut w = world_of(16, 16);
         roads(&mut w, &[(1, 4), (2, 4), (3, 4), (4, 4), (5, 4)]);
         build(&mut w, SMALL_WELL, 2, 3);
@@ -467,15 +467,24 @@ mod demographics {
         // will not die of hunger. Empty one by hand — deaths are what would do
         // it in a longer game, and this keeps the test about the capacity.
         let victim = w.houses().next().map(|(id, _)| id).expect("a house");
+        assert!(
+            w.coverage().houses_served_by(small_well).contains(&victim),
+            "the nearest house is the one the well's four places go to"
+        );
         w.house_mut(victim).expect("alive").residents = 0;
-        tick(&mut w, &[]);
+
+        // The hook writes the field and nothing else, so it leaves no dirty
+        // flag behind and empty ticks would go on reading yesterday's
+        // assignment. One more road tile is the cheapest real command that
+        // invalidates the coverage, and it is laid at the far end of the
+        // corridor where it brings no house into range and takes none out.
+        roads(&mut w, &[(6, 4)]);
         tick(&mut w, &[]);
 
         assert_eq!(w.house(victim).expect("alive").residents, 0);
         assert!(
-            w.coverage().houses_served_by(small_well).contains(&victim),
-            "an emptied house keeps its coverage, and weighs nothing while it \
-             has it — that is exactly what the question at 14.5 is about"
+            !w.coverage().houses_served_by(small_well).contains(&victim),
+            "a house with nobody in it is no candidate for a service"
         );
     }
 }

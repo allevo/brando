@@ -37,6 +37,7 @@ pub struct RoadNetwork {
     component: Vec<Option<ComponentId>>,
     /// How many full rebuilds have been performed. It serves the dirty-flag
     /// tests, not the game.
+    #[cfg(feature = "counters")]
     rebuilds: u32,
 }
 
@@ -44,6 +45,7 @@ impl RoadNetwork {
     pub fn new(tiles: u32) -> Self {
         Self {
             component: vec![None; tiles as usize],
+            #[cfg(feature = "counters")]
             rebuilds: 0,
         }
     }
@@ -52,6 +54,7 @@ impl RoadNetwork {
         self.component.get(idx.as_usize()).copied().flatten()
     }
 
+    #[cfg(feature = "counters")]
     pub const fn rebuilds(&self) -> u32 {
         self.rebuilds
     }
@@ -86,7 +89,10 @@ impl RoadNetwork {
     pub(crate) fn rebuild(&mut self, grid: &Grid) {
         self.component.clear();
         self.component.resize(grid.len() as usize, None);
-        self.rebuilds = self.rebuilds.wrapping_add(1);
+        #[cfg(feature = "counters")]
+        {
+            self.rebuilds = self.rebuilds.wrapping_add(1);
+        }
 
         let mut queue: Vec<TileIndex> = Vec::new();
         for root in grid.indices() {
@@ -183,10 +189,32 @@ impl Visited {
 /// tiles, stopping beyond `max`. The cutoff is not an optional optimisation:
 /// without it, a range of 12 in a large city would visit the whole network.
 ///
-/// `visit` receives each reached tile **exactly once**, with the smallest
-/// distance. The visit order is by increasing distance and, at equal distance,
-/// by increasing `TileIndex`: it is a total order, so whoever builds a game rule
+/// `visit` receives all the tiles at one distance **in a single call**, each
+/// tile exactly once and at the smallest distance it can be reached at. The
+/// calls come in increasing distance, and within a call the tiles are in
+/// increasing `TileIndex`: it is a total order, so whoever builds a game rule
 /// on top of it (phase 06) does not depend on BFS internals.
+///
+/// **A whole distance at a time, and not a tile at a time.** A caller that has
+/// to break ties among what it finds does so on something of its own — the
+/// coverage orders the *houses* facing the tiles, by the house's origin, which
+/// is not the order the tiles arrive in. Handing over one tile at a time would
+/// let it act on a partial distance, and the answer would depend on which road
+/// tile a house happened to be reached from.
+///
+/// **And the tile-at-a-time shape is not faster, which was measured and not
+/// assumed.** Gathering a distance before acting on it looks like the expensive
+/// half of this, so it was built three ways — ordering the houses of one road
+/// tile by the house's own tile, by its id, and not at all — and timed against
+/// this one over forty interleaved rounds at the reference scale. Every one of
+/// them made the tick **slower**: by 2.0%, 1.8% and 0.6%, and the first two lost
+/// in all forty rounds. Weakening the order buys nothing, so the stronger
+/// guarantee is kept: the same map gives the same answer, whatever order the
+/// city was built in.
+///
+/// Returning `false` ends the walk after that distance, and the tiles beyond it
+/// are never touched. It is what lets a provider that has run out of capacity
+/// stop instead of walking to its full range.
 ///
 /// `visited` is opened in a fresh round on every call: its previous contents do
 /// not affect the result, and passing in one already used is the intended way
@@ -196,7 +224,7 @@ pub fn bfs_roads(
     start: &[TileIndex],
     max: u16,
     visited: &mut Visited,
-    mut visit: impl FnMut(TileIndex, u16),
+    mut visit: impl FnMut(&[TileIndex], u16) -> bool,
 ) {
     visited.begin(grid.len() as usize);
 
@@ -214,8 +242,8 @@ pub fn bfs_roads(
     let mut d = 0u16;
     let mut next: Vec<TileIndex> = Vec::new();
     while !level.is_empty() {
-        for t in &level {
-            visit(*t, d);
+        if !visit(&level, d) {
+            break;
         }
         if d == max {
             break;
@@ -254,7 +282,10 @@ mod tests {
 
     fn reached(grid: &Grid, from: TileIndex, max: u16, v: &mut Visited) -> Vec<(TileIndex, u16)> {
         let mut out = Vec::new();
-        bfs_roads(grid, &[from], max, v, |t, d| out.push((t, d)));
+        bfs_roads(grid, &[from], max, v, |tiles, d| {
+            out.extend(tiles.iter().map(|t| (*t, d)));
+            true
+        });
         out
     }
 
@@ -319,6 +350,39 @@ mod tests {
             expected,
             "after the wrap"
         );
+    }
+
+    /// Stopping at a distance leaves everything beyond it untouched, and what
+    /// came before it is exactly what a walk cut off there would have given.
+    ///
+    /// Two halves, and the second is the one worth having: a stop that merely
+    /// hid the far tiles from the caller while still walking them would pass
+    /// the first assertion and buy nothing.
+    #[test]
+    fn stopping_at_a_distance_walks_no_further() {
+        let grid = with_road(3);
+        let a = grid.index(TilePos::new(0, 3)).expect("on the map");
+
+        for stop_at in 0..4u16 {
+            let mut seen = Vec::new();
+            let mut marked = 0;
+            let mut v = Visited::new(grid.len());
+            bfs_roads(&grid, &[a], 7, &mut v, |tiles, d| {
+                seen.extend(tiles.iter().map(|t| (*t, d)));
+                d < stop_at
+            });
+            for i in 0..grid.len() as usize {
+                marked += usize::from(v.is_seen(i));
+            }
+
+            let expected = reached(&grid, a, stop_at, &mut Visited::new(grid.len()));
+            assert_eq!(seen, expected, "stopping at {stop_at}");
+            assert_eq!(
+                marked,
+                expected.len(),
+                "stopping at {stop_at}: no tile beyond it is even marked"
+            );
+        }
     }
 
     /// A scratch born for a different grid must not be used blindly: `begin`

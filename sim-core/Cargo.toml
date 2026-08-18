@@ -13,15 +13,14 @@ rand = { workspace = true }
 rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
-# Hooks on the state, for tests — other crates' since phase 08, this crate's own
-# since phase 13. Mostly direct mutation, and not an extension of the API: the
-# only write channel into the core is still the Command queue. Since `World` stopped
-# being `Clone` in any configuration, it also
-# holds one **read-only** member, `first_difference`, which compares two worlds
-# that played the same game — what the tests do instead of copying one, `World`
-# being no longer Clone.
 [features]
-test-util = []
+counters = []
+# The recomputation of coverage from scratch. It is its own feature, and not part
+# of `test-util`, because one of the two readers outside the crate is `xtask`,
+# which reaches it over a normal dependency edge — where `test-util` would compile
+# the direct-mutation hooks on `World` into every plain workspace build.
+from-scratch = []
+test-util = ["counters", "from-scratch"]
 
 [dev-dependencies]
 proptest = { workspace = true }

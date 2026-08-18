@@ -336,11 +336,18 @@ mod levels {
         /// no command is issued, so nothing but the levels themselves can move.
         /// If a house went up and then down, the only possible cause would be
         /// the review reading a value that the review before it had changed.
+        ///
+        /// **On the fixture with the demographics switched off**, which is what
+        /// makes that sentence true rather than nearly true. A house emptied by
+        /// deaths is served by nobody, so its satisfaction falls and its level
+        /// follows — a real fall, with a cause that is neither the gap nor the
+        /// review, and one that would make this test red for a reason it is not
+        /// asking about. Deaths are the business of the demographics tests.
         #[test]
         fn the_level_shows_no_oscillation_with_constant_services(
             setup in prop::collection::vec(any_command(), 1..14)
         ) {
-            let mut w = world();
+            let mut w = world_without_demographics();
             let corner = a_served_corner(&mut w);
             tick(&mut w, &setup);
 

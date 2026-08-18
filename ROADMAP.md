@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 14.9.8.** M0 is complete; M1 is in progress.
+> **Implemented through phase 14.9.9.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -27,12 +27,14 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.9.6 | [An id sorts the same way everywhere](plan/14.9.6-an-id-sorts-the-same-way-everywhere.md) — a number after the first is a single digit, so a listing runs the way the numbers do | 2026-08-15 |
 | 14.9.7 | [A terrain says what it allows](plan/14.9.7-a-terrain-says-what-it-allows.md) — what may be built on and walked on leaves the tables for the enum; a new terrain kind is now a compile error | 2026-08-16 |
 | 14.9.8 | [A tile answers for itself](plan/14.9.8-a-tile-answers-for-itself.md) — a tile exposes no field and `Grid` hands out no mutable one; outside `sim-core` a tile changes through setup or a command, and by no third way | 2026-08-16 |
+| 14.5 | [An empty house consumes no capacity](plan/14.5-an-empty-house-consumes-no-capacity.md) — answered: a house with nobody in it is not served, so it gathers no satisfaction and cannot be promoted on one | 2026-08-17 |
+| 14.9.9 | [A provider stops looking once it is full](plan/14.9.9-a-provider-stops-looking-once-it-is-full.md) — the walk ends where the capacity does, and step 3 costs half what it did | 2026-08-17 |
 
 ## To do — the rest of M1
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
-| **14.5** | **Open question — [An empty house consumes no capacity](plan/14.5-an-empty-house-consumes-no-capacity.md):** does an empty house consume provider capacity? | an answer written into this task, plus whichever test the answer implies | phase 15 |
+| 14.9.9.1 | [How well served the city is becomes a knob](plan/14.9.9.1-how-well-served-the-city-is-becomes-a-knob.md) | `--places 100` prints today's state hash unchanged, and 70 and 150 move the served share the way they say | 18.5 |
 | **14.6** | **Open question — [A house is covered by services its level does not require](plan/14.6-a-house-is-covered-by-services-its-level-does-not-require.md):** is a house covered by, and fed by, a service its own level does not require? | an answer written into this task, plus a test that changes its outcome rather than breaking | phase 15 |
 | 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
