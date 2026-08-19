@@ -363,10 +363,12 @@ impl World {
 
     /// Sets the terrain of a tile.
     ///
-    /// It serves **scenario setup**, before the game begins: it is the only
-    /// mutation of the state that does not go through a `Command`, because the
-    /// map is not a move by the player. It is not a channel for the renderer,
-    /// which only ever writes commands into the core.
+    /// It serves **scenario setup**, before the game begins: it mutates the
+    /// state without going through a `Command`, because the map is not a move by
+    /// the player. It is no longer the only one — `set_house_level`, behind the
+    /// `house-level` feature, founds a house at a chosen level for the same
+    /// reason — and those two are the whole of that list. It is not a channel
+    /// for the renderer, which only ever writes commands into the core.
     /// `false` if the position is off the map.
     pub fn set_terrain(&mut self, pos: TilePos, terrain: crate::grid::Terrain) -> bool {
         match self.grid.at_mut(pos) {
@@ -376,6 +378,37 @@ impl World {
             }
             None => false,
         }
+    }
+
+    /// Founds a house at a chosen level, before the game begins.
+    ///
+    /// Setup, like [`World::set_terrain`], and mutating the state directly for
+    /// the same reason: what a town already was on the tick play begins is not a
+    /// move anybody made. **The residents come with the level** — a house
+    /// founded at one is founded full, holding that level's `max_residents` —
+    /// because a level and an occupancy that could disagree would be two knobs
+    /// where the game has one, and what a house built *during* play starts with
+    /// is already the difficulty profile's to say.
+    ///
+    /// `false` for a house or a level the tables do not have, and an answer
+    /// rather than a clamp: a caller asking for a level that does not exist has
+    /// a bug, and silently founding a different city than the one asked for is
+    /// how a measurement gets attributed to the wrong thing.
+    ///
+    /// It invalidates the coverage, so it is correct whatever order setup calls
+    /// it in.
+    #[cfg(feature = "house-level")]
+    pub fn set_house_level(&mut self, id: HouseId, level: Level) -> bool {
+        let Some(residents) = self.data.rules.max_residents(level) else {
+            return false;
+        };
+        let Some(house) = self.houses.get_mut(id) else {
+            return false;
+        };
+        house.level = level;
+        house.residents = residents;
+        self.dirty.invalidate_coverage();
+        true
     }
 
     /// The road tiles orthogonally adjacent to a building's area.

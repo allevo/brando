@@ -603,4 +603,46 @@ mod levels {
             "and the next tick has to act on it"
         );
     }
+
+    // --- founding a house at a level, which is setup and not play ------------
+
+    /// Founding a house at a level brings the residents with it.
+    ///
+    /// A level and an occupancy that could disagree would be two knobs where the
+    /// game has one, so the hook fills the house to that level's capacity rather
+    /// than leaving behind whoever happened to be living there.
+    #[test]
+    fn a_house_is_founded_full_for_the_level_it_is_founded_at() {
+        let (mut w, house) = a_served_house();
+        let capacity = w.data().rules.max_residents(level(2)).expect("level 2");
+        let recomputes = w.coverage().recomputes();
+
+        assert!(w.set_house_level(house, level(2)));
+        assert_eq!(house_level(&w, house), level(2));
+        assert_eq!(w.house(house).expect("alive").residents, capacity);
+
+        tick(&mut w, &[]);
+        assert_eq!(
+            w.coverage().recomputes(),
+            recomputes + 1,
+            "a house that changed size has to be covered again"
+        );
+    }
+
+    /// A level the tables do not have is refused, and refused without leaving
+    /// the house half-founded.
+    ///
+    /// An answer and not a clamp: a caller asking for a level that does not
+    /// exist has a bug, and quietly founding a different city than the one asked
+    /// for is how a measurement gets credited to the wrong cause.
+    #[test]
+    fn founding_at_a_level_the_tables_do_not_have_changes_nothing() {
+        let (mut w, house) = a_served_house();
+        let before = w.house(house).expect("alive").clone();
+        let past_the_end =
+            u8::try_from(w.data().rules.house_levels.len() + 1).expect("a short table");
+
+        assert!(!w.set_house_level(house, level(past_the_end)));
+        assert_eq!(w.house(house).expect("alive"), &before);
+    }
 }

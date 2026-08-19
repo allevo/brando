@@ -21,6 +21,10 @@ counters = []
 # the direct-mutation hooks on `World` into every plain workspace build.
 from-scratch = []
 test-util = ["counters", "from-scratch"]
+# Founding a house at a level of your choosing, for setup that has to stand a
+# city up as though it had already been played. Its own feature, and not part of
+# `test-util`, for the same reason `from-scratch` is not.
+house-level = []
 # Tick::get(). Its own feature, not part of `test-util`, for the same reason
 # `from-scratch` is: sim-replay and xtask read a tick's raw number over a normal
 # dependency edge, where `test-util` would pull in far more than that.
@@ -35,7 +39,7 @@ proptest = { workspace = true }
 # branch is to put the residents there by hand, which is what `house_mut` is for.
 # Phase 14 makes the branch live and this dependency ordinary. `tick-number` is
 # here so the integration tests can read a tick's raw number too.
-sim-core = { path = ".", features = ["test-util", "tick-number"] }
+sim-core = { path = ".", features = ["house-level", "test-util", "tick-number"] }
 
 [lints]
 workspace = true
