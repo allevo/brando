@@ -59,6 +59,13 @@ closed, so the balancing is decided after watching real ticks run rather than be
   half of *the site you chose is part of what the building costs*. Waits on the terrain.
 - **[Bridges](plan/21-bridges.md)** — a bridge makes two bank-side networks one region, and demolishing
   it splits them again. Waits on the terrain.
+- **[A building gains a level when the player pays for it](plan/22-a-building-gains-a-level-when-the-player-pays-for-it.md)** —
+  a provider's level is hashed state that has never moved, and the per-level tables around it have
+  never been read past their first entry. This gives a building a way to grow that is not *build
+  another one*.
+- **[A farm works the land around it](plan/23-a-farm-works-the-land-around-it.md)** — a farm's output
+  and the mouths it can feed grow with the land the player attaches to it, and a fourth terrain
+  decides what a parcel of it is worth. Waits on the terrain, and on 22.
 - **M2 — the two clients, in parallel.** `game-bevy` renders M1's state isometrically with placeholder
   assets, the point being to validate the snapshot/event boundary rather than the graphics. Alongside
   it: a heuristic bot that completes scenario 1, and an evaluator.
