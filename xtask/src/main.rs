@@ -49,6 +49,9 @@ fn usage() {
     eprintln!(
         "  bench [--side <n>] [--residents <n>] [--reps <n>] [--zero-demographics]   (use --release)"
     );
+    eprintln!("        [--places <n> | --places <kind>=<n>,...] [--tables <dir>]");
+    eprintln!("        [--houses <level>=<n>,...]   instead of --residents");
+    eprintln!("        [--seed <n>]                 a ragged map instead of the lattice");
     eprintln!("  doc-check                                    (also runs in cargo test)");
     eprintln!();
     eprintln!("scenarios: {}", scenario::NAMES.join(", "));

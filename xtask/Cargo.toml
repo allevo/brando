@@ -4,9 +4,15 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-sim-core = { path = "../sim-core", features = ["counters", "from-scratch", "tick-number"] }
+sim-core = { path = "../sim-core", features = ["counters", "from-scratch", "house-level", "tick-number"] }
 sim-data = { path = "../sim-data" }
 sim-replay = { path = "../sim-replay" }
+# The seeded map's dice. The same generator the core seeds its own streams with,
+# rather than a second one invented here — and it stays out of the core's way:
+# what it decides is where the benchmark puts its roads, which happens before the
+# first tick and never enters the simulation (D4).
+rand = { workspace = true }
+rand_pcg = { workspace = true }
 
 [lints]
 workspace = true

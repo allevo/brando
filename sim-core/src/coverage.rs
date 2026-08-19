@@ -465,9 +465,9 @@ mod tests {
     use slotmap::SlotMap;
 
     use super::{HousesByTile, pick_within_capacity};
-    use crate::{House, Level, ServiceFlags, TilePos};
     use crate::grid::TileIndex;
     use crate::ids::HouseId;
+    use crate::{House, Level, ServiceFlags, TilePos};
 
     /// The counting sort, against the grouping done the obvious way.
     ///
@@ -578,11 +578,9 @@ mod tests {
                 .collect();
 
             let mut left = *capacity;
-            let picked: Vec<u8> = pick_within_capacity(
-                houses.iter().map(|(id, house)| (*id, house)),
-                &mut left,
-            )
-            .collect();
+            let picked: Vec<u8> =
+                pick_within_capacity(houses.iter().map(|(id, house)| (*id, house)), &mut left)
+                    .collect();
             assert_eq!(
                 picked, *served,
                 "capacity {capacity}, candidates {candidates:?}"
