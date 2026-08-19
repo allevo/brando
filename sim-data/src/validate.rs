@@ -8,10 +8,10 @@ use std::fmt;
 
 use sim_core::{Coins, Level, Milli, ServiceKind, Terrain};
 
-use crate::raw::{RawBuildingDef, RawDataSet, RawDemographics, RawSatisfaction};
+use crate::raw::{RawBuildingDef, RawDataSet, RawDemographics, RawMigration, RawSatisfaction};
 use sim_core::data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
-    Inconsistency, Production, Rules, SatisfactionRules, ServiceDef,
+    Inconsistency, MigrationRules, Production, Rules, SatisfactionRules, ServiceDef,
 };
 
 /// A single problem, with the logical path of the field that causes it.
@@ -97,6 +97,11 @@ pub enum ValidationErrorKind {
 
     #[error("too many difficulty profiles in the table: the maximum is {max}")]
     TooManyProfiles { max: usize },
+
+    #[error(
+        "satisfaction_weight + free_places_weight is {found}, not 1000: attractiveness would stop being a share expressed in thousandths"
+    )]
+    MigrationWeightsNotAThousand { found: u32 },
 }
 
 /// The set of problems found in one validation pass.
@@ -213,6 +218,12 @@ fn path_of(i: &Inconsistency) -> String {
         Inconsistency::UnreachableDemographicThreshold { what, .. } => {
             format!("rules.demographics.{what}")
         }
+        Inconsistency::UnreachableMigrationThreshold { what, .. } => {
+            format!("rules.migration.{what}")
+        }
+        Inconsistency::NoGapBetweenEmigrationAndBirths { .. } => {
+            "rules.migration.emigration_threshold".to_string()
+        }
     }
 }
 
@@ -234,7 +245,102 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
         food_per_resident: Milli::from_millis(r.food_per_resident),
         satisfaction: validate_satisfaction(&r.satisfaction, rep),
         demographics: validate_demographics(&r.demographics, rep),
+        migration: validate_migration(&r.migration, rep),
     }
+}
+
+/// Field checks for the migration rates and weights (phase 15).
+///
+/// Only what can be judged from **one field of one table**: the relations that
+/// cross `rules.migration` with `rules.demographics` and `rules.satisfaction`
+/// live in `DataSet::inconsistencies`, so `sim-core`'s hand-built fixture is
+/// protected by them too.
+fn validate_migration(m: &RawMigration, rep: &mut ValidationReport) -> MigrationRules {
+    const PATH: &str = "rules.migration";
+
+    let rules = MigrationRules {
+        satisfaction_weight: m.satisfaction_weight,
+        free_places_weight: m.free_places_weight,
+        founding_immigration_per_thousand_per_month: m.founding_immigration_per_thousand_per_month,
+        founding_population_threshold: m.founding_population_threshold,
+        immigration_per_thousand_per_month: m.immigration_per_thousand_per_month,
+        emigration_per_thousand_per_month_unhappy: m.emigration_per_thousand_per_month_unhappy,
+        emigration_threshold: m.emigration_threshold,
+        jitter_per_thousand: m.jitter_per_thousand,
+    };
+
+    // Attractiveness divides its weighted sum by 1000 exactly once: if the two
+    // weights do not add up to it, the result stops being a share expressed in
+    // thousandths and every number derived from it silently means something
+    // else than what it says.
+    let sum = u32::from(m.satisfaction_weight) + u32::from(m.free_places_weight);
+    if sum != 1_000 {
+        rep.push(
+            PATH,
+            ValidationErrorKind::MigrationWeightsNotAThousand { found: sum },
+        );
+    }
+
+    if m.jitter_per_thousand >= 1_000 {
+        rep.push(
+            format!("{PATH}.jitter_per_thousand"),
+            ValidationErrorKind::BeyondMax {
+                found: m.jitter_per_thousand,
+                max: 999,
+            },
+        );
+    }
+
+    // Switched off — every rate at zero — is a configuration
+    // (`MigrationRules::is_off`), for the same reason as the demographics: a
+    // table describing no migration is not describing one badly.
+    if rules.is_off() {
+        return rules;
+    }
+
+    // A rate of zero on its own is a table somebody half filled in, the same
+    // fault `validate_demographics` refuses for its own three rates.
+    for (field, value) in [
+        (
+            "founding_immigration_per_thousand_per_month",
+            m.founding_immigration_per_thousand_per_month,
+        ),
+        (
+            "immigration_per_thousand_per_month",
+            m.immigration_per_thousand_per_month,
+        ),
+        (
+            "emigration_per_thousand_per_month_unhappy",
+            m.emigration_per_thousand_per_month_unhappy,
+        ),
+    ] {
+        if value < 1 {
+            rep.push(
+                format!("{PATH}.{field}"),
+                ValidationErrorKind::TooSmall {
+                    min: 1,
+                    found: i64::from(value),
+                },
+            );
+        }
+    }
+
+    // At zero the founding regime would never apply — a population is never
+    // below zero — so a city founded with every house empty would be rated on a
+    // population of nobody, times any rate, for ever. That is the bootstrap trap
+    // the two regimes exist to avoid, and one written as a table value rather
+    // than as a bug in the code, which is why it is refused here.
+    if m.founding_population_threshold < 1 {
+        rep.push(
+            format!("{PATH}.founding_population_threshold"),
+            ValidationErrorKind::TooSmall {
+                min: 1,
+                found: i64::from(m.founding_population_threshold),
+            },
+        );
+    }
+
+    rules
 }
 
 /// Field checks for the demographic rates.

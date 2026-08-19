@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 14.9.9.5.** M0 is complete; M1 is in progress.
+> **Implemented through phase 15.5.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -35,12 +35,13 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.9.9.1 | [How well served the city is becomes a knob](plan/14.9.9.1-how-well-served-the-city-is-becomes-a-knob.md) — `--places` per kind of provider and `--tables <dir>`; the header says how well served the city it built is, and the coverage becomes a curve | 2026-08-18 |
 | 14.9.9.4 | [A city is founded at the levels you ask for](plan/14.9.9.4-a-city-is-founded-at-the-levels-you-ask-for.md) — `--houses 1=2000,2=800`; the provider stop turns out never to fire at all in a city of level-3 houses | 2026-08-18 |
 | 14.9.9.5 | [The streets stop being perfect](plan/14.9.9.5-the-streets-stop-being-perfect.md) — `--seed <n>` builds a ragged, provably connected map; a tick on one costs 40% more than on the lattice every figure was measured on | 2026-08-18 |
+| 15 | [Immigration and emigration](plan/15-migration.md) — the destination is never gated on coverage (slot 14.5's answer generalised), immigration is counted per free place and not per resident, and the coverage↔population loop damps: a `hard` city, born with nobody in it, reaches a living population within five years by migration alone | 2026-08-19 |
+| 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
 
 ## To do — the rest of M1
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
-| 15 | [Immigration and emigration](plan/15-migration.md) | two cities identical except for their coverage receive different flows, and the coverage↔population loop **damps** | |
 | 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 17 | [`sim-scenario`](plan/17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
 | 18 | [Invariants and closing M1](plan/18-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |

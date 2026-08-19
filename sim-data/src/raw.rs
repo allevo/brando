@@ -15,6 +15,7 @@ pub struct RawRules {
     pub food_per_resident: i32,
     pub satisfaction: RawSatisfaction,
     pub demographics: RawDemographics,
+    pub migration: RawMigration,
 }
 
 /// The demographic rates (phase 14), per month and per thousand residents.
@@ -25,6 +26,19 @@ pub struct RawDemographics {
     pub deaths_per_thousand_per_month_when_unserved: u16,
     pub unserved_threshold: u8,
     pub birth_threshold: u8,
+    pub jitter_per_thousand: u16,
+}
+
+/// The migration rates and weights (phase 15).
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawMigration {
+    pub satisfaction_weight: u16,
+    pub free_places_weight: u16,
+    pub founding_immigration_per_thousand_per_month: u16,
+    pub founding_population_threshold: u32,
+    pub immigration_per_thousand_per_month: u16,
+    pub emigration_per_thousand_per_month_unhappy: u16,
+    pub emigration_threshold: u8,
     pub jitter_per_thousand: u16,
 }
 

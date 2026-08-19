@@ -13,8 +13,8 @@
 use crate::grid::Terrain;
 
 use crate::data::{
-    BuildingDef, BuildingRole, DemographicsRules, DifficultyDef, HouseLevelDef, Production, Rules,
-    SatisfactionRules,
+    BuildingDef, BuildingRole, DemographicsRules, DifficultyDef, HouseLevelDef, MigrationRules,
+    Production, Rules, SatisfactionRules,
 };
 use crate::units::Coins;
 
@@ -43,6 +43,7 @@ pub(crate) fn dataset_hash(
         food_per_resident,
         satisfaction,
         demographics,
+        migration,
     } = rules;
     h.update(&starting_treasury.get().to_le_bytes());
     h.update(&(house_levels.len() as u64).to_le_bytes());
@@ -85,6 +86,25 @@ pub(crate) fn dataset_hash(
     h.update(&deaths_per_thousand_per_month.to_le_bytes());
     h.update(&deaths_per_thousand_per_month_when_unserved.to_le_bytes());
     h.update(&[*unserved_threshold, *birth_threshold]);
+    h.update(&jitter_per_thousand.to_le_bytes());
+
+    let MigrationRules {
+        satisfaction_weight,
+        free_places_weight,
+        founding_immigration_per_thousand_per_month,
+        founding_population_threshold,
+        immigration_per_thousand_per_month,
+        emigration_per_thousand_per_month_unhappy,
+        emigration_threshold,
+        jitter_per_thousand,
+    } = migration;
+    h.update(&satisfaction_weight.to_le_bytes());
+    h.update(&free_places_weight.to_le_bytes());
+    h.update(&founding_immigration_per_thousand_per_month.to_le_bytes());
+    h.update(&founding_population_threshold.to_le_bytes());
+    h.update(&immigration_per_thousand_per_month.to_le_bytes());
+    h.update(&emigration_per_thousand_per_month_unhappy.to_le_bytes());
+    h.update(&[*emigration_threshold]);
     h.update(&jitter_per_thousand.to_le_bytes());
 
     // --- terrain, in Terrain order ---

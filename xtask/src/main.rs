@@ -159,8 +159,18 @@ fn run(args: &[String]) -> Result<(), String> {
 
 fn table_header() {
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>7}  {:>7}  {:>8}  {:>7}  {:>10}",
-        "tick", "months", "houses", "res.", "stock", "water", "food", "treasury", "sat.", "levels"
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>7}  {:>9}  {:>7}  {:>7}  {:>8}  {:>7}  {:>10}",
+        "tick",
+        "months",
+        "houses",
+        "res.",
+        "away",
+        "stock",
+        "water",
+        "food",
+        "treasury",
+        "sat.",
+        "levels"
     );
 }
 
@@ -177,11 +187,16 @@ fn row(w: &World) {
     let houses = w.house_count();
     let max = w.data().rules.satisfaction.max;
     println!(
-        "{:>6}  {:>6}  {:>6}  {:>5}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}  {:>3}/{:<3}  {:>10}",
+        "{:>6}  {:>6}  {:>6}  {:>5}  {:>7}  {:>9}  {:>3}/{:<3}  {:>3}/{:<3}  {:>8}  {:>3}/{:<3}  {:>10}",
         w.tick(),
         months,
         houses,
         w.population(),
+        // Running, not per tick: a column sampled every N ticks would show one
+        // tick's turn-aways and hide the N-1 either side of it. Climbing while
+        // the population sits still is the city saying it is full, not
+        // unattractive.
+        w.population_totals().turned_away,
         milli(w.total_stock()),
         with_water,
         houses,

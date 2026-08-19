@@ -69,9 +69,10 @@ The rule is **plain words over jargon**.
 | **calendar** | The fixed shape of game time: how many ticks make a month, and how many months make a year. Not a balancing knob — nobody tunes what a month **is** the way the rest of the tables get tuned, so it is a Rust constant (`Calendar`) rather than a row in a table. |
 
 Some words above are defined here but do not exist in the code yet, because the phases that introduce
-them are not written: **attractiveness** arrives with phase 15, **ground height** and **slope** with
-phase 19. Until then, finding one in `plan/` and not in a `.rs` is expected, not a stale entry.
-**jitter** was in this note until phase 14, and is out of it because it is in `demographics.rs`.
+them are not written: **ground height** and **slope** arrive with phase 19. Until then, finding one in
+`plan/` and not in a `.rs` is expected, not a stale entry. **jitter** was in this note until phase 14
+and **attractiveness** until phase 15, and both are out of it now because they are in the code —
+`demographics.rs` and `migration.rs` respectively.
 
 ---
 

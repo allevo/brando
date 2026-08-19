@@ -59,9 +59,13 @@ mod demographics {
     }
 
     /// Everyone who has ever arrived or left, flow by flow.
-    fn flows(w: &World) -> (u64, u64, u64) {
+    ///
+    /// All four demographic flows and `evicted`, but not
+    /// `settled_on_construction` or `lost_to_demolition`: this only ever runs
+    /// on `tick(&mut w, &[])`, so no command moves either of those two.
+    fn flows(w: &World) -> (u64, u64, u64, u64, u64) {
         let t = w.population_totals();
-        (t.born, t.died, t.evicted)
+        (t.born, t.died, t.immigrated, t.emigrated, t.evicted)
     }
 
     /// Every place in every house: the ceiling the population climbs towards.
@@ -423,13 +427,25 @@ mod demographics {
             "while the houses are newly built the farm reaches everybody"
         );
 
-        run(&mut w, year);
+        // **Checked at every tick of the year, not only at the end.** Phase
+        // 15's emigration is the loop's other half: once the farm falls short,
+        // satisfaction drops, and the residents it can no longer feed start to
+        // leave. So the city does not only outgrow the farm, it can also
+        // shrink back to fit it — which is the damping test 9 of the phase
+        // file asks for — and a snapshot taken only at tick 360 can land on
+        // exactly such a moment of equilibrium and see no overshoot at all,
+        // while the run plainly contained one. The property this test is
+        // about is that the overshoot is *reachable*, not that it persists.
+        let mut overshot = false;
+        for _ in 0..year {
+            tick(&mut w, &[]);
+            if u32::from(residents_served(&w)) < w.population() {
+                overshot = true;
+            }
+        }
         assert!(
-            u32::from(residents_served(&w)) < w.population(),
-            "as the houses fill, somebody has to fall outside the farm's \
-             capacity: {} served out of {}",
-            residents_served(&w),
-            w.population()
+            overshot,
+            "the city never outgrew the farm's capacity in a whole year"
         );
         assert_eq!(
             w.food().covered_but_unfed,

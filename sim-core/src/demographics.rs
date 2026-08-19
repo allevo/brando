@@ -6,14 +6,14 @@
 //! tick; which house an event falls on is a draw per event. Fifteen thousand
 //! residents cost four draws and a handful more, not fifteen thousand.
 //!
-//! **The order of the draws inside a tick is a determinism contract**, like the
-//! order of the ten steps, and it is written here rather than left to the
-//! reading order of the code:
-//!
-//! 1. deaths' jitter
-//! 2. deaths' choice of house, one draw per death
-//! 3. births' jitter
-//! 4. births' choice of house, one draw per birth
+//! **This module's two draws are half of a determinism contract that spans two
+//! modules**, like the order of the ten steps, and the whole of it is written
+//! down once, in `tick::houses_and_migration` — deaths, then
+//! [`crate::migration::emigration`], then births, then
+//! [`crate::migration::immigration`], each contributing its jitter and then its
+//! per-event choice of house. Writing the four here as well would be a second
+//! copy nothing would keep in agreement with the real order the day one of
+//! the four moved.
 //!
 //! Departures come before arrivals for two reasons. One technical: after a
 //! decay there can be a house full to its limit, and freeing up first keeps
@@ -27,7 +27,8 @@
 //! of the city rather than of the calendar — and it is what lets
 //! `an_empty_tick_only_advances_the_tick` go on asserting that a world with no
 //! houses touches no stream, the same sentence it has asserted since phase 04,
-//! now true for a reason instead of by absence.
+//! now true for a reason instead of by absence. [`crate::migration`] follows
+//! the same rule for its own two flows.
 
 use crate::event::Event;
 use crate::ids::HouseId;
@@ -73,10 +74,12 @@ impl Flow {
 
 /// The fractions of an event not yet matured, one slot per flow.
 ///
-/// **State**, and in the state hash: these decide the following ticks. Two of
-/// the four slots do nothing until phase 15 and are hashed as zeros on purpose
-/// — the array is sized for all four flows now so that adding migration moves
-/// no recording.
+/// **State**, and in the state hash: these decide the following ticks. The
+/// array was sized for all four [`Flow`] variants from phase 14, before
+/// migration filled the last two — [`Flow::Immigration`] and
+/// [`Flow::Emigration`] had a slot reserved and hashed as zero from the start,
+/// so phase 15 needed no change to the array's shape, only to what moves the
+/// two slots that had sat unused.
 ///
 /// **Why an accumulator at all.** A rate of 0.4 births a tick truncated to a
 /// whole number is zero on *every* tick, so a small city would never grow. The
@@ -128,10 +131,9 @@ pub struct PopulationTotals {
     pub settled_on_construction: u64,
     pub born: u64,
     pub died: u64,
-    /// Phase 15. In the conservation equation from now, so that phase adds no
-    /// term to it.
+    /// Written by [`crate::migration::immigration`].
     pub immigrated: u64,
-    /// Phase 15, like `immigrated`.
+    /// Written by [`crate::migration::emigration`].
     pub emigrated: u64,
     /// Residents sent away because decay shrank the house below its occupancy
     /// (phase 13, written by [`levels::review`]).
@@ -140,6 +142,21 @@ pub struct PopulationTotals {
     pub evicted: u64,
     /// Residents who vanished with a demolished house.
     pub lost_to_demolition: u64,
+    /// Would-be immigrants the city drew and had no room for, written by
+    /// [`crate::migration::immigration`]. **Outside [`balance`]**, unlike every
+    /// other field here: someone turned away never became a resident of
+    /// anywhere, so adding them to the equation would break the equality rather
+    /// than complete it. A **diagnostic**, the same kind of number as
+    /// [`FoodTotals::covered_but_unfed`].
+    ///
+    /// It exists because the population alone cannot tell the player which
+    /// problem they have: a city that is not growing because nobody wants to
+    /// come needs services, a city that is not growing because it is full needs
+    /// houses, and those read identically in every other number.
+    ///
+    /// [`balance`]: PopulationTotals::balance
+    /// [`FoodTotals::covered_but_unfed`]: crate::production::FoodTotals
+    pub turned_away: u64,
 }
 
 impl PopulationTotals {
@@ -149,6 +166,9 @@ impl PopulationTotals {
     /// the sum of `residents` over the living houses. `i64` and not `u64`
     /// because the invariant has to be able to *observe* a negative balance in
     /// order to report it, not saturate and hide it.
+    ///
+    /// `turned_away` is deliberately absent: it counts people who never entered
+    /// a house, so it belongs to neither side.
     pub const fn balance(&self) -> i64 {
         let arrived = self.settled_on_construction + self.born + self.immigrated;
         let left = self.died + self.emigrated + self.evicted + self.lost_to_demolition;
@@ -156,47 +176,45 @@ impl PopulationTotals {
     }
 }
 
-/// Steps 6.3 and 6.5. Returns whether anybody moved.
-///
-/// The caller invalidates the coverage on `true` and only on `true`: capacity
-/// is counted on the residents present, so an assignment made at step 3
-/// with yesterday's population is stale the moment anyone is born or dies —
-/// but in a full or empty city nobody moves, no recomputation is needed, and
-/// the tick goes back to costing what it did before this phase.
-///
-/// A birth and a death in the same tick net to no change in `population` and
-/// still have to invalidate: the coverage is decided by the residents of each
-/// house, not by the city's total. That is why this returns a flag instead of
-/// the caller comparing populations.
-pub(crate) fn run(world: &mut World, r: &mut StepReportEvents<'_>) -> bool {
-    let deaths = deaths(world, DIVISOR, r);
-    let births = births(world, DIVISOR);
-    deaths || births
-}
-
 /// `1000` (rates are per thousand) × `1000` (the jitter's base) × the ticks in
 /// a month.
-const DIVISOR: i64 = Calendar::TICKS_PER_MONTH as i64 * 1_000 * 1_000;
+///
+/// `pub(crate)`: [`crate::migration`] wants the identical derivation for its
+/// own two flows, and a second copy of the formula is exactly the kind of
+/// thing nothing would keep in agreement with this one if `Calendar` ever
+/// changed.
+pub(crate) const DIVISOR: i64 = Calendar::TICKS_PER_MONTH as i64 * 1_000 * 1_000;
 
 /// The jitter on a rate: one draw, symmetric about zero, in `-J..=J`.
 ///
 /// Symmetric because an asymmetric jitter shifts the whole balancing without
 /// showing up anywhere — which is what `the_jitter_does_not_move_the_mean`
 /// checks over ten thousand ticks.
-fn jitter(world: &mut World, span: u16) -> i64 {
+///
+/// `kind` and not a hardcoded stream: [`crate::migration`] draws its own
+/// jitter from `RngKind::Migration`, and sharing this function is what keeps
+/// the fixed-cost-draw machinery in one place without also sharing a stream
+/// between two systems — which would make their draw order an implicit
+/// contract.
+pub(crate) fn jitter(world: &mut World, span: u16, kind: RngKind) -> i64 {
     if span == 0 {
         // Still a draw: the cost of a flow's jitter must not depend on a table
         // value, or `draws` stops being a function of the city.
-        world.rng.get(RngKind::Demographics).below(1);
+        world.rng.get(kind).below(1);
         return 0;
     }
     let width = u64::from(span) * 2 + 1;
-    let drawn = world.rng.get(RngKind::Demographics).below(width);
+    let drawn = world.rng.get(kind).below(width);
     drawn as i64 - i64::from(span)
 }
 
 /// Turns an accumulated numerator into whole events, keeping the remainder.
-fn mature(world: &mut World, flow: Flow, numerator: i64, divisor: i64) -> u64 {
+///
+/// `pub(crate)`: flow-agnostic already — it reads and writes
+/// `Demographics::remainder[flow.index()]` and nothing about the rate that
+/// filled it — so [`crate::migration`] reuses it unchanged for its own two
+/// flows instead of duplicating the accumulate-then-divide arithmetic.
+pub(crate) fn mature(world: &mut World, flow: Flow, numerator: i64, divisor: i64) -> u64 {
     let slot = &mut world.demographics.remainder[flow.index()];
     *slot = slot.saturating_add(numerator);
     let events = *slot / divisor;
@@ -224,7 +242,7 @@ fn mature(world: &mut World, flow: Flow, numerator: i64, divisor: i64) -> u64 {
 /// house without food is not. One threshold, no new concept, and the raised
 /// rate generalises to every service a rung ever demands instead of being wired
 /// to food.
-fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool {
+pub(crate) fn deaths(world: &mut World, r: &mut StepReportEvents<'_>) -> bool {
     // Copied, and only the rates: `jitter` and `mature` want the whole
     // `&mut World`, so no borrow of the tables survives across them, and
     // naming the fields separately cannot help here the way it does in
@@ -247,10 +265,10 @@ fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool
         return false;
     }
 
-    let j = jitter(world, d.jitter_per_thousand);
+    let j = jitter(world, d.jitter_per_thousand, RngKind::Demographics);
     let rate = served * i64::from(d.deaths_per_thousand_per_month)
         + unserved * i64::from(d.deaths_per_thousand_per_month_when_unserved);
-    let events = mature(world, Flow::Deaths, rate * (1_000 + j), divisor);
+    let events = mature(world, Flow::Deaths, rate * (1_000 + j), DIVISOR);
     if events == 0 {
         return false;
     }
@@ -308,7 +326,7 @@ fn deaths(world: &mut World, divisor: i64, r: &mut StepReportEvents<'_>) -> bool
 /// the numbers. A city whose houses are all full has nobody eligible, so the
 /// rate is zero and the population stops — and it stops for a reason a reader
 /// can point at instead of because two constants happen to cancel.
-fn births(world: &mut World, divisor: i64) -> bool {
+pub(crate) fn births(world: &mut World) -> bool {
     // The rates alone, and copied, for the reason spelled out in `deaths`.
     // Everything else the table is asked for here — `max_residents` below,
     // `satisfaction.max` further down — is read through `world` at a point
@@ -332,7 +350,7 @@ fn births(world: &mut World, divisor: i64) -> bool {
         return false;
     }
 
-    let j = jitter(world, d.jitter_per_thousand);
+    let j = jitter(world, d.jitter_per_thousand, RngKind::Demographics);
     // The satisfaction scaling folds into the numerator, and `satisfaction.max`
     // into the divisor: scaling the rate first would truncate it to a whole
     // number and throw away most of the curve.
@@ -343,7 +361,7 @@ fn births(world: &mut World, divisor: i64) -> bool {
     let rate = eligible_residents
         * i64::from(d.births_per_thousand_per_month)
         * i64::from(average_satisfaction(world));
-    let events = mature(world, Flow::Births, rate * (1_000 + j), divisor * max);
+    let events = mature(world, Flow::Births, rate * (1_000 + j), DIVISOR * max);
     if events == 0 {
         return false;
     }
@@ -385,7 +403,12 @@ fn births(world: &mut World, divisor: i64) -> bool {
 ///
 /// The same reading `Mood::of` and the decay check use, which is the point: one
 /// threshold and no new concept.
-fn worst_required(world: &World, house: &crate::world::House) -> u8 {
+///
+/// `pub(crate)`: [`crate::migration`] reads the identical worst-of-the-required
+/// value for `emigration_threshold` — "going without" and "unhappy enough to
+/// leave" are the same question asked of two different thresholds, not two
+/// questions.
+pub(crate) fn worst_required(world: &World, house: &crate::world::House) -> u8 {
     let rules = &world.data.rules;
     rules
         .required_at(house.level)
@@ -398,7 +421,9 @@ fn worst_required(world: &World, house: &crate::world::House) -> u8 {
         .unwrap_or(rules.satisfaction.max)
 }
 
-fn level_of(world: &World, house: HouseId) -> crate::ids::Level {
+/// `pub(crate)`: [`crate::migration::immigration`] reads a house's level the
+/// same way, to know when a house it just moved somebody into has filled up.
+pub(crate) fn level_of(world: &World, house: HouseId) -> crate::ids::Level {
     world
         .houses
         .get(house)
@@ -433,7 +458,7 @@ pub(crate) struct StepReportEvents<'a> {
 }
 
 impl StepReportEvents<'_> {
-    fn push(&mut self, e: Event) {
+    pub(crate) fn push(&mut self, e: Event) {
         self.events.push(e);
     }
 }

@@ -1,14 +1,16 @@
 ---
 id: 15
 kind: phase
-status: not-yet-built
+status: implemented
 opened: 2026-08-09
+closed: 2026-08-19
 ---
 
 # Phase 15 — Immigration and emigration
 
-> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
-> work is really done — see [ROADMAP.md](../ROADMAP.md).
+> See [How it went](#how-it-went) at the end, which is where the shape it really took is written
+> down. Everything above that section is the plan as it was written, including the parts the work
+> proved wrong — the prediction next to the outcome is the point.
 
 **Goal:** two cities identical except for their coverage receive different migration flows; a city
 with no free places receives nobody, and one that has places but has left them uncovered fills them
@@ -16,6 +18,19 @@ with no free places receives nobody, and one that has places but has left them u
 **Depends on:** 14.
 **Size:** M.
 **Decisions involved:** A15, A12, A10, A14, D3, D5.
+
+> **Revised on 2026-08-19**, before writing any of it, by reading the plan against the tree it has to
+> land in. Slot 14.5 closed on 2026-08-17 — eight days after this plan was written and two before it
+> was built — and its answer rules out this plan's own design for where an immigrant is sent: *"a
+> house with nobody in it is not served"*, and immigration "must not make coverage a precondition for
+> moving into a particular house," on pain of an absorbing state exactly like the one 14.5 itself
+> closed. This plan's "served houses only" gate is that precondition, and on `hard` — every house born
+> empty, hence never served — it would have meant no house is ever eligible, for ever: the very profile
+> this phase's own verification section asks to watch would never take off. Three passages are
+> corrected in place below and marked **(revised)**; a fourth number the plan proposed — immigration
+> counted per thousand *residents* — has the identical bootstrap failure for the identical reason, and
+> is corrected alongside it. The general lesson is phase 14's again: a plan written before the code it
+> has to fit is a hypothesis, and the cheap moment to test it is before the first commit, not after.
 
 ## Why now
 
@@ -104,9 +119,14 @@ The order above is the one to fix.
 Zero free places ⇒ zero immigration, at any attractiveness. Not a reduced rate: zero. Houses are the
 only container for population (D5), and with no container there is no flow.
 
-Within the houses with room, the eligible set is the **served** houses. It is the cheapest part of
-A10: *"migrants only go where life is good"* is not a separate mechanism, it is
-the filter — the same houses levelling up considers worthy, for the same reason.
+**(revised)** Within the houses with room, the eligible set is **every house with room, served or
+not**, and not "the served houses" as first written here. Slot 14.5, closed after this paragraph and
+before the phase was built, answers a narrower question — does an empty house consume provider
+capacity — and in doing so rules the wider filter out by name: *"Immigration must not make coverage a
+precondition for moving into a particular house. Coverage drives the rate at which a city attracts
+people ... if it also decided which house they enter, an emptied house could never be refilled —
+uncovered because empty, empty because uncovered."* Coverage still decides how much a city attracts,
+through `attractiveness`; it stops deciding which house within it a migrant lands in.
 
 **The gate that does not get put in**, and it is the decision to write down: immigration is **not**
 made conditional on the providers' remaining capacity. It would be easy and it would look prudent —
@@ -118,12 +138,16 @@ Without it, what has to happen does: the city fills up, outgrows its own service
 starts failing someone, satisfaction drops, emigration switches on. **The player sees the problem
 and builds.** The overshoot is the signal, not a bug.
 
-A warning worth writing alongside: with the capacity counted on residents, an **empty** house costs
-zero and therefore always comes out served. At `hard` difficulty, where every house is born empty,
-the "served houses only" filter filters nothing at the start. That is correct — an empty house needs
-no water — but it means the first wave of immigrants spreads everywhere and the deficit shows up all
-at once a few ticks later. It is the most delicate moment of the curve and it has to be watched in
-the dump.
+**(revised)** The warning this paragraph used to carry assumed the opposite of what 14.5 answered: it
+read an empty house as costing nothing and therefore *always* coming out served, and reasoned from
+there about the first wave spreading everywhere. Slot 14.5 answers the other way — an empty house is
+never served, at any distance, for any provider — which is the sharper version of the same worry: on
+`hard`, where every house is born empty, "served houses only" would not merely filter nothing, it would
+admit nothing, for ever. That is exactly why the filter above is now "every house with room" instead.
+The delicate moment the original paragraph was reaching for is real all the same and still has to be
+watched in the dump: the first wave of immigrants lands wherever there is room, spreads before the
+coverage has caught up to any of it, and the deficit this creates is what step 3 has to chase down over
+the following ticks.
 
 ### The real risk of this phase: the loop might not damp
 
@@ -159,7 +183,7 @@ migration: (
     // Attractiveness weights, in thousandths.
     satisfaction_weight: 700,
     free_places_weight: 300,
-    // Maximum inbound flow, per thousand residents per month, at full attractiveness.
+    // Maximum inbound flow, per thousand free places per month, at full attractiveness.
     immigration_per_thousand_per_month: 30,
     emigration_per_thousand_per_month_unhappy: 40,
     emigration_threshold: 25,
@@ -167,10 +191,23 @@ migration: (
 ),
 ```
 
-**A cross-table check**: `emigration_threshold < birth_threshold`, and below level 1's decay
-threshold. If a house emigrated at a satisfaction where it is still having children, the two flows
-would fight each other on every tick and the population would oscillate with nothing to flag it — it
-is the same shape as `Inconsistency::NoHysteresis`.
+**(revised)** `immigration_per_thousand_per_month` is counted against the **free places**, not against
+the population as first sketched here. A rate against the population has the identical failure the
+destination gate above had, for the identical reason: a `hard` city starts at zero residents, and zero
+residents times any rate is zero, for ever. Free places exist the moment a house is built, whatever its
+occupancy, so the rate can act from the first tick — and "zero free places ⇒ zero immigration" falls
+out of that multiplication for free instead of needing a gate written on top of it.
+
+**A cross-table check**: `emigration_threshold < birth_threshold`. If a house emigrated at a
+satisfaction where it is still having children, the two flows would fight each other on every tick and
+the population would oscillate with nothing to flag it. **(revised)** The second half of this check as
+first written — "and below level 1's decay threshold" — does not survive contact with the table: level
+1 has no level below it to decay to, so its `decay_threshold` is unread and written as zero by
+convention (see `rules.ron`), and a check demanding `emigration_threshold` sit below zero could never
+pass. Dropped; the relation that remains is the one the paragraph's own argument is about. And the name
+this plan reached for, `Inconsistency::NoHysteresis`, does not survive either: the vocabulary review
+retired "hysteresis" in favour of "gap" before this phase was built (`CLAUDE.md`'s naming rule), so the
+variant that implements this check is named for the gap it guards instead.
 
 The `Summary` gains `immigrated`, `emigrated` and `attractiveness`.
 
@@ -190,10 +227,14 @@ exists, and no scenario asks for it.
 1. **The goal**: two cities identical except for their coverage ⇒ different flows, and the served
    one grows faster. With the same seed, so the only difference is the coverage.
 2. **The hard gate**: attractiveness at maximum, zero free places ⇒ zero immigrants, for a hundred
-   ticks. And on adding one served house, the flow restarts in the same tick.
-3. **Served houses only**: an uncovered house with free places receives nobody, even if it is the
-   only one with room in the whole city. The case has to be built with a house that is **already
-   inhabited** and uncovered: an empty one is served at zero cost and would distinguish nothing.
+   ticks. And on adding one house with room, the flow restarts in the same tick, whether or not that
+   house is covered.
+3. **(revised) Coverage is not a precondition for the destination**: an uncovered house with free
+   places receives immigrants all the same, even when a covered house with room also exists — the
+   opposite of what this test asked for as first written, and the direct consequence of slot 14.5's
+   answer. The case is built with a house that is **already inhabited** and uncovered, the same
+   construction the original test proposed: an empty one would not distinguish "not gated on coverage"
+   from "not gated on anything at all", since an empty house is never served either way.
 4. **Emigration**: with the well demolished, the houses empty out through emigration **and** through
    deaths, and the totals tell the two apart. The test is on the totals, not on the population: it is
    the distinction that has to be checked.
@@ -248,3 +289,83 @@ it goes into A17's data.
 
 **Done when:** test 5 (conservation still exact) and test 9 (the loop damps) pass, and the game at
 `hard` reaches a living city within five years.
+
+## How it went
+
+All of it landed, and the biggest single change from the plan was decided **before** the first line of
+code, not discovered afterwards: the three passages marked **(revised)** above, corrected against slot
+14.5's answer and against the immigration-rate bootstrap trap 14.5's argument turns out to generalise
+to. Both are recorded there, next to the sentences they replace, rather than repeated here.
+
+**The fixture's own migration rates had to be found by trial, not chosen up front.** The plan asked for
+numbers "deliberately large... a test that had to run five game years to see one [event] would be a
+test nobody runs" — the same instinct phase 14 had for its own rates. The first attempt (500 per
+thousand per month, both flows) broke two existing coverage tests that build a handful of houses over
+a dozen ticks and were never about migration at all: `on_hard_an_empty_house_is_not_served` and
+`the_capacity_serves_the_nearest_ones`. The cause was not a bug — a freshly built house's satisfaction
+accumulator starts at zero and stays below `emigration_threshold` for the several ticks it takes to
+climb, so *every* house is briefly emigration-eligible right after construction, and a large enough rate
+moves somebody during exactly the short window those two tests build their cities in. `demographics.rs`'s
+own large rates carry the identical exposure and simply never happened to fire in those two tests, on
+that seed — luck, not a guarantee. The fixture's rates came down to a tenth of the first attempt
+(`IMMIGRATION_PER_THOUSAND`/`EMIGRATION_PER_THOUSAND_UNHAPPY` at 60), which stopped colliding with the
+short-window tests and meant the migration-specific tests could no longer rely on the shared fixture
+alone: three of them build their own dataset variant, cloned from the shared one with a single field
+changed — `dataset_with_fast_immigration` to see a slow, uncovered scene inside a few thousand ticks
+instead of several hundred thousand, and `dataset_with_migration_off` to isolate the domain-separation
+property from the base death rate every real city pays regardless of coverage.
+
+**A rate of zero is not the same as a stream that never draws, and one test had to unlearn that.** The
+first version of the domain-separation test expected a "full, served, satisfied" house to leave
+`RngKind::Migration` untouched, and it does not: `jitter` draws exactly once for every eligible flow on
+every tick *by construction*, regardless of what the table's rate says — the same rule
+`demographics.rs` already lives by, so that `draws` stays a function of the city and never of a number
+somebody could retune. A served, satisfied house still pays the demographics' own base death rate, so a
+long-lived city will eventually free a place no matter how well it is served, and the moment it does,
+immigration has something to draw jitter for again. The test that survives switches migration off at the
+table instead (`MigrationRules::is_off`, the same shape `DemographicsRules::is_off` already had) and
+checks the thing that really is guaranteed: no *event* matures, not that nothing is *drawn*.
+
+**Two of phase 14's own tests needed correcting, and both for the same reason: migration's damping is
+real.** `flows()` in `demographics.rs`'s test file compared only `born`/`died`/`evicted` before and
+after a tick to decide whether "anybody moved" — blind to the two new flows, so
+`demographics_invalidate_the_coverage_and_only_then` started reporting the coverage dirtied when
+nothing it was watching had moved. Widening the tuple to all five running totals fixed it in one line.
+The second was a real prediction proven wrong by the mechanism working: `the_coverage_follows_a_city_
+that_outgrows_it` asserted the farm's capacity was still exceeded at exactly the one-year mark, which
+held under phase 14 alone but stopped holding once emigration could correct an overshoot back down —
+the population still outgrows the farm along the way (confirmed at many ticks in the same run), it just
+no longer has to still be overshot at the one arbitrary tick the test happened to sample. The fix checks
+the whole year for an overshoot instead of the last instant of it, which is the more honest reading of
+what the test was always trying to prove.
+
+**Test 5, 6 and 10 needed no new test at all.** Conservation was already exact in `invariants.rs` —
+`PopulationTotals::balance` had carried `immigrated` and `emigrated` in its equation since phase 14,
+written in ahead of the phase that would fill them. The empty-city reading of `attractiveness` has its
+own inline unit test next to the function, `migration::tests::an_empty_city_is_maximally_attractive`,
+in the same style `levels.rs` and `satisfaction.rs` already use for their own pure functions. And the
+coverage was never sticky to begin with: `compute_from_scratch` reads no history, migration gave it
+none to read, and the two existing tie-break tests in `coverage.rs` already pin the property down.
+
+**The measurement, on the same machine, before and after this phase's changes** (200×200, 15,000
+residents, `easy`, `bench --reps 40`):
+
+| | before phase 15 | after |
+|---|---|---|
+| `A` empty tick, real rates | 2.092 ms | ~2.26 ms |
+| `H` empty tick, every rate at zero (migration included) | — | ~0.38 ms |
+| recomputations | 202 of 202 ticks | 202 of 202 ticks |
+
+Migration adds roughly 8% to a cost that was already paid on every tick: `J` was already 100% after
+phase 14, so the two new flows do not make the coverage recompute *more often* — they add two more
+`O(houses)` scans (emigration's eligibility pass, immigration's free-places pass) and up to four more
+RNG draws to a tick that was already the expensive case. `H` moved up from phase 13's ~280 µs region
+too, for the same reason phase 14 found: step 6 now scans the houses five times even with every rate at
+zero, not three. Nothing here is optimised — slot 18.5 is where that work belongs, and this phase's
+job was only to measure it honestly, which the paired same-machine numbers above do.
+
+**The by-eye proof asked for in the Verification section holds.** `cargo xtask run --difficulty hard
+--ticks 1800 --dump-every 90` climbs from zero residents to the mid-twenties over five years, entirely
+by immigration, catching up to within a few residents of `easy`'s trajectory by month 30 — the "starts
+slower but gets there" the plan predicted. The population column visibly saws rather than climbing
+smoothly or exploding, which is the loop test 9 asks for read by eye instead of by property test.
