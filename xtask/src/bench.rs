@@ -102,7 +102,7 @@ use sim_core::{
 /// `A` is the number to watch: it is paid on **every** tick, while `D` is paid
 /// only when the player does something. Phase 14 then moved `A` to 3.600 ms by
 /// making the coverage recompute almost every tick, which is the whole
-/// subject of the open question at slot 18.5.
+/// subject of the open question at slot 19.5.
 ///
 /// **Where they stand now**, same scale, after phase 14.9.9 stopped a provider
 /// walking once its capacity has run out:
@@ -115,7 +115,7 @@ use sim_core::{
 ///
 /// The table above it stays as the end-of-M0 baseline and is not rewritten:
 /// what these two say side by side is that the whole of phase 14's 13× is not
-/// yet paid back, and where the rest of it has to come from is still slot 18.5.
+/// yet paid back, and where the rest of it has to come from is still slot 19.5.
 ///
 /// **`A` and not `G` is the honest measure of a change to the rules.** `G` runs
 /// after the several hundred ticks the measures above it take, so two builds
@@ -281,7 +281,7 @@ fn preset(
     //    milliseconds with zero recomputations is a completely different fault
     //    from one costing the same with a recomputation on every tick. It is
     //    also how `J` — the fraction of ticks in which the population moved —
-    //    is read off directly instead of estimated (slot 18.5).
+    //    is read off directly instead of estimated (slot 19.5).
     let ticks_a = reps * 5;
     let recomputes_before = w.coverage().recomputes();
     let a = measure(ticks_a, |_| {
@@ -1334,7 +1334,7 @@ fn with_unlimited_treasury(real: &DataSet) -> DataSet {
 
 /// The same dataset with the demographics **switched off**.
 ///
-/// What `--zero-demographics` measures on, and it is the term slot 18.5 needs:
+/// What `--zero-demographics` measures on, and it is the term slot 19.5 needs:
 /// `A` with the rates at zero is `H`, the tick that pays for step 6 but not for the
 /// coverage recomputation step 6 triggers. Without `H` the cost of the coverage
 /// chasing the population cannot be told apart from the cost of the demographics

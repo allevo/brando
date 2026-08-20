@@ -12,11 +12,11 @@ opened: 2026-08-13
 >
 > It is also, deliberately, a **sketch rather than a full plan**: it was written when the task was
 > added to the tree, not when the phase was designed. What follows is the goal and the shape of the
-> problem. The detail arrives when phase 19 has closed and there is a real river to cross.
+> problem. The detail arrives when phase 16 has closed and there is a real river to cross.
 
 **Goal:** the player can carry a road across water, within limits and at a much higher cost, and the
 road network crosses it as one region.
-**Depends on:** 19 — water is only a real obstacle once a map file can draw a river.
+**Depends on:** 16 — water is only a real obstacle once a map file can draw a river.
 **Size:** L (guessed, not estimated).
 
 ## Why it exists
@@ -58,7 +58,7 @@ one direction.
   Whether it may turn, whether it may run along the water instead of across it, and whether deep water
   refuses outright are all questions the simple answer leaves open, and the last one implies a notion
   of depth that does not exist yet.
-- **What happens to phase 19's fourth loader refusal** — walkable tiles must form one region. It stays,
+- **What happens to phase 16's fourth loader refusal** — walkable tiles must form one region. It stays,
   it weakens, or it changes into "one region once every crossable span is counted". A severed map that
   the player *can* join is now a legitimate map, and possibly an interesting one; a severed map they
   cannot join is still a broken asset.
@@ -67,7 +67,7 @@ one direction.
   by default, and "by default" is not the same as decided.
 
 The failure names this phase will need are descriptive of what went wrong and carry the numbers the
-caller needs to act — the span it found against the span allowed, in the shape phase 19's `TooSteep`
+caller needs to act — the span it found against the span allowed, in the shape phase 16's `TooSteep`
 uses. The spellings are not chosen here; the naming rule in [CLAUDE.md](../CLAUDE.md) applies, and
 every limit is a parameter in `sim-data`.
 

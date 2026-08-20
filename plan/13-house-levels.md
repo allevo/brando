@@ -12,6 +12,9 @@ closed: 2026-08-10
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
 
+> **Amended 2026-08-20.** The tree was renumbered so that terrain could be built next, before the rest
+> of M1. Below, "(phase 16)" (the taxable base per resident, treasury and taxes) is now phase 17.
+
 **Goal:** a house served with water and food reaches level 2 in a number of ticks you can compute
 from the `DataSet`; take the water away and it goes back to level 1; and on the boundary it **does
 not oscillate**.

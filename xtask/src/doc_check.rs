@@ -259,7 +259,7 @@ fn cited_slots_exist(sources: &[(PathBuf, String)], tasks: &[Task]) -> Vec<Findi
 }
 
 /// The numbers `phase` and `slot` introduce, in either case and either number:
-/// `phase 14`, `Phase 14.4`, `slot 18.5`, `phases 15`.
+/// `phase 14`, `Phase 14.4`, `slot 19.5`, `phases 15`.
 fn cited_slots(line: &str) -> Vec<(&'static str, PhaseNumber)> {
     // Lowercasing only maps ASCII letters, so every byte offset still lines up
     // with the original and the digits are untouched.

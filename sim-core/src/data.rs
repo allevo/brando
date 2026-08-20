@@ -67,7 +67,7 @@ impl DemographicsRules {
     /// stored coverage against a from-scratch one computed after step 6 has
     /// already moved somebody and diverges for a reason that is not a bug.
     /// And `bench --zero-demographics` measures `H`, the tick with the
-    /// demographics off, which is the term slot 18.5 needs in order to tell the
+    /// demographics off, which is the term slot 19.5 needs in order to tell the
     /// cost of the recomputation apart from the cost of step 6 itself.
     ///
     /// All three rates or none: a table with births at zero and deaths at six
@@ -185,8 +185,8 @@ pub struct HouseLevelDef {
     ///
     /// Unread at level 1: there is no level 0 to fall to.
     pub decay_threshold: u8,
-    /// The taxable base per resident (phase 16). Zero until then, and read by
-    /// nobody: it is declared now because the levels are the table phase 16 will
+    /// The taxable base per resident (phase 17). Zero until then, and read by
+    /// nobody: it is declared now because the levels are the table phase 17 will
     /// want it in, and adding it later would regenerate the recordings a second
     /// time for one number.
     pub taxable_per_resident: Milli,

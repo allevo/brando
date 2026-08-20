@@ -1,25 +1,25 @@
 ---
-id: 17
+id: 18
 kind: phase
 status: not-yet-built
 opened: 2026-08-09
 ---
 
-# Phase 17 — `sim-scenario` and objectives
+# Phase 18 — `sim-scenario` and objectives
 
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
 **Goal:** the scenario "500 residents within 5 years" declares itself complete on the right tick, and
 not before.
-**Depends on:** 16.
+**Depends on:** 17.
 **Size:** L.
 **Decisions involved:** A16, A2, A6, D7.
 
 ## Why now
 
 Because it is the last phase that adds a mechanic, and because an objective only makes sense once
-there is a game underneath: before phase 16 the city could not finance its own growth, and "500
+there is a game underneath: before phase 17 the city could not finance its own growth, and "500
 residents within 5 years" would have been won or lost by the balancing rather than by the player.
 
 It is also the first new crate since M0. It comes into being now and not earlier because

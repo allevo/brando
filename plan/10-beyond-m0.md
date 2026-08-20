@@ -19,9 +19,13 @@ watched a single tick run, and every number decided in the abstract has to be re
 ## M1 — A minimal game loop
 
 > **Planned on 2026-08-09**, after M0 was closed and step 3 optimised. The real phases are
-> [11](11-difficulty.md)–[18](18-invariants-closeout-m1.md), listed in [README.md](../ROADMAP.md). This
+> [11](11-difficulty.md)–[18](19-invariants-closeout-m1.md), listed in [README.md](../ROADMAP.md). This
 > section stays as it was written: comparing it with the real plan is the only way to know how much
 > sketching ahead is worth.
+
+> **Amended 2026-08-20.** The tree was renumbered so that terrain could be built next, before the rest
+> of M1: the real phases are now 11–19 (with 19.5 as the open question), not 11–18, and terrain sits at
+> 16, ahead of treasury (17), `sim-scenario` (18) and the invariants closeout (19, linked above).
 
 > **Amended 2026-08-15.** The index this names, `plan/README.md`, no longer exists: it answered the
 > same question as `ROADMAP.md`, which is now the only file that lists the tasks, and the link above

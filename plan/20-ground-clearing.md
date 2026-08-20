@@ -12,11 +12,11 @@ opened: 2026-08-13
 >
 > It is also, deliberately, a **sketch rather than a full plan**: it was written when the task was
 > added to the tree, not when the phase was designed. What follows is the goal and the shape of the
-> problem. The detail arrives when phase 19 has closed and there is a real map to look at.
+> problem. The detail arrives when phase 16 has closed and there is a real map to look at.
 
 **Goal:** the same building costs more on ground with trees on it than on bare ground, the clearing is
 paid for as part of placing the building, and the map is what says where the trees are.
-**Depends on:** 19 — the map file, and the room phase 19 leaves in the tile.
+**Depends on:** 16 — the map file, and the room phase 16 leaves in the tile.
 **Size:** M (guessed, not estimated).
 
 ## Why it exists
@@ -31,7 +31,7 @@ affects the player only through slope and the shape of the coast, which is thin.
 
 ## The shape it will take
 
-The rule lands where phase 19's slope rule lands: in `place_building`, after the loop that validates
+The rule lands where phase 16's slope rule lands: in `place_building`, after the loop that validates
 the footprint and before the treasury is charged. The site cost becomes a sum of terms — the base
 cost, the slope term, the clearing term — rather than a single number, and the moment there are two
 terms the sum wants a name and a single function that computes it.
@@ -48,7 +48,7 @@ column.
 ## The decisions it will produce, none of them taken
 
 - **What can stand on a tile.** Trees only, or trees and loose rock and ruins. One kind is honest
-  while there is one map; more than one is the speculative widening that phase 19 refused for
+  while there is one map; more than one is the speculative widening that phase 16 refused for
   `Terrain`, and the same argument probably applies here.
 - **Whether the tile carries it at all**, or whether it lives in a side table of positions. A field on
   the tile is fast and costs bits that are hard to get back; a side table costs a lookup in a path
@@ -71,12 +71,12 @@ spellings. Every balancing number lives in `sim-data`, never in a `.rs`.
 - **Wood as a resource**, per the decision above.
 - **Things that block coverage or sight.** Coverage is walked distance along roads; a tree beside the
   road does not change it, and making it do so puts terrain into step 3, the hot path — which is
-  exactly what phase 19 pushed out of itself.
+  exactly what phase 16 pushed out of itself.
 - **Decorative variety.** How many kinds of tree the renderer draws is M2's business and has no state.
 
 ## What its tests will have to prove
 
-Two of them are already known, because they are the same two that define phase 19:
+Two of them are already known, because they are the same two that define phase 16:
 
 1. **The treasury stays an exact equality.** `sim-core/tests/invariants.rs` reimplements what a
    command costs, independently and on purpose. A clearing term added in one place only turns

@@ -1,18 +1,18 @@
 ---
-id: 18
+id: 19
 kind: phase
 status: not-yet-built
 opened: 2026-08-09
 ---
 
-# Phase 18 — The invariant suite and closing M1
+# Phase 19 — The invariant suite and closing M1
 
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
 > **Amended 2026-08-15.** A17 is still open, but it is no longer an entry in `DECISIONS.md`: writing
 > one for a question nobody had answered was itself the mistake, and A17 has been reduced to a stub
-> pointing at [18.5](18.5-the-per-tick-recomputation-cost.md), which is where the question and the
+> pointing at [19.5](19.5-the-per-tick-recomputation-cost.md), which is where the question and the
 > measurement phase 14 took now live. See
 > A24. The mentions of A17
 > below are left standing because they record what was believed when this file was written, which is
@@ -20,7 +20,7 @@ opened: 2026-08-09
 
 **Goal:** the table at the top of `invariants.rs` covers the new invariants, the benchmark is
 re-measured with M1's measures, and `CLAUDE.md` declares M1 complete.
-**Depends on:** 17.
+**Depends on:** 18.
 **Size:** M.
 **Decisions involved:** the whole Testing section of `CLAUDE.md`, A12–A17.
 
@@ -51,7 +51,7 @@ lives. M1 adds nine and changes three.
 | *A house covered by food always eats* — now a strict equality | A5, under A12 |
 | If the population changed, the coverage is dirty | phase 14, it is A12's contract |
 | Population conservation, an exact equality | phase 14 |
-| `treasury×1000 + remainder == (starting − Σcosts)×1000 + collected` | phase 16 |
+| `treasury×1000 + remainder == (starting − Σcosts)×1000 + collected` | phase 17 |
 | With constant services, a house's level is monotone over 360 ticks | phase 13 |
 | The coverage↔population loop damps: the oscillation does not grow | phase 15 |
 | The number of RNG draws does not depend on the seed | phase 14 |
@@ -191,7 +191,7 @@ Three corrections to the bench, which the phases have accumulated:
   numbers measured here, which are its input: it is the task to close before M2.
 - [10-beyond-m0.md](10-beyond-m0.md): the questions M1 answered have to be struck through with the
   answer, as was done with M0's. Two are already there waiting: *does 30 ticks/month give a playable
-  curve?* — phase 17's scenario says — and *is a 4-byte `Tile` enough?*
+  curve?* — phase 18's scenario says — and *is a 4-byte `Tile` enough?*
 
 ## Out of scope
 

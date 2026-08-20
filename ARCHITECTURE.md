@@ -113,9 +113,9 @@ the development timeline. Reordering requires regenerating the recordings and wr
 | 4 | Production and consumption | **yes** | `production.rs` |
 | 5 | Step the real logistics walkers | no — M3 (D3) | — |
 | 6 | Houses: satisfaction, levels, migration | **yes** | `satisfaction.rs`, `levels.rs`, `demographics.rs`, `migration.rs` |
-| 7 | Finance and taxes | no — phase 16 | — |
+| 7 | Finance and taxes | no — phase 17 | — |
 | 8 | Random events | no — not scheduled. First use of `RngKind::Events` | — |
-| 9 | Check the scenario objectives | no — phase 17, needs `sim-scenario` | — |
+| 9 | Check the scenario objectives | no — phase 18, needs `sim-scenario` | — |
 | 10 | Emit the events for the renderer | **yes** | `event.rs` |
 
 An invalid command does not interrupt the tick and is not an `Err` of the tick: it is discarded and
@@ -141,7 +141,7 @@ That final conditional invalidation is where the services chasing the population
 coverage is counted on the residents present, so if anyone moved, yesterday's assignment no longer
 holds. It is conditional rather than unconditional on purpose — but phase 14 measured the condition as
 true on **100%** of ticks at the reference scale, and what to do about that is the open question at
-slot 18.5.
+slot 19.5.
 
 **Immigration's destination is not gated on coverage.** The eligible set is every house with a free
 place, served or not, occupied or empty — coverage only shapes the *rate*, through `attractiveness`.

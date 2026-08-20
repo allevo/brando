@@ -12,12 +12,12 @@ opened: 2026-08-19
 >
 > It is also, deliberately, a **sketch rather than a full plan**: it was written when the task was
 > added to the tree, not when the phase was designed. What follows is the goal and the shape of the
-> problem. The detail arrives when phase 19 has closed and a map can really draw good ground, and
+> problem. The detail arrives when phase 16 has closed and a map can really draw good ground, and
 > when phase 22 has given a farm a way to reach further.
 
 **Goal:** a farm's output and the number of mouths it can feed grow with the land the player attaches
 to it, and the ground under each parcel decides what that parcel is worth.
-**Depends on:** 19 — good ground cannot be drawn, recorded or replayed while a map is one uniform
+**Depends on:** 16 — good ground cannot be drawn, recorded or replayed while a map is one uniform
 terrain; and 22 — without a level to buy, a farm's reach never moves and the land beyond it feeds
 nobody.
 **Size:** L (guessed, not estimated).
@@ -75,7 +75,7 @@ game's economy is going to be built, and today it holds one number.
 - **What a farmfield is, structurally.** A third role gets placement, demolition, occupancy and the
   overlap invariant for nothing, and puts hundreds of buildings that serve nobody into the collection
   step 3 walks on every recomputation. A collection of its own keeps that walk clean and costs a new
-  hashed structure, a new kind of id, and a bit in a tile whose four-byte budget phase 19 and phase 20
+  hashed structure, a new kind of id, and a bit in a tile whose four-byte budget phase 16 and phase 20
   have both already spent. Measure before choosing: the obvious answer about where the cost lies has
   been wrong twice in this tree.
 - **What the farm stores.** A count per tier keeps the numbers in the tables, where a rebalance can
@@ -93,7 +93,7 @@ game's economy is going to be built, and today it holds one number.
   it grew. That follows from aggregate coverage (D2) rather than contradicting it, but *follows from*
   is not the same as decided.
 - **Whether the ground under a field is read once, when it is placed, or on every tick.** Terrain
-  never changes today, and phase 19 does not make it change either, so the two answers cannot be told
+  never changes today, and phase 16 does not make it change either, so the two answers cannot be told
   apart yet — which is exactly when a choice gets made by accident.
 
 ## Out of scope, as things stand
@@ -104,7 +104,7 @@ game's economy is going to be built, and today it holds one number.
 - **Ore, quarries and every other deposit.** Phase 19 names good ground and ore together and sends
   both to M3's production chains, on the argument that a yield modifier would mean rebalancing food
   while the scenario is calibrated on flat ground. This phase takes back exactly one of the two, and
-  it owes phase 19 a dated amendment saying which and why — appended below the sentence, never an
+  it owes phase 16 a dated amendment saying which and why — appended below the sentence, never an
   edit to it.
 - **Workers, and anything that walks between the field and the barn.** Nobody is employed and no
   goods move; the food appears in the farm's stock. Aggregate coverage (D2) stands and this phase does

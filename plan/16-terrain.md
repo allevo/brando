@@ -1,18 +1,18 @@
 ---
-id: 19
+id: 16
 kind: phase
 status: not-yet-built
 opened: 2026-08-13
 ---
 
-# Phase 19 — Terrain: relief and cost
+# Phase 16 — Terrain: relief and cost
 
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
 
 **Goal:** the same building costs more on a hillside than on the flat, is refused outright on a cliff,
 and the map it stands on is loaded from a file rather than being one terrain repeated.
-**Depends on:** 18.
+**Depends on:** 15.5.
 **Size:** L.
 **Decisions involved:** A2, A4, D4, D6.
 **Decisions it will produce, and which are *not* taken yet:** the tile's layout and the range of a
@@ -32,17 +32,22 @@ every one of them, which is the half that matters, but the tag is the half `doc-
 
 ## Why now
 
-Because the map is the last placeholder left. Everything else the player touches has become real over
-M1 — houses level, people are born and leave, the treasury is spent — while the ground under all of it
-is still `Grid::new(side, side, Terrain::Plain)`, one terrain repeated sixty-five thousand times.
+Because the map is the last placeholder left that M0 already tested and hashed: houses level and
+people are born, leave and get turned away (phases 13–15.5), while the ground under all of it is still
+`Grid::new(side, side, Terrain::Plain)`, one terrain repeated sixty-five thousand times.
+
+And because it is cheaper to take now than after treasury, `sim-scenario` and the invariants closeout
+land — each of those adds its own state, its own share of the shared command generator, and a row to
+the invariant table. This is the first phase since M0 to change `Tile`'s **layout** rather than its
+contents, and a layout change is simplest against the tree M0 already tested, before more moving parts
+accumulate for it to be reconciled against.
 
 And because it has to come **before M2**. M2 is the isometric renderer, and a 2.5D renderer built for
 a flat map is a different renderer from one that draws relief: the sort order changes, the tile
 geometry changes, the sprite anchoring changes. Building it flat and then reworking it is the
 expensive order, and the rework would land on the one part of the tree with no tests worth the name.
 
-It is also the first phase that changes `Tile`'s **layout** rather than its contents, and that is
-cheapest now. There are two recordings. There will be more.
+There are two recordings. There will be more.
 
 What it is deliberately **not** doing is deciding the numbers. The structure is fixed here because the
 renderer depends on it; what a step of slope costs and where the refusal falls are set when the phase

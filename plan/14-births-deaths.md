@@ -12,6 +12,11 @@ closed: 2026-08-12
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
 
+> **Amended 2026-08-20.** The tree was renumbered so that terrain could be built next, before the rest
+> of M1. Below, "phase 16" (the treasury's remainder, and the summary's income field) is now phase 17
+> — treasury and taxes keeps its content, just not its old number. The links to "18" (the invariants
+> closeout) now resolve to phase 19, at [19-invariants-closeout-m1.md](19-invariants-closeout-m1.md).
+
 **Goal:** a served city grows until it fills up its houses, one that loses its services empties out;
 and `different_seeds_give_different_hashes`, `#[ignore]` since phase 08, is re-enabled and passes.
 **Depends on:** 13.
@@ -436,7 +441,7 @@ One phase, one PR, and inside it the commits are ordered so that exactly one of 
    It is one commit and not four because every one of its parts moves the dataset hash or
    `RngKind::ALL`, and four commits would mean four regenerations of the same two files.
 3. **The measurement.** `bench --zero-demographics`, the recompute deltas, the three numbers written
-   into [18](18-invariants-closeout-m1.md) and A17. No hash moves.
+   into [18](19-invariants-closeout-m1.md) and A17. No hash moves.
 4. **The documents.** A14 gains its "how it really went"; A18 gains the amendment above; `GLOSSARY.md`
    gains a row for **demographics** and one for **flow**, promotes **jitter** out of the
    "not written yet" note, and adds `Flow`'s declaration order to the frozen values next to
@@ -617,7 +622,7 @@ The **count of recomputations** should be added too: `coverage().recomputes()` b
 measure, with the delta printed. An `A` paying milliseconds with zero recomputations would be a
 completely different diagnosis.
 
-The three numbers go into [18](18-invariants-closeout-m1.md) and are the input to
+The three numbers go into [18](19-invariants-closeout-m1.md) and are the input to
 A17, the open performance task to be closed before M2. **Nothing gets optimised
 in this phase**: `CLAUDE.md` says not to optimise before the profiler, and A11 is the story of what
 happens when you guess instead of measuring.
@@ -682,4 +687,4 @@ A17 say A12's cost is `J × G` and that `J` is low in a full city. At the
 reference scale the population moves on all 502 measured ticks. The cost is `G`. The other surprise
 in the same measurement: `H` did not stay where phase 13 left it — 324 µs against ~280 µs — because
 step 6 scans the houses three times even with the rates at zero, which by this file's own rule makes
-it a different thing to optimise. The numbers are in A17 and in [18](18-invariants-closeout-m1.md).
+it a different thing to optimise. The numbers are in A17 and in [18](19-invariants-closeout-m1.md).

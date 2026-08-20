@@ -12,6 +12,9 @@ closed: 2026-08-10
 > **not** a description of the tree today: for that see [ARCHITECTURE.md](../ARCHITECTURE.md)
 > and [RULES.md](../RULES.md).
 
+> **Amended 2026-08-20.** The tree was renumbered so that terrain could be built next, before the rest
+> of M1. Below, "phase 17" (per-scenario difficulty, part of `sim-scenario`) is now phase 18.
+
 **Goal:** the same seed and the same commands at two different difficulties ⇒ different hashes; the
 difficulty travels in the replay's header, and a file recorded at one difficulty does not replay at
 another.

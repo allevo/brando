@@ -152,7 +152,7 @@ pub struct Summary {
     /// The city's attractiveness this tick, in thousandths. See
     /// [`crate::migration::attractiveness`].
     pub attractiveness: i32,
-    // phase 16: income
+    // phase 17: income
 }
 
 impl StepReport {

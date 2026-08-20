@@ -38,24 +38,32 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 15 | [Immigration and emigration](plan/15-migration.md) — the destination is never gated on coverage (slot 14.5's answer generalised), immigration is counted per free place and not per resident, and the coverage↔population loop damps: a `hard` city, born with nobody in it, reaches a living population within five years by migration alone | 2026-08-19 |
 | 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
 
-## To do — the rest of M1
+## To do
+
+Built next, ahead of the rest of M1: terrain touches `Tile`'s byte layout and the save format, and
+that structural change is cheapest against the tree as M0 left it, before treasury, `sim-scenario` and
+the invariants closeout each add their own state on top of it. Nothing in the three phases after it
+depends on it, so this is a scheduling choice, not a milestone change — M1 is still treasury +
+`sim-scenario` + the invariants closeout, just built after terrain instead of before it.
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
-| 16 | [Treasury and taxes](plan/16-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
-| 17 | [`sim-scenario`](plan/17-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
-| 18 | [Invariants and closing M1](plan/18-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |
-| **18.5** | **Open question — [The per-tick recomputation cost](plan/18.5-the-per-tick-recomputation-cost.md):** what to do about the per-tick recomputation cost | an answer written into this task, and a measurement that survives it | M2 |
+| 16 | [Terrain: relief and cost](plan/16-terrain.md) | a 2×2 building on a slope costs more, a cliff refuses it outright, and the treasury invariant stays an exact equality with the new cost term in it | |
+
+### The rest of M1
+
+| # | What | Verified by | Blocks |
+|---|---|---|---|
+| 17 | [Treasury and taxes](plan/17-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
+| 18 | [`sim-scenario`](plan/18-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
+| 19 | [Invariants and closing M1](plan/19-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |
+| **19.5** | **Open question — [The per-tick recomputation cost](plan/19.5-the-per-tick-recomputation-cost.md):** what to do about the per-tick recomputation cost | an answer written into this task, and a measurement that survives it | M2 |
 
 ## What next
 
 Beyond M1, and none of it planned in detail: a milestone is planned only once the one before it has
 closed, so the balancing is decided after watching real ticks run rather than before.
 
-- **[Terrain: relief and cost](plan/19-terrain.md)** — the map stops being flat: tiles gain a ground
-  height, a building pays to flatten what it stands on and is refused on a cliff, and a map becomes a
-  file with a hash. **Comes before M2**, because the renderer has to be built against the map model it
-  will really draw.
 - **[Things on the ground, and the cost of clearing them](plan/20-ground-clearing.md)** — the other
   half of *the site you chose is part of what the building costs*. Waits on the terrain.
 - **[Bridges](plan/21-bridges.md)** — a bridge makes two bank-side networks one region, and demolishing

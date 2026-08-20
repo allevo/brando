@@ -12,6 +12,9 @@ closed: 2026-08-19
 > down. Everything above that section is the plan as it was written, including the parts the work
 > proved wrong — the prediction next to the outcome is the point.
 
+> **Amended 2026-08-20.** The tree was renumbered so that terrain could be built next, before the rest
+> of M1. Below, "slot 18.5" (the per-tick recomputation cost) is now slot 19.5.
+
 **Goal:** two cities identical except for their coverage receive different migration flows; a city
 with no free places receives nobody, and one that has places but has left them uncovered fills them
 **and then gets worse**.

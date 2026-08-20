@@ -1,11 +1,11 @@
 ---
-id: 16
+id: 17
 kind: phase
 status: not-yet-built
 opened: 2026-08-09
 ---
 
-# Phase 16 — Treasury and taxes
+# Phase 17 — Treasury and taxes
 
 > Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
 > work is really done — see [ROADMAP.md](../ROADMAP.md).
@@ -25,7 +25,7 @@ scenario ends by running out.
 And because there is now something to tax. Taxes on a constant population would be a linear function
 of time; on a population that grows with wellbeing they close the ring — services → wellbeing →
 population → revenue → more services. It is the ring that makes the game a game, and it has to be
-tried out before an objective is put on top of it (phase 17).
+tried out before an objective is put on top of it (phase 18).
 
 The tax rate enters here **also** as the third term of the attractiveness, which phase 15
 deliberately left out so as not to have to balance two things at once
@@ -183,7 +183,7 @@ Variable construction costs, subsidies, loans, trade. Trade is M3 with the carav
    > named above is covered, and so is more than was asked: the comparison is exhaustive over the
    > state and over the derived structures too.
    >
-   > It stopped being a change phase 16 had to make and became simply how the test is written, which
+   > It stopped being a change phase 17 had to make and became simply how the test is written, which
    > is the better outcome — the phase no longer has to reason about a test's shape while it is
    > reasoning about taxes.
 6. **The treasury does not go negative**: `charge` keeps rejecting for insufficient funds, and there
@@ -204,7 +204,7 @@ cargo xtask regen-expected
 
 The dump closes the phase: the treasury column has to rise smoothly, with no monthly steps, and the
 city has to be able to finance its own growth. If the treasury explodes, the rate or the taxable base
-is high; if it is never enough to build a well, phase 17 will not have a winnable scenario — and that
+is high; if it is never enough to build a well, phase 18 will not have a winnable scenario — and that
 has to be sorted out now.
 
 **Done when:** test 1 passes as an exact equality with 2000 cases, and test 4 shows both effects of
