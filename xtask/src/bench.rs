@@ -1350,6 +1350,17 @@ fn without_demographics(real: &DataSet) -> DataSet {
         rules
             .demographics
             .deaths_per_thousand_per_month_when_unserved = 0;
+        // Migration's flows move the population exactly as the two above do, so
+        // `H` — the tick that pays for step 6 but not for the recomputation it
+        // triggers — has to switch these off too, or a "zero rates" run still
+        // has migration quietly moving people and `H` stops meaning what its own
+        // name says. The founding rate too: the reference city starts under the
+        // founding threshold like every other, so that is the rate it reads
+        // first, and left running it would fill the city while the flag claims
+        // nothing moves.
+        rules.migration.founding_immigration_per_thousand_per_month = 0;
+        rules.migration.immigration_per_thousand_per_month = 0;
+        rules.migration.emigration_per_thousand_per_month_unhappy = 0;
     })
 }
 

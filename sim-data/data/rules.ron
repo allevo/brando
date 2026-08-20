@@ -135,4 +135,69 @@
         // also be a more volatile one.
         jitter_per_thousand: 200,
     ),
+
+    // Emigration and immigration. `sim-core` `DataSet::inconsistencies` checks
+    // two relations across tables: emigration_threshold has to sit below
+    // demographics.birth_threshold, or a house could be having children and
+    // losing residents at the same satisfaction; and it has to stay reachable,
+    // no greater than satisfaction.max. `sim-data`'s own validation checks that
+    // the two weights below add to 1000, since attractiveness divides by it
+    // exactly once, and that founding_population_threshold is at least one.
+    migration: (
+        // How much of attractiveness is the city's own average satisfaction
+        // against how much is the free places in the houses the coverage
+        // reaches, in thousandths. Have to sum to 1000.
+        satisfaction_weight: 700,
+        free_places_weight: 300,
+
+        // The founding regime: immigrants per thousand **free places** per
+        // month, at full attractiveness, while the city is still under the
+        // threshold below. Counted against the free places because a `hard` city
+        // is born with nobody in it, and a rate against a population of nobody
+        // could never draw its first resident.
+        founding_immigration_per_thousand_per_month: 30,
+
+        // Where the founding regime hands over to the growth one. It is a cliff
+        // and not a curve, the same as emigration_threshold and birth_threshold:
+        // a second kind of curve is a second thing to reason about, and a kink
+        // is easier to watch in the dump than a blend is to explain.
+        //
+        // It only has to be large enough to carry a city born with nobody in it
+        // up to a population worth counting against, and at one it does nothing
+        // at all: the founding regime would then cover the empty city and
+        // nothing else, and a city of one resident would crawl. Twenty is a few
+        // houses' worth on any profile, and the run on `hard` climbs through it
+        // without a visible step.
+        founding_population_threshold: 20,
+
+        // The growth regime: immigrants per thousand **residents** per month, at
+        // full attractiveness, once the city is at or above the threshold. This
+        // is what makes a bigger, equally attractive city grow faster than a
+        // small one. Free places no longer count the rate; they cap how many of
+        // the people who want in actually get in, and the rest are counted as
+        // turned away.
+        //
+        // Above the founding rate rather than equal to it, and that is what the
+        // regime is for. Equal, the growth rate only overtakes the founding one
+        // once a city is more than half full, which no scenario in the tree ever
+        // is — measured, and the population curve barely moved off phase 15's.
+        // At a hundred a mature city really does out-draw its own housing, the
+        // population sits higher, and turned_away starts climbing where a player
+        // can see it and go on building.
+        immigration_per_thousand_per_month: 100,
+
+        // Emigrants per thousand residents per month, for a house below
+        // emigration_threshold on the worst service its own level requires —
+        // the same reading demographics.unserved_threshold takes, of a
+        // different threshold.
+        emigration_per_thousand_per_month_unhappy: 40,
+
+        // Below demographics.birth_threshold (60), so a house cannot be having
+        // children and losing residents to emigration at the same time.
+        emigration_threshold: 25,
+
+        // Symmetric, drawn once per flow per tick, the same shape as
+        // demographics.jitter_per_thousand.
+        jitter_per_thousand: 200,
+    ),
 )

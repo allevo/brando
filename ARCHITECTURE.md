@@ -47,6 +47,7 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | `satisfaction.rs` | Step 6.1 — satisfaction as an accumulator of time served, plus the `Mood` bands. |
 | `levels.rs` | Step 6.2 — the monthly house level-up and decay review. |
 | `demographics.rs` | Steps 6.3/6.5 — aggregated births and deaths, with a frozen draw order. |
+| `migration.rs` | Steps 6.4/6.6 — emigration, immigration and `attractiveness`. The destination is never gated on coverage (slot 14.5). |
 | `units.rs` | `Milli(i32)` and `Coins(i32)`: the only numeric quantities allowed in the state. |
 | `ids.rs` | Newtype ids. A bare `usize` never appears in a public signature. |
 | `service.rs` | `ServiceKind` — an enum, unlike building kinds, which are data (D6). |
@@ -111,7 +112,7 @@ the development timeline. Reordering requires regenerating the recordings and wr
 | 3 | Propagate service coverage | **yes** | `coverage.rs` — **hot path** |
 | 4 | Production and consumption | **yes** | `production.rs` |
 | 5 | Step the real logistics walkers | no — M3 (D3) | — |
-| 6 | Houses: satisfaction, levels, migration | **yes**, partly | `satisfaction.rs`, `levels.rs`, `demographics.rs` |
+| 6 | Houses: satisfaction, levels, migration | **yes** | `satisfaction.rs`, `levels.rs`, `demographics.rs`, `migration.rs` |
 | 7 | Finance and taxes | no — phase 16 | — |
 | 8 | Random events | no — not scheduled. First use of `RngKind::Events` | — |
 | 9 | Check the scenario objectives | no — phase 17, needs `sim-scenario` | — |
@@ -130,28 +131,39 @@ events these would be one per house per tick, which is the polling the core/rend
 |---|---|---|
 | 6.1 | `satisfaction::update` | First, because it reads only what steps 3 and 4 wrote **this** tick, and everything else in step 6 reads it. |
 | 6.2 | `levels::review` | Only on a month boundary. The cadence is what makes the absence of oscillation structural rather than a consequence of the thresholds. |
-| 6.3 | deaths | `demographics::run` |
-| 6.4 | *emigration* | **Reserved slot** — phase 15. |
-| 6.5 | births | `demographics::run`. Departures before arrivals, so `residents <= max_residents` holds at every observable instant. |
-| 6.6 | *immigration* | **Reserved slot** — phase 15. |
-| — | invalidate the coverage if anyone moved | Stays the **last** thing step 6 does, including after 15 lands. |
+| 6.3 | deaths | `demographics::deaths` |
+| 6.4 | emigration | `migration::emigration` |
+| 6.5 | births | `demographics::births`. Departures before arrivals, so `residents <= max_residents` holds at every observable instant. |
+| 6.6 | immigration | `migration::immigration`. Reads `migration::attractiveness`, itself a pure read of the state as this tick's deaths, emigration and births already left it. |
+| — | invalidate the coverage if anyone moved | Stays the **last** thing step 6 does. |
 
-Phases add their sub-steps **below** these, never above. That final conditional invalidation is where
-the services chasing the population is paid for: coverage is counted on the residents present, so if
-anyone moved, yesterday's assignment no longer holds. It is conditional rather than unconditional on
-purpose — but phase 14 measured the condition as true on **100%** of ticks at the reference scale,
-and what to do about that is the open question at slot 18.5.
+That final conditional invalidation is where the services chasing the population is paid for:
+coverage is counted on the residents present, so if anyone moved, yesterday's assignment no longer
+holds. It is conditional rather than unconditional on purpose — but phase 14 measured the condition as
+true on **100%** of ticks at the reference scale, and what to do about that is the open question at
+slot 18.5.
+
+**Immigration's destination is not gated on coverage.** The eligible set is every house with a free
+place, served or not, occupied or empty — coverage only shapes the *rate*, through `attractiveness`.
+Slot 14.5, closed before this module was written, ruled the narrower gate out explicitly: a coverage
+precondition on the destination would leave an emptied, uncovered house unable to ever be refilled.
 
 ### The demographics draw order — a determinism contract
 
 1. deaths' jitter
 2. deaths' choice of house, one draw per death
-3. births' jitter
-4. births' choice of house, one draw per birth
+3. emigration's jitter
+4. emigration's choice of house, one draw per departure
+5. births' jitter
+6. births' choice of house, one draw per birth
+7. immigration's jitter
+8. immigration's choice of house, one draw per arrival
 
-The rule the module implements: ***the rate is random, the distribution is deterministic***. Fifteen
-thousand residents cost four draws and a handful more, not fifteen thousand. Nothing is drawn when
-there is nothing to draw for.
+The rule the two modules implement: ***the rate is random, the distribution is deterministic***.
+Fifteen thousand residents cost eight draws and a handful more, not fifteen thousand. Nothing is
+drawn when there is nothing to draw for. Deaths and births draw from `RngKind::Demographics`,
+emigration and immigration from `RngKind::Migration` — two independent streams, so adding one phase's
+flows never knocked the other's sequence out of phase.
 
 ## The frozen orders
 

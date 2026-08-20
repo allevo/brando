@@ -22,6 +22,7 @@ pub struct Rules {
     pub food_per_resident: Milli,
     pub satisfaction: SatisfactionRules,
     pub demographics: DemographicsRules,
+    pub migration: MigrationRules,
 }
 
 /// The rates that drive births and deaths (phase 14).
@@ -77,6 +78,65 @@ impl DemographicsRules {
         self.births_per_thousand_per_month == 0
             && self.deaths_per_thousand_per_month == 0
             && self.deaths_per_thousand_per_month_when_unserved == 0
+    }
+}
+
+/// The rates that drive emigration and immigration, and the weights that turn
+/// the state into [`crate::migration::attractiveness`].
+///
+/// Immigration is counted against **two different bases**, one below
+/// `founding_population_threshold` and one at or above it, because no single
+/// basis serves both ends of a city's life. A rate against the population is the
+/// intuitive model — a bigger, equally attractive city draws people faster — but
+/// a `hard`-profile city is founded with every house empty, and zero residents
+/// times any rate is zero for ever, so such a city could never draw its first
+/// immigrant. Free places exist from the moment the first house is built,
+/// whatever its occupancy, so the founding rate is counted against those
+/// instead, and the city has something to grow from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationRules {
+    /// The weight of the average satisfaction in [`crate::migration::attractiveness`],
+    /// in thousandths. Together with `free_places_weight` it has to sum to
+    /// 1000, or the result stops being a share expressed in thousandths.
+    pub satisfaction_weight: u16,
+    /// The weight of the free places in the houses the coverage currently
+    /// reaches, in thousandths.
+    pub free_places_weight: u16,
+    /// Immigrants per thousand **free places** per month, at full attractiveness
+    /// (1000, in thousandths), for a city below `founding_population_threshold`.
+    pub founding_immigration_per_thousand_per_month: u16,
+    /// The population at and above which the rate above hands over to the one
+    /// below: a hard cutover, the same shape as `emigration_threshold` and
+    /// `birth_threshold`, and not a blend.
+    pub founding_population_threshold: u32,
+    /// Immigrants per thousand **residents** per month, at full attractiveness
+    /// (1000, in thousandths), for a city at or above
+    /// `founding_population_threshold`.
+    pub immigration_per_thousand_per_month: u16,
+    /// Emigrants per thousand residents per month, for the residents of a house
+    /// below `emigration_threshold` on the worst service its own level
+    /// requires.
+    pub emigration_per_thousand_per_month_unhappy: u16,
+    /// The satisfaction below which a house's residents start to emigrate.
+    pub emigration_threshold: u8,
+    /// The jitter on a rate, in thousandths, symmetric — the same shape as
+    /// [`DemographicsRules::jitter_per_thousand`].
+    pub jitter_per_thousand: u16,
+}
+
+impl MigrationRules {
+    /// Whether migration is **switched off**: every rate at zero, the founding
+    /// one included — it is the rate a city under
+    /// `founding_population_threshold` reads, and every city is under it on its
+    /// first tick.
+    ///
+    /// The same reason [`DemographicsRules::is_off`] exists: `coverage_equivalence`
+    /// needs a city whose population cannot move, and it moves by four flows
+    /// now, not two.
+    pub const fn is_off(&self) -> bool {
+        self.founding_immigration_per_thousand_per_month == 0
+            && self.immigration_per_thousand_per_month == 0
+            && self.emigration_per_thousand_per_month_unhappy == 0
     }
 }
 
@@ -526,6 +586,7 @@ impl DataSet {
         self.check_food_capacity(&mut out);
         self.check_difficulty(&mut out);
         self.check_demographics(&mut out);
+        self.check_migration(&mut out);
         out
     }
 
@@ -569,6 +630,38 @@ impl DataSet {
                     max,
                 });
             }
+        }
+    }
+
+    /// The migration table has to describe a city that does not fight itself.
+    ///
+    /// **`emigration_threshold` has to be reachable**, the same fault as
+    /// [`Inconsistency::UnreachableDemographicThreshold`] and caught for the
+    /// same reason: above `satisfaction.max` no house could ever cross it, in
+    /// either direction.
+    ///
+    /// **`emigration_threshold` has to sit below `birth_threshold`.** If a
+    /// house's residents could still be having children at a satisfaction where
+    /// they are also leaving, the two flows would fight each other on every
+    /// tick with nothing to say so — the same shape as
+    /// [`Inconsistency::NoGap`], between two tables instead of within one.
+    fn check_migration(&self, out: &mut Vec<Inconsistency>) {
+        let m = &self.rules.migration;
+        let max = self.rules.satisfaction.max;
+        if m.emigration_threshold > max {
+            out.push(Inconsistency::UnreachableMigrationThreshold {
+                what: "emigration_threshold",
+                threshold: m.emigration_threshold,
+                max,
+            });
+        }
+
+        let birth_threshold = self.rules.demographics.birth_threshold;
+        if m.emigration_threshold >= birth_threshold {
+            out.push(Inconsistency::NoGapBetweenEmigrationAndBirths {
+                emigration_threshold: m.emigration_threshold,
+                birth_threshold,
+            });
         }
     }
 
@@ -892,6 +985,27 @@ pub enum Inconsistency {
         what: &'static str,
         threshold: u8,
         max: u8,
+    },
+
+    #[error(
+        "migration.{what} is {threshold}, beyond the satisfaction ceiling of \
+         {max}: it is a condition no house can ever meet"
+    )]
+    UnreachableMigrationThreshold {
+        /// The field's name in the table, so the report points at it.
+        what: &'static str,
+        threshold: u8,
+        max: u8,
+    },
+
+    #[error(
+        "emigration_threshold is {emigration_threshold}, not below birth_threshold's \
+         {birth_threshold}: a house could be having children and losing residents at \
+         the same satisfaction, and the two flows would fight each other on every tick"
+    )]
+    NoGapBetweenEmigrationAndBirths {
+        emigration_threshold: u8,
+        birth_threshold: u8,
     },
 }
 

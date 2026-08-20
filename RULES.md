@@ -99,7 +99,9 @@ it the very day it is placed, so it begins gaining satisfaction at once. But it 
 nothing is granted in advance, so its first rise costs the whole climb.
 
 A house with nobody left in it still stands and still holds its tile. No provider serves it, nobody
-is born in it, and nobody in it dies.
+is born in it, and nobody in it dies — but immigration can still move somebody into it, whole rooms
+and all, whatever its coverage. A profile that founds every house empty fills its city by immigration
+alone.
 
 ## Coverage
 
@@ -242,6 +244,55 @@ water kills people everywhere. A house that loses its last resident is abandoned
 the same tick, and a house never holds more residents than its level allows at any moment you could
 look at it.
 
+## Migration
+
+`attractiveness` is a single number, in thousandths, saying how much the city draws people in. It is
+a weighted sum of two shares, weighted by `satisfaction_weight` and `free_places_weight`: the average
+satisfaction across every resident, and the free places in the houses the coverage currently reaches.
+A city with no residents yet reads both shares at their ceiling, so a city whose houses are all born
+empty can still draw its first immigrants.
+
+**Emigration** runs at `emigration_per_thousand_per_month_unhappy`, for the residents of a house below
+`emigration_threshold` on the worst service its own level requires — the same reading
+`unserved_threshold` takes, of a different threshold. It is the channel by which a city that decays
+empties out even without deaths. `emigration_threshold` sits below `birth_threshold`, so a house cannot
+be having children and losing residents to emigration at the same satisfaction.
+
+**Immigration** fills the free places of every house that has one — served or not, occupied or empty.
+`attractiveness` scales the rate: at the ceiling it runs at the full rate, and it falls away as the city
+becomes less attractive. What the rate is counted *against* depends on how big the city already is, and
+there are two regimes with a hard cutover between them at `founding_population_threshold`.
+
+Below the threshold the city is **founding**, and the rate runs at
+`founding_immigration_per_thousand_per_month` counted against the **free places**. A city whose houses
+are all born empty has no residents for a rate to read, and none it could ever get, so the founding
+regime counts what such a city does have: room.
+
+At or above the threshold the city is **growing**, and the rate runs at
+`immigration_per_thousand_per_month` counted against the **residents**. A bigger, equally attractive
+city therefore draws people faster than a small one, which is the word-of-mouth model the founding
+regime cannot express.
+
+Zero free places is zero immigrants either way, because houses are the only container for population
+and with none free there is nowhere for anybody to go. What differs is what the city does about it. In
+the founding regime the rate is a multiple of the free places, so a city with none draws nobody at all.
+In the growth regime the rate reads the residents, so the city still draws people and simply cannot
+house them: everyone it could not house is **turned away** and counted. A player reads that count to
+tell a city that is full from a city that is unwanted — the first needs houses, the second needs
+services — and the two look identical in the population alone.
+
+**A migrant turned away is lost, not queued.** Each day's arrivals are worked out afresh from that
+day's own city, the same way the granary's lid works: what would go in beyond it is lost. Nobody waits
+outside for room to appear.
+
+**Immigration is not gated on coverage.** A house is chosen for its free places alone; whether a
+provider reaches it decides how fast the city as a whole attracts people, through `attractiveness`, not
+which house within it fills first. Gating the choice on coverage would leave an emptied, uncovered house
+unable to ever be refilled — uncovered because empty, empty because uncovered.
+
+`jitter_per_thousand` varies each of the two rates by a symmetric fraction, drawn once per flow per
+tick, the same shape as the demographics' own jitter.
+
 ## The treasury
 
 The city starts with `starting_treasury`. A `road` costs its terrain's `road_cost`, a building costs
@@ -276,12 +327,13 @@ order:
 - The farms grow food, and the covered houses eat.
 - Satisfaction moves by one tick.
 - On a month boundary, the houses are reviewed.
-- Deaths, then births.
+- Deaths, then emigration, then births, then immigration.
 
 These orderings are observable. The houses eat after the coverage is settled, so a house
 covered today eats today. Satisfaction moves before the review that reads it, so a month of service
 counts at the review that closes it. Departures come before arrivals, so a house that loses somebody
-can take them back the same day.
+can take them back the same day; deaths and emigration read this tick's own review before they act, and
+immigration's `attractiveness` reads this tick's own deaths, emigration and births.
 
 The full sequence — the ten steps of a tick, and which are still empty — is in
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -313,6 +365,11 @@ report, not a subtle misbehaviour at run time.
 | `births_per_thousand_per_month` beats `deaths_per_thousand_per_month` | a city at full satisfaction shrinks, so no growth scenario is winnable |
 | `deaths_per_thousand_per_month_when_unserved` strictly worse than `deaths_per_thousand_per_month` | losing a service costs the city nothing |
 | No lone zero rate in `demographics` | a table somebody half filled in |
+| `emigration_threshold` no greater than `satisfaction.max` | a condition no house could ever meet |
+| `emigration_threshold` strictly below `birth_threshold` | a house could be having children and losing residents to emigration at the same satisfaction, fighting each other on every tick |
+| `satisfaction_weight` and `free_places_weight` add up to a whole thousand | `attractiveness` stops being a share expressed in thousandths |
+| No lone zero rate in `migration` | a table somebody half filled in |
+| `founding_population_threshold` at least one | no city is ever below it, so a city founded with nobody in it is rated on a population of nobody and can never draw a soul |
 
 Some of these are asked only of a table that describes demographics at all: every rate at zero
 switches births and deaths off, which is a configuration and not a mistake. And the comparison
@@ -399,3 +456,11 @@ about it that is a number; what may be done on it is fixed in the code.
 | `unserved_threshold` | the satisfaction below which a house counts as going without |
 | `birth_threshold` | the satisfaction a house needs before it can have children |
 | `jitter_per_thousand` | the symmetric wobble drawn on each rate, once per flow per tick |
+| `migration` | the rates and weights below |
+| `satisfaction_weight` | how much of `attractiveness` is the city's average satisfaction, in thousandths |
+| `free_places_weight` | how much of `attractiveness` is the free places in the houses the coverage reaches, in thousandths |
+| `founding_immigration_per_thousand_per_month` | the inbound rate below the threshold, counted against the free places |
+| `founding_population_threshold` | the population at which the founding rate hands over to the one below |
+| `immigration_per_thousand_per_month` | the inbound rate at and above the threshold, counted against the residents |
+| `emigration_per_thousand_per_month_unhappy` | the outbound rate for a house below `emigration_threshold` |
+| `emigration_threshold` | the satisfaction below which a house's residents start to emigrate |

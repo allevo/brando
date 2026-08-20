@@ -190,6 +190,16 @@ mod tests {
                 birth_threshold: 60,
                 jitter_per_thousand: 0,
             },
+            migration: crate::data::MigrationRules {
+                satisfaction_weight: 700,
+                free_places_weight: 300,
+                founding_immigration_per_thousand_per_month: 1,
+                founding_population_threshold: 20,
+                immigration_per_thousand_per_month: 1,
+                emigration_per_thousand_per_month_unhappy: 1,
+                emigration_threshold: 25,
+                jitter_per_thousand: 0,
+            },
         }
     }
 

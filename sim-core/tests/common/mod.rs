@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use sim_core::data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, HouseLevelDef,
-    Production, Rules, SatisfactionRules, ServiceDef,
+    MigrationRules, Production, Rules, SatisfactionRules, ServiceDef,
 };
 use sim_core::{
     BuildingKindId, Coins, Command, DifficultyId, Grid, Level, Milli, ServiceKind, Terrain,
@@ -95,6 +95,37 @@ pub const DEATHS_PER_THOUSAND_UNSERVED: u16 = 600;
 pub const UNSERVED_THRESHOLD: u8 = 25;
 pub const BIRTH_THRESHOLD: u8 = 60;
 pub const JITTER_PER_THOUSAND: u16 = 200;
+
+// --- migration ---------------------------------------------------------------
+//
+// Large, like the demographics above, and for the same reason: a test that had
+// to run for years to see one immigrant would be a test nobody runs. The
+// relations production keeps hold here too: `EMIGRATION_THRESHOLD` sits below
+// `BIRTH_THRESHOLD`, and the two weights sum to 1000.
+pub const SATISFACTION_WEIGHT: u16 = 700;
+pub const FREE_PLACES_WEIGHT: u16 = 300;
+/// The founding rate, counted per free place while the city is under
+/// `FOUNDING_POPULATION_THRESHOLD`.
+///
+/// **Do not raise it.** `on_hard_an_empty_house_is_not_served` in `coverage.rs`
+/// builds seven empty houses over seven ticks and asserts the city is still
+/// empty, and it survives on roughly a four-fold margin against this number: a
+/// larger one lets the first immigrant arrive before the assertion and breaks a
+/// test that is not about migration at all.
+pub const FOUNDING_IMMIGRATION_PER_THOUSAND: u16 = 60;
+/// Where the founding regime hands over to the growth one. Small, so the
+/// fixture's little cities really do cross it and the tests run on the regime a
+/// played city spends its life in.
+pub const FOUNDING_POPULATION_THRESHOLD: u32 = 20;
+/// The growth rate, counted per resident once the city is at or above
+/// `FOUNDING_POPULATION_THRESHOLD`.
+///
+/// Well above the founding rate, in the same proportion production keeps: equal
+/// rates would leave the growth regime the slower of the two until a city is
+/// more than half full, and the fixture's cities never are.
+pub const IMMIGRATION_PER_THOUSAND: u16 = 200;
+pub const EMIGRATION_PER_THOUSAND_UNHAPPY: u16 = 60;
+pub const EMIGRATION_THRESHOLD: u8 = 25;
 
 /// The profile the tests play on unless they say otherwise: a house is born
 /// full, which is M0's behaviour and keeps every test written before phase 11
@@ -214,6 +245,41 @@ fn demographics_rules(rates: Rates) -> DemographicsRules {
     }
 }
 
+/// The fixture's migration rates. `Off` is the same fixture
+/// `dataset_without_demographics` builds: a city whose population cannot move
+/// has to have every flow at zero, migration included, or the tests that name
+/// stands for — `coverage_equivalence` chief among them — would go on
+/// comparing a coverage taken mid-move.
+fn migration_rules(rates: Rates) -> MigrationRules {
+    match rates {
+        Rates::AsProduction => MigrationRules {
+            satisfaction_weight: SATISFACTION_WEIGHT,
+            free_places_weight: FREE_PLACES_WEIGHT,
+            founding_immigration_per_thousand_per_month: FOUNDING_IMMIGRATION_PER_THOUSAND,
+            founding_population_threshold: FOUNDING_POPULATION_THRESHOLD,
+            immigration_per_thousand_per_month: IMMIGRATION_PER_THOUSAND,
+            emigration_per_thousand_per_month_unhappy: EMIGRATION_PER_THOUSAND_UNHAPPY,
+            emigration_threshold: EMIGRATION_THRESHOLD,
+            jitter_per_thousand: JITTER_PER_THOUSAND,
+        },
+        // The founding rate goes to zero alongside the others: a city under the
+        // threshold — which is every city on its first tick — would otherwise go
+        // on drawing immigrants while the fixture claims nothing moves. The
+        // threshold itself keeps its real value, like `emigration_threshold`: it
+        // is shape, not flow.
+        Rates::Off => MigrationRules {
+            satisfaction_weight: SATISFACTION_WEIGHT,
+            free_places_weight: FREE_PLACES_WEIGHT,
+            founding_immigration_per_thousand_per_month: 0,
+            founding_population_threshold: FOUNDING_POPULATION_THRESHOLD,
+            immigration_per_thousand_per_month: 0,
+            emigration_per_thousand_per_month_unhappy: 0,
+            emigration_threshold: EMIGRATION_THRESHOLD,
+            jitter_per_thousand: JITTER_PER_THOUSAND,
+        },
+    }
+}
+
 fn dataset_built(levels: &[&[ServiceKind]], farm_output: FarmOutput) -> Arc<DataSet> {
     dataset_built_with(levels, farm_output, Rates::AsProduction)
 }
@@ -244,6 +310,7 @@ fn dataset_built_with(
         house_levels,
         food_per_resident: Milli::from_millis(20),
         demographics: demographics_rules(rates),
+        migration: migration_rules(rates),
         satisfaction: SatisfactionRules {
             max: SATISFACTION_MAX,
             step_up: SATISFACTION_STEP_UP,

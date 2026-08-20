@@ -15,6 +15,7 @@ pub mod event;
 pub mod grid;
 pub mod ids;
 pub mod levels;
+pub mod migration;
 pub mod network;
 pub mod production;
 pub mod rng;
@@ -28,12 +29,13 @@ pub use command::{Command, CommandError};
 pub use coverage::Coverage;
 pub use data::{
     BuildingDef, BuildingRole, DataSet, DemographicsRules, DifficultyDef, DifficultyId,
-    HouseLevelDef, Inconsistency, Production, Rules, SatisfactionRules, ServiceDef,
+    HouseLevelDef, Inconsistency, MigrationRules, Production, Rules, SatisfactionRules, ServiceDef,
 };
 pub use demographics::{Demographics, Flow, PopulationTotals};
 pub use event::Event;
 pub use grid::{Grid, GridError, Terrain, Tile, TileIndex, TileOccupant, TilePos};
 pub use ids::{BuildingId, BuildingKindId, HouseId, Level};
+pub use migration::attractiveness;
 pub use network::{ComponentId, RoadNetwork, Visited};
 pub use production::FoodTotals;
 pub use rng::{RngKind, RngSet};

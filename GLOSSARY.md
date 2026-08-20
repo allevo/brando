@@ -9,7 +9,7 @@ Sections:
 2. **[Words deliberately avoided](#words-deliberately-avoided)** — the common jargon this repository
    does *not* use, and the plain word it uses instead.
 3. **[Retired words](#retired-words)** — words this repository used to use. They survive in older
-   documents under `plan/`, so they are still explained here.
+   documents, so they are still explained here.
 4. **[Frozen strings and values](#frozen-strings-and-values)** — what is load-bearing, and why
    touching it would break something.
 
@@ -68,10 +68,8 @@ The rule is **plain words over jargon**.
 | **constitution** | The rules `D1`–`D7`, settled before the first line of code and binding on all of it. They are the only rules that live in a document rather than in the comment on the code they bind, because they bind code that does not exist yet. |
 | **calendar** | The fixed shape of game time: how many ticks make a month, and how many months make a year. Not a balancing knob — nobody tunes what a month **is** the way the rest of the tables get tuned, so it is a Rust constant (`Calendar`) rather than a row in a table. |
 
-Some words above are defined here but do not exist in the code yet, because the phases that introduce
-them are not written: **attractiveness** arrives with phase 15, **ground height** and **slope** with
-phase 19. Until then, finding one in `plan/` and not in a `.rs` is expected, not a stale entry.
-**jitter** was in this note until phase 14, and is out of it because it is in `demographics.rs`.
+An entry may be written before any code uses the word, so finding one in a document and in no `.rs`
+does not make it stale. Which words the code has reached is not a question this file answers.
 
 ---
 
@@ -93,8 +91,9 @@ plain word this repository uses instead.
 
 ## Retired words
 
-These were used in this repository and are not any more. They still appear in the phase documents
-under `plan/`, which are a record of decisions as they were taken and are not rewritten afterwards.
+These were used in this repository and are not any more. Older documents still carry them and are not
+rewritten, so what each one meant is written down here. In every case it was the name that changed and
+nothing else.
 
 | Retired word | What it meant | Used now |
 |---|---|---|
@@ -104,11 +103,10 @@ under `plan/`, which are a record of decisions as they were taken and are not re
 | **canary** (`field_canary`) | The exhaustive `let World { .. }` that stops compiling when a field is added. | `World::every_field` |
 | **perturbation** | A test's deliberate change to one field of the state. | *change* |
 | **desperate** / **thriving** | The bottom and top bands of a house's mood. | `Mood::Awful`, `Mood::Great` |
-
-The phase documents also name a few types by their old spelling — `RngDomain`, `InsufficientFunds`,
-`OutOfBounds`, `UnsuitableTerrain`. The vocabulary review of 2026-08-12 renamed them and nothing but
-the name changed in any of them. Those documents are frozen records and are not corrected, so the old
-spellings stay: where one would mislead, an amendment says so under the sentence that uses it.
+| `RngDomain` | Which system is drawing random numbers. | `RngKind` |
+| `InsufficientFunds` | The treasury cannot pay for what was asked. | `NotEnoughMoney` |
+| `OutOfBounds` | A tile that is not on the map. | `OutsideMap` |
+| `UnsuitableTerrain` | Ground a building may not stand on. | `WrongTerrain` |
 
 ---
 

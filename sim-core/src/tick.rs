@@ -12,6 +12,7 @@ use std::fmt;
 
 use crate::command::{Command, CommandError, OccupantKind};
 use crate::data::BuildingDef;
+use crate::demographics::PopulationTotals;
 use crate::event::Event;
 use crate::grid::{TileIndex, TilePos};
 use crate::ids::{BuildingId, BuildingKindId, HouseId, Level};
@@ -134,13 +135,23 @@ pub struct StepReport {
 pub struct Summary {
     pub population: u32,
     /// Every place in every house, taken or not: `population` against this is
-    /// how full the city is, and it is what phase 15's immigration gates on.
+    /// how full the city is.
     pub places: u32,
     pub born: u16,
     pub died: u16,
+    pub immigrated: u16,
+    pub emigrated: u16,
+    /// Would-be immigrants this tick that the city had no room for. Not a flow
+    /// and not part of the population's arithmetic — see
+    /// [`PopulationTotals::turned_away`].
+    ///
+    /// [`PopulationTotals::turned_away`]: crate::demographics::PopulationTotals
+    pub turned_away: u16,
     /// Weighted by residents, so a big house counts for more than a hut.
     pub average_satisfaction: u8,
-    // phase 15: immigrated, emigrated, attractiveness
+    /// The city's attractiveness this tick, in thousandths. See
+    /// [`crate::migration::attractiveness`].
+    pub attractiveness: i32,
     // phase 16: income
 }
 
@@ -156,10 +167,13 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     // A snapshot of the houses at the start of the tick: it is the reference
     // step 10 emits its deltas against.
     let before = house_snapshot(world);
-    // The flows as they stood before this tick: the summary reports the tick's
-    // own births and deaths as the difference, so there is one accounting path
-    // and not two that could disagree.
-    let flows_before = (world.population.born, world.population.died);
+    // The running totals as they stood before this tick: the summary reports
+    // the tick's own births, deaths, immigration, emigration and turn-aways as
+    // the difference, so there is one accounting path and not two that could
+    // disagree. A copy of the whole struct rather than a tuple of the five
+    // fields, because they are all `u64` and a tuple that long is a swap
+    // waiting to happen.
+    let totals_before = world.population;
     apply_commands(world, cmds, &mut r); // 1
     rebuild_roads(world); // 2
     propagate_coverage(world); // 3
@@ -170,21 +184,20 @@ pub fn step(world: &mut World, cmds: &[Command]) -> StepReport {
     random_events(world); // 8
     check_objectives(world, &mut r); // 9
     emit_events(world, &before, &mut r); // 10
-    r.summary = summarise(world, flows_before);
+    r.summary = summarise(world, &totals_before);
     world.tick = world.tick.next();
     r
 }
 
 /// The tick's aggregates, read off the world after every step has run.
 ///
-/// `born` and `died` come from the running totals rather than being threaded
-/// out of step 6: the totals are already exact — population conservation
-/// depends on them — so taking the difference across the tick is one
-/// subtraction instead of a second accounting path that could disagree with the
-/// first.
-fn summarise(world: &World, flows_before: (u64, u64)) -> Summary {
-    let (born_before, died_before) = flows_before;
-    let (born, died) = (world.population.born, world.population.died);
+/// `born`, `died`, `immigrated`, `emigrated` and `turned_away` come from the
+/// running totals rather than being threaded out of step 6: the totals are
+/// already exact — population conservation depends on the first four — so taking
+/// the difference across the tick is one subtraction instead of a second
+/// accounting path that could disagree with the first.
+fn summarise(world: &World, before: &PopulationTotals) -> Summary {
+    let p = &world.population;
     Summary {
         population: world.population(),
         places: world
@@ -192,9 +205,13 @@ fn summarise(world: &World, flows_before: (u64, u64)) -> Summary {
             .iter()
             .map(|(_, h)| u32::from(world.data.rules.max_residents(h.level).unwrap_or(0)))
             .sum(),
-        born: u16::try_from(born - born_before).unwrap_or(u16::MAX),
-        died: u16::try_from(died - died_before).unwrap_or(u16::MAX),
+        born: u16::try_from(p.born - before.born).unwrap_or(u16::MAX),
+        died: u16::try_from(p.died - before.died).unwrap_or(u16::MAX),
+        immigrated: u16::try_from(p.immigrated - before.immigrated).unwrap_or(u16::MAX),
+        emigrated: u16::try_from(p.emigrated - before.emigrated).unwrap_or(u16::MAX),
+        turned_away: u16::try_from(p.turned_away - before.turned_away).unwrap_or(u16::MAX),
         average_satisfaction: crate::demographics::average_satisfaction(world),
+        attractiveness: crate::migration::attractiveness(world),
     }
 }
 
@@ -450,12 +467,11 @@ fn production(world: &mut World) {
 /// Step 5 — real logistics walkers, M3 (D3).
 fn step_walkers(_world: &mut World) {}
 
-/// Step 6 — levelling up, decay and migration.
+/// Step 6 — levelling up, decay and the four demographic flows.
 ///
 /// The internal order is **game semantics** as much as the order of the ten
 /// steps, and the same rule applies: do not reorder without regenerating the
-/// recordings and writing down why. Phases 14 and 15 add their sub-steps
-/// **below** these, never above.
+/// recordings and writing down why.
 ///
 /// 6.1 comes first because it reads only what steps 3 and 4 have written *this*
 /// tick, and all the rest of step 6 reads it. If it came after levelling up, a
@@ -466,21 +482,32 @@ fn step_walkers(_world: &mut World) {}
 /// oscillation structural rather than a consequence of the thresholds, and it
 /// makes the recordings readable: a level that can only change at multiples of
 /// `Calendar::TICKS_PER_MONTH` can be followed by eye.
+///
+/// **6.3 to 6.6 are departures before arrivals, and phase 14's flows before
+/// phase 15's**: deaths, emigration, births, immigration. Departures first
+/// guarantees `residents <= max_residents` holds at every observable instant —
+/// a house decay just shrank has to be able to lose its excess before anyone
+/// new is counted against it. Deaths before emigration and births before
+/// immigration is what lets each of phase 15's flows read a state phase 14
+/// already moved this tick: emigration's "going without" threshold and
+/// immigration's `attractiveness` are both truer for including this tick's
+/// deaths and births instead of yesterday's. It is also the draw order the RNG
+/// stream depends on — the complete list is in `demographics.rs`'s module doc
+/// comment.
 fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     crate::satisfaction::update(world); // 6.1
     if Calendar::is_month_boundary(world.tick) {
         crate::levels::review(world, r); // 6.2
     }
-    // 6.3 deaths, then 6.5 births. Phase 15's emigration (6.4) and immigration
-    // (6.6) slot in **between** these and not at the end, and the invalidation
-    // below stays the last thing step 6 does then too. Written down here so
-    // that whoever adds them knows where they go.
-    let moved = crate::demographics::run(
-        world,
-        &mut crate::demographics::StepReportEvents {
-            events: &mut r.events,
-        },
-    );
+
+    let mut events = crate::demographics::StepReportEvents {
+        events: &mut r.events,
+    };
+    let mut moved = false;
+    moved |= crate::demographics::deaths(world, &mut events); // 6.3
+    moved |= crate::migration::emigration(world, &mut events); // 6.4
+    moved |= crate::demographics::births(world); // 6.5
+    moved |= crate::migration::immigration(world, &mut events); // 6.6
 
     // The coverage is counted on the residents present: if anyone has
     // moved, yesterday's assignment no longer holds and the next tick's step 3
@@ -489,7 +516,7 @@ fn houses_and_migration(world: &mut World, r: &mut StepReport) {
     //
     // Conditional and not unconditional on purpose: in a full or an empty city
     // nobody moves, no recomputation is needed, and the tick costs what it did
-    // before this phase. It is also what lets `coverage_equivalence` go on
+    // before phase 14. It is also what lets `coverage_equivalence` go on
     // running in its original form on a zero-rate dataset.
     if moved {
         mark_all_providers_dirty(world);
