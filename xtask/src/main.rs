@@ -126,12 +126,15 @@ fn run(args: &[String]) -> Result<(), String> {
         )
     })?;
 
+    let map_desc = match &sc.map {
+        sim_replay::MapSpec::Uniform { width, height, .. } => format!("grid {width}x{height}"),
+        sim_replay::MapSpec::File { id, .. } => format!("map '{id}'"),
+    };
     println!("scenario '{}' — {}", sc.name, sc.description);
     println!(
-        "seed {}, grid {}x{}, difficulty '{}', dataset {}",
+        "seed {}, {}, difficulty '{}', dataset {}",
         sc.seed,
-        sc.side,
-        sc.side,
+        map_desc,
         profile,
         &data.hash_hex()[..16]
     );

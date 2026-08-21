@@ -15,7 +15,7 @@ pub mod replay;
 
 pub use expected::ExpectedError;
 pub use hash::{hash_hex, hash_world};
-pub use recording::{FORMAT_VERSION, GridSpec, Header, Recording, RecordingError};
+pub use recording::{FORMAT_VERSION, Header, MapSpec, Recording, RecordingError};
 pub use replay::{Checkpoint, ReplayError, advance, checkpoints, initial_world, replay};
 
 /// How many ticks apart the checkpoints are in the committed recordings.

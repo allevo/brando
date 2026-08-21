@@ -8,12 +8,13 @@
 use std::sync::Arc;
 
 use sim_core::{Command, DataSet, DifficultyId, Grid, Terrain, Tick, TilePos, World};
+use sim_replay::MapSpec;
 
 pub struct Scenario {
     pub name: &'static str,
     pub description: &'static str,
     pub seed: u64,
-    pub side: u16,
+    pub map: MapSpec,
     /// The profile the scenario is played on. It is state, so it travels in the
     /// recording's header and goes into the hash.
     pub difficulty: DifficultyId,
@@ -39,7 +40,13 @@ pub fn by_name(name: &str, data: &DataSet) -> Option<Scenario> {
     }
 }
 
+/// Every scenario `--scenario`/`by_name` know about.
 pub const NAMES: [&str; 2] = ["minimal", "hunger"];
+/// The scenarios that get a committed recording. A separate list from
+/// [`NAMES`], deliberately: a scenario built on a named map is a real playtest
+/// (phase 16's test 12), by hand and by eye, not one more file `regen-expected`
+/// keeps hashed forever the day it is added.
+pub const RECORDED: [&str; 2] = ["minimal", "hunger"];
 
 fn kind(data: &DataSet, id: &str) -> sim_core::BuildingKindId {
     data.kind_by_id(id)
@@ -90,7 +97,11 @@ fn minimal(data: &DataSet) -> Scenario {
         name: "minimal",
         description: "four houses served by one well and one farm",
         seed: 42,
-        side: 32,
+        map: MapSpec::Uniform {
+            width: 32,
+            height: 32,
+            terrain: Terrain::Plain,
+        },
         difficulty: difficulty(data, RECORDED_DIFFICULTY),
         commands,
     }
@@ -126,8 +137,19 @@ const fn pos(x: u8, y: u8) -> TilePos {
 
 impl Scenario {
     pub fn world(&self, data: Arc<DataSet>) -> World {
-        let grid = Grid::new(self.side, self.side, Terrain::Plain)
-            .unwrap_or_else(|e| panic!("the scenario's grid is invalid: {e}"));
+        let grid = match &self.map {
+            MapSpec::Uniform {
+                width,
+                height,
+                terrain,
+            } => Grid::new(*width, *height, *terrain)
+                .unwrap_or_else(|e| panic!("the scenario's grid is invalid: {e}")),
+            MapSpec::File { id, .. } => {
+                let def = sim_data::load_map_by_id(id)
+                    .unwrap_or_else(|e| panic!("the scenario's map {id:?} failed to load: {e}"));
+                Grid::from_map(&def)
+            }
+        };
         World::new(grid, data, self.seed, self.difficulty)
     }
 

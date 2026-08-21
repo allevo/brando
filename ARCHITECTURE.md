@@ -39,7 +39,8 @@ fill it. See [ROADMAP.md](ROADMAP.md) for when each arrives.
 | `world.rs` | The game state: a concrete struct of `SlotMap`s and `Vec`s, not an ECS (D1). |
 | `tick.rs` | The ten-step tick, whose order is game semantics. Also `Calendar`, the fixed month/year lengths (D6). |
 | `data.rs` | The validated dataset the core consumes, plus every **cross-table** consistency check. `BuildingRole` is an enum over the **roles** a building can play — house, provider — while **which buildings exist** stays data (D6). A building's shape follows its role, so a house has no service field to leave empty. |
-| `grid.rs` | The tile grid. `Tile` fits in 4 bytes so 40,000 tiles stay in cache. |
+| `grid.rs` | The tile grid. `Tile` fits in 4 bytes so 40,000 tiles stay in cache — terrain, flags and ground height share a packed `u16`. `Grid::from_map` builds a grid from a `MapDef`; `slope_over` and `walkable_regions` are derived, never stored. |
+| `map.rs` | `MapDef`: the validated shape `Grid::from_map` builds a grid from, and the blake3 of it that travels in the replay header (`MapSpec::File`). Loaded and validated by `sim-data` (`RawMap`, `validate_map`), the same split `Rules`/`BuildingDef` use. |
 | `rng.rs` | One seeded PCG64 stream per kind, derived from the kind's **name**, not its index. |
 | `network.rs` | Road connected components and walked distances. Derived, outside the hash. |
 | `coverage.rs` | Aggregate service coverage along roads (D2). **The hot path.** |
