@@ -221,16 +221,15 @@ impl Tile {
     pub const MAX_GROUND_HEIGHT: u8 = HEIGHT_MASK as u8;
 
     /// The kind of ground on the tile.
-    ///
-    /// Only 0, 1 and 2 are ever written (`Terrain::index`'s range); the other
-    /// thirteen codes the 4-bit field could hold are never produced by
-    /// `set_terrain`, so folding them onto `Plain` costs nothing real and
-    /// keeps the decode total over the field.
     pub const fn terrain(&self) -> Terrain {
         match self.packed & TERRAIN_MASK {
+            0 => Terrain::Plain,
             1 => Terrain::Water,
             2 => Terrain::Rock,
-            _ => Terrain::Plain,
+            // Provable invariant: `set_terrain` only ever writes
+            // `Terrain::index()`'s range, 0..=2 — the other thirteen codes
+            // the 4-bit field could hold are never produced.
+            _ => unreachable!(),
         }
     }
 
@@ -452,15 +451,16 @@ impl Grid {
     /// minus the lowest. Zero for a single tile or a level region — there is
     /// nothing to flatten over one height.
     ///
-    /// It is **never stored on the tile**. A stored slope would be a second
-    /// copy of a fact the heights already carry, and the two would drift
-    /// apart the first time a height changed without it — the reason a save
-    /// file is `seed + Vec<Command>` and not a dump of the state (D4), in
-    /// miniature. An index the grid cannot resolve is skipped, not reported,
-    /// the same convention the state hash's tile loop already follows.
+    /// It is **never stored on the tile**.
     pub fn slope_over(&self, tiles: &[TileIndex]) -> u8 {
+        // A stored slope would be a second copy of a fact the heights already
+        // carry, and the two would drift apart the first time a height
+        // changed without it — the reason a save file is `seed +
+        // Vec<Command>` and not a dump of the state (D4), in miniature.
         let mut range: Option<(u8, u8)> = None;
         for &idx in tiles {
+            // An index the grid cannot resolve is skipped, not reported — the
+            // same convention the state hash's tile loop already follows.
             let Some(h) = self.get(idx).map(Tile::ground_height) else {
                 continue;
             };
