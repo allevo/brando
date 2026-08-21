@@ -16,12 +16,18 @@ crate?* If yes, this file changes in the same commit. If no, say so and move on.
 Dependencies always point towards `sim-core`. If `game-bevy` ever appears among another crate's
 dependencies, that is an architectural mistake.
 
+The same rule binds `map-gen`, and there it is not a sentence but something that fails: `cargo xtask
+doc-check` reads the three manifests and refuses a workspace in which `sim-core`, `sim-data` or
+`sim-replay` names it. A generator the simulation could reach would be a frozen part of the
+determinism contract, and every improvement to it would move every recorded hash.
+
 | Crate | Exists | Responsibility |
 |---|---|---|
 | `sim-core` | **yes** | State, tick, commands. No dependency beyond serde/rand_pcg/slotmap/blake3. |
-| `sim-data` | **yes** | RON tables, validated at load. The only crate doing I/O on game data. |
+| `sim-data` | **yes** | RON tables, validated at load. The only crate doing I/O on game data. Owns the map format in both directions: `parse_map` reads it, `render_map` and `save_map` write it. |
 | `sim-replay` | **yes** | `seed + Vec<Command>`, the state hash, the recorded replays. |
-| `xtask` | **yes** | Headless runner: `run`, `record`, `regen-expected`, `bench`, `doc-check`. |
+| `map-gen` | **yes** | Draws a map from a seed. Pure arithmetic: it touches no disk, and nothing the simulation loads may depend on it. |
+| `xtask` | **yes** | Headless runner: `run`, `record`, `regen-expected`, `bench`, `gen-map`, `doc-check`. |
 | `sim-scenario` | no | Scenarios, objectives, victory conditions. Phase 17. |
 | `sim-civ` | no | The `CivilizationRules` trait. **M3, together with the second civilisation** — not before. |
 | `agent-bot` | no | Compiles `Intent`s into primitive `Command`s. M2. |

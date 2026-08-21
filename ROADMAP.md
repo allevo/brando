@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 16.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.5.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -38,12 +38,12 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 15 | [Immigration and emigration](plan/15-migration.md) — the destination is never gated on coverage (slot 14.5's answer generalised), immigration is counted per free place and not per resident, and the coverage↔population loop damps: a `hard` city, born with nobody in it, reaches a living population within five years by migration alone | 2026-08-19 |
 | 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
 | 16 | [Terrain: relief and cost](plan/16-terrain.md) — a building's footprint spans a `slope`, never stored; a step of it beyond zero costs `flatten_cost_per_step`, and past `max_build_slope` the placement is refused with `TooSteep`; a map is loaded from `sim-data/maps/<id>.ron` through the same raw/validate/`Def` pipeline as the balancing tables, refusing a bad row, an unclaimed character, a height out of range or a severed walkable region | 2026-08-21 |
+| 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) — `cargo xtask gen-map` draws one in the new `map-gen` crate and `sim-data` writes it, refusing anything the loader would not accept; the format now reads and writes through one owner, and `doc-check` refuses a workspace in which any crate the simulation loads names the generator | 2026-08-21 |
 
 ## To do
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
-| 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) | a map the tool wrote, with no hand editing, loads through `load_map_by_id`, and a city built on it reaches a living population | |
 | 17 | [Treasury and taxes](plan/17-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 18 | [`sim-scenario`](plan/18-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
 | 19 | [Invariants and closing M1](plan/19-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |
