@@ -12,6 +12,8 @@ use sim_core::{Mood, Terrain};
 pub struct RawRules {
     pub starting_treasury: i32,
     pub house_levels: Vec<RawHouseLevelDef>,
+    pub max_build_slope: u8,
+    pub flatten_cost_per_step: i32,
     pub food_per_resident: i32,
     pub satisfaction: RawSatisfaction,
     pub demographics: RawDemographics,

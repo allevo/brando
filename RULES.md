@@ -34,6 +34,11 @@ occupant never share one.
 | `Rock` | no | yes | ground you can cross but not settle |
 | `Water` | no | no | neither, and a stretch of it splits the city in two |
 
+A tile also carries a `ground height`, a small whole number of steps. The `slope` a building's
+footprint spans is the highest ground height among its tiles minus the lowest — worked out when it is
+needed, never stored — and it is zero for a single tile: a 1x1 building never has a slope to measure
+and can never be refused or charged for one.
+
 ## Roads and distance
 
 A `road` may be laid on a tile that is on the map, whose terrain is `walkable`, and that carries
@@ -80,9 +85,10 @@ A building's own level decides which entry of `range_per_level` and `capacity_pe
 Only a `house` ever changes level.
 
 **Placing.** A building may be placed where every tile of its area is on the map, is `buildable`, and
-is free of a road, a building and a house alike. The whole area is checked before anything is
-written, so a refused placement leaves nothing half built. A placement is refused, and says which of
-these it was, when a tile lies off the map, when a tile is taken, when the terrain is not buildable,
+is free of a road, a building and a house alike, and where its footprint's `slope` does not exceed
+`max_build_slope`. The whole area is checked before anything is written, so a refused placement leaves
+nothing half built. A placement is refused, and says which of these it was, when a tile lies off the
+map, when a tile is taken, when the terrain is not buildable, when the ground is too steep to flatten,
 when the treasury cannot pay the `cost`, or when the kind of building is not one the tables declare.
 
 **Demolishing.** Demolishing returns nothing, and it takes more than the building with it. The
@@ -296,7 +302,8 @@ tick, the same shape as the demographics' own jitter.
 ## The treasury
 
 The city starts with `starting_treasury`. A `road` costs its terrain's `road_cost`, a building costs
-its `cost`, and both come out of the treasury the moment the command is applied. A placement that
+its `cost` plus `flatten_cost_per_step` for every step of slope its footprint spans beyond zero, and
+both come out of the treasury the moment the command is applied. A placement that
 cannot be paid for is refused rather than allowed to run up a debt, and the treasury never goes
 negative.
 
@@ -438,6 +445,8 @@ about it that is a number; what may be done on it is fixed in the code.
 | Parameter | What it decides |
 |---|---|
 | `starting_treasury` | the city's money on its first day |
+| `max_build_slope` | the steepest a footprint may span before it is refused outright |
+| `flatten_cost_per_step` | what one step of slope beyond zero adds to a building's `cost` |
 | `house_levels` | one entry per house level, holding the five below |
 | `max_residents` | how many residents the level holds |
 | `required_services` | what the level demands, read for the mood, the review and going without |

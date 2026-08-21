@@ -238,10 +238,20 @@ fn validate_rules(raw: &RawDataSet, rep: &mut ValidationReport) -> Rules {
             },
         );
     }
+    if r.flatten_cost_per_step < 0 {
+        rep.push(
+            "rules.flatten_cost_per_step",
+            ValidationErrorKind::Negative {
+                found: i64::from(r.flatten_cost_per_step),
+            },
+        );
+    }
 
     Rules {
         starting_treasury: Coins::new(r.starting_treasury),
         house_levels: validate_house_levels(raw, rep),
+        max_build_slope: r.max_build_slope,
+        flatten_cost_per_step: Coins::new(r.flatten_cost_per_step),
         food_per_resident: Milli::from_millis(r.food_per_resident),
         satisfaction: validate_satisfaction(&r.satisfaction, rep),
         demographics: validate_demographics(&r.demographics, rep),

@@ -6,6 +6,20 @@
     // amended). Scenario objectives are expressed in months/years (M1).
     starting_treasury: 1000,
 
+    // Terrain (phase 16). A building costs more where the ground it stands on
+    // is uneven, and is refused outright past a limit. Provisional pending the
+    // river-valley playtest: no scenario with real relief has been played on
+    // these numbers yet.
+    //
+    // 3 is a farm's own 2x2 footprint spanning a step on each side without
+    // being refused; a hut (1x1) is never charged or refused regardless of
+    // `max_build_slope`, because `Grid::slope_over` is always zero over one
+    // tile.
+    max_build_slope: 3,
+    // Half a hut's cost per step of slope: enough to matter when choosing
+    // where to build, not enough to make a hillside farm impossible.
+    flatten_cost_per_step: 5,
+
     // The house levels (phase 13). One entry per level, level 1 first, and the
     // building's `levels` in buildings.ron has to say the same number.
     //

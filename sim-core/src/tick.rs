@@ -316,6 +316,23 @@ fn place_building(
         }
     }
 
+    // The cost of flattening: measured over the whole footprint. A one-tile
+    // building has one height and nothing to flatten — `slope_over` makes
+    // that true by construction, not by a special case here, so a hut can go
+    // anywhere buildable however steep the ground around it while a 2x2 farm
+    // cannot.
+    let footprint: Vec<TileIndex> = tiles.iter().map(|(idx, _)| *idx).collect();
+    let slope = world.grid.slope_over(&footprint);
+    let rules = &world.data.rules;
+    if slope > rules.max_build_slope {
+        return Err(CommandError::TooSteep { at: origin, slope });
+    }
+    let extra = rules
+        .flatten_cost_per_step
+        .checked_mul_int(i32::from(slope))
+        .unwrap_or(Coins::MAX);
+    let cost = cost.checked_add(extra).unwrap_or(Coins::MAX);
+
     charge(world, cost)?;
 
     // --- from here on no failure is possible ---

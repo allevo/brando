@@ -24,6 +24,10 @@
             taxable_per_resident: 0,
         ),
     ],
+    // Valid, and here only because the table would not deserialise without
+    // them: this fixture is about the satisfaction curve alone.
+    max_build_slope: 3,
+    flatten_cost_per_step: 5,
     satisfaction: (
         max: 100,
         step_up: 4,

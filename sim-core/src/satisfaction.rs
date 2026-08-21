@@ -180,6 +180,8 @@ mod tests {
                 def(4, &[ServiceKind::Water]),
                 def(8, &[ServiceKind::Water, ServiceKind::Food]),
             ],
+            max_build_slope: 0,
+            flatten_cost_per_step: Coins::ZERO,
             food_per_resident: Milli::ZERO,
             satisfaction: rules(),
             demographics: crate::data::DemographicsRules {

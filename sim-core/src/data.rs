@@ -19,6 +19,14 @@ pub struct Rules {
     pub starting_treasury: Coins,
     /// Indexed by house level (level 1 = index 0).
     pub house_levels: Vec<HouseLevelDef>,
+    /// The steepest a building's footprint may span (`Grid::slope_over`)
+    /// before it is refused outright, with `CommandError::TooSteep`. A
+    /// one-tile building has one height and nothing to flatten, so this can
+    /// never refuse one, however large it is.
+    pub max_build_slope: u8,
+    /// What one step of slope beyond zero adds to a building's `cost`,
+    /// charged for every tile of relief its footprint spans.
+    pub flatten_cost_per_step: Coins,
     pub food_per_resident: Milli,
     pub satisfaction: SatisfactionRules,
     pub demographics: DemographicsRules,
