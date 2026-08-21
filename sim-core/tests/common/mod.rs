@@ -47,6 +47,13 @@ pub const STARTING_TREASURY: i32 = 1000;
 /// What a house holds at level 1, which is also what `easy` builds it with.
 pub const RESIDENTS_PER_HOUSE: u16 = 4;
 
+/// The steepest a footprint may span before `TooSteep` refuses it. Small on
+/// purpose: the tests that exercise it (phase 16) want a slope past this
+/// limit reachable with a handful of tiles set by hand.
+pub const MAX_BUILD_SLOPE: u8 = 3;
+/// What one step of slope beyond zero adds to a building's cost.
+pub const FLATTEN_COST_PER_STEP: i32 = 5;
+
 // The house levels of the fixture (phase 13), one entry per level. Its own
 // numbers, like everything else here: a test about the mechanics must not break
 // when the production balancing moves. What a test may **not** do is copy them
@@ -308,6 +315,8 @@ fn dataset_built_with(
     let rules = Rules {
         starting_treasury: Coins::new(STARTING_TREASURY),
         house_levels,
+        max_build_slope: MAX_BUILD_SLOPE,
+        flatten_cost_per_step: Coins::new(FLATTEN_COST_PER_STEP),
         food_per_resident: Milli::from_millis(20),
         demographics: demographics_rules(rates),
         migration: migration_rules(rates),

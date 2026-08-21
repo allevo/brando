@@ -40,6 +40,8 @@ pub(crate) fn dataset_hash(
     let Rules {
         starting_treasury,
         house_levels,
+        max_build_slope,
+        flatten_cost_per_step,
         food_per_resident,
         satisfaction,
         demographics,
@@ -63,6 +65,8 @@ pub(crate) fn dataset_hash(
         h.update(&[*level_up_threshold, *decay_threshold]);
         h.update(&taxable_per_resident.to_millis().to_le_bytes());
     }
+    h.update(&[*max_build_slope]);
+    h.update(&flatten_cost_per_step.get().to_le_bytes());
     h.update(&food_per_resident.to_millis().to_le_bytes());
 
     let SatisfactionRules {

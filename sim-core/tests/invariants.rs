@@ -244,6 +244,13 @@ fn tiles_of((w, h): (u8, u8)) -> impl Iterator<Item = (u8, u8)> {
 }
 
 /// The cost of an accepted command, for the treasury's balance.
+///
+/// Only has to be right for a command the real tick actually accepts — the
+/// caller adds this to `spent` exactly when it was not rejected — so it does
+/// not need to reimplement `TooSteep`'s threshold or the overflow-refusal
+/// branch, only the cost formula for the accepted case. If that formula drifts
+/// from `place_building`'s real one, `the_treasury_adds_up` goes red on any
+/// accepted sloped placement: that is the mechanism, by design (phase 16).
 fn accepted_cost(w: &World, cmd: &Command) -> Coins {
     match cmd {
         Command::Demolish { .. } => Coins::ZERO,
@@ -251,7 +258,26 @@ fn accepted_cost(w: &World, cmd: &Command) -> Coins {
             .grid()
             .at(*at)
             .map_or(Coins::ZERO, |t| w.data().road_cost(t.terrain())),
-        Command::PlaceBuilding { kind, .. } => w.data().def(*kind).map_or(Coins::ZERO, |d| d.cost),
+        Command::PlaceBuilding { kind, origin } => {
+            let Some(def) = w.data().def(*kind) else {
+                return Coins::ZERO;
+            };
+            let (fw, fh) = def.size;
+            let footprint: Vec<_> = tiles_of((fw, fh))
+                .filter_map(|(dx, dy)| {
+                    let x = origin.x.checked_add(dx)?;
+                    let y = origin.y.checked_add(dy)?;
+                    w.grid().index(TilePos::new(x, y))
+                })
+                .collect();
+            let slope = w.grid().slope_over(&footprint);
+            let rules = &w.data().rules;
+            let extra = rules
+                .flatten_cost_per_step
+                .checked_mul_int(i32::from(slope))
+                .unwrap_or(Coins::MAX);
+            def.cost.checked_add(extra).unwrap_or(Coins::MAX)
+        }
     }
 }
 

@@ -76,6 +76,99 @@ fn a_farm_takes_four_tiles_and_costs_money() {
     assert_eq!(w.occupant(outside), None);
 }
 
+/// Phase 16 — a farm spanning a slope pays `cost + flatten_cost_per_step` per
+/// step of relief, and the treasury moves by exactly that much.
+#[test]
+fn a_sloped_farm_costs_more() {
+    let mut w = world();
+    for (x, y, h) in [(3, 3, 0), (4, 3, 0), (3, 4, 3), (4, 4, 3)] {
+        w.set_ground_height(pos(x, y), h);
+    }
+    let before = w.economy().treasury;
+
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(3, 3),
+        }],
+    );
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(
+        before.get() - w.economy().treasury.get(),
+        FARM_COST + 3 * FLATTEN_COST_PER_STEP,
+        "3 steps of slope, within max_build_slope"
+    );
+}
+
+/// Phase 16 — a 1x1 building has one height and nothing to flatten: it never
+/// pays a slope surcharge and can never be refused for one, however uneven
+/// its surroundings are. Pinned so nobody "fixes" this later by measuring a
+/// 1x1 against its neighbours instead of just its own tile.
+#[test]
+fn a_one_tile_building_never_pays_or_is_refused_for_slope() {
+    let mut w = world();
+    for (x, y, h) in [(4, 2, 0), (6, 2, 30), (5, 1, 30), (5, 3, 30)] {
+        w.set_ground_height(pos(x, y), h);
+    }
+    let before = w.economy().treasury;
+
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: HOUSE,
+            origin: pos(5, 2),
+        }],
+    );
+
+    assert!(r.rejected.is_empty(), "{:?}", r.rejected);
+    assert_eq!(before.get() - w.economy().treasury.get(), HOUSE_COST);
+}
+
+/// Phase 16 — a footprint steeper than `max_build_slope` is refused cleanly:
+/// `TooSteep` carries the slope found, the treasury is untouched, and no tile
+/// is mutated. The no-partial-mutation discipline, on the new failure path.
+#[test]
+fn too_steep_is_refused_without_mutating_anything() {
+    let (mut w, mut still) = twins();
+    for g in [&mut w, &mut still] {
+        for (x, y, h) in [(3, 3, 0), (4, 3, 0), (3, 4, 4), (4, 4, 4)] {
+            g.set_ground_height(pos(x, y), h);
+        }
+    }
+
+    let r = tick(
+        &mut w,
+        &[Command::PlaceBuilding {
+            kind: FARM,
+            origin: pos(3, 3),
+        }],
+    );
+    tick(&mut still, &[]);
+
+    assert_eq!(r.rejected.len(), 1);
+    assert_eq!(
+        r.rejected[0].1,
+        CommandError::TooSteep {
+            at: pos(3, 3),
+            slope: 4
+        }
+    );
+    assert_eq!(w.building_count(), 0);
+    assert_eq!(
+        w.economy(),
+        still.economy(),
+        "a rejected command costs nothing"
+    );
+    assert_eq!(
+        w.grid(),
+        still.grid(),
+        "no partial mutation on a refused placement"
+    );
+    same_game(&w, &still).unwrap_or_else(|e| panic!("and nothing else moved either: {e}"));
+}
+
 #[test]
 fn an_overlap_is_rejected_without_mutating_anything() {
     let (mut w, mut still) = twins();

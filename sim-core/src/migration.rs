@@ -355,6 +355,8 @@ mod tests {
                 decay_threshold: 25,
                 taxable_per_resident: Milli::ZERO,
             }],
+            max_build_slope: 0,
+            flatten_cost_per_step: Coins::ZERO,
             food_per_resident: Milli::ZERO,
             satisfaction: SatisfactionRules {
                 max: 100,

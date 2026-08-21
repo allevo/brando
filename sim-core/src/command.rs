@@ -38,6 +38,10 @@ pub enum CommandError {
     #[error("wrong terrain at {at:?}: {terrain:?}")]
     WrongTerrain { at: TilePos, terrain: Terrain },
 
+    /// The ground under the building's footprint is too uneven to flatten.
+    #[error("too steep at {at:?}: slope {slope}")]
+    TooSteep { at: TilePos, slope: u8 },
+
     #[error("not enough money: {needed} needed, {available} available")]
     NotEnoughMoney { needed: Coins, available: Coins },
 

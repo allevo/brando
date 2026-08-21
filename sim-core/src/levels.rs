@@ -179,6 +179,8 @@ mod tests {
         Rules {
             starting_treasury: Coins::ZERO,
             house_levels: vec![def(4, 0, 0), def(8, 50, 25), def(12, 90, 60)],
+            max_build_slope: 0,
+            flatten_cost_per_step: Coins::ZERO,
             food_per_resident: Milli::ZERO,
             demographics: DemographicsRules {
                 births_per_thousand_per_month: 1,
