@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["sim-core", "sim-data", "sim-replay", "xtask"]
+members = ["map-gen", "sim-core", "sim-data", "sim-replay", "xtask"]
 
 # Versions pinned here: the child crates use { workspace = true }.
 [workspace.dependencies]

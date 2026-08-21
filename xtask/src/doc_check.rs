@@ -78,6 +78,7 @@ pub fn run(root: &Path) -> Result<Vec<Finding>, String> {
     f.extend(frozen_orders_match_the_code(root, &sources)?);
     f.extend(skill_matches_the_task_header(root)?);
     f.extend(rules_match_what_a_terrain_allows(root)?);
+    f.extend(the_simulation_does_not_depend_on_the_generator(root)?);
     Ok(f)
 }
 
@@ -1354,7 +1355,7 @@ fn read(root: &Path, rel: &str) -> Result<String, String> {
 /// Every `.rs`, `.ron` and `.toml` that is source rather than recording.
 fn source_files(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     let mut out = Vec::new();
-    for crate_dir in ["sim-core", "sim-data", "sim-replay", "xtask"] {
+    for crate_dir in ["map-gen", "sim-core", "sim-data", "sim-replay", "xtask"] {
         walk(&root.join(crate_dir), root, &mut out)?;
     }
     for file in ["Cargo.toml", "clippy.toml"] {
@@ -1493,6 +1494,47 @@ fn rules_match_what_a_terrain_allows(root: &Path) -> Result<Vec<Finding>, String
                     ),
                 });
             }
+        }
+    }
+    Ok(out)
+}
+
+// --- 12. the simulation does not depend on the generator -------------------
+
+/// The crate that draws a map is a tool, and no crate the simulation loads may
+/// name it.
+///
+/// A generator the simulation could reach would be a frozen part of the
+/// determinism contract: every improvement to it would move every recorded
+/// hash, and the rule at the head of every `.hashes` file — *if this changes
+/// without the balancing having changed, a source of non-determinism has been
+/// introduced* — would stop meaning anything at all.
+///
+/// `ARCHITECTURE.md` has carried a sentence of this shape about the renderer
+/// since the first commit, and it has never been anything but a sentence. This
+/// is the same rule as something that fails, which is this repository's own
+/// lesson applied without modification: a relation that has to hold is a
+/// check, not a comment. `xtask` may name it, and does.
+///
+/// Reading the manifest as text is enough, and that is not laziness: the test
+/// edge points from the generator to `sim-data` and never the other way, so
+/// these three files have no honest reason to contain the word at all.
+fn the_simulation_does_not_depend_on_the_generator(root: &Path) -> Result<Vec<Finding>, String> {
+    const GENERATOR: &str = "map-gen";
+    let mut out = Vec::new();
+    for name in ["sim-core", "sim-data", "sim-replay"] {
+        let at = format!("{name}/Cargo.toml");
+        if read(root, &at)?.contains(GENERATOR) {
+            out.push(Finding {
+                check: "generator-edge",
+                at,
+                what: format!(
+                    "names `{GENERATOR}`. The generator draws the maps the game \
+                     loads and is a tool: a crate the simulation loads may not \
+                     depend on it, or every improvement to it would move every \
+                     recorded hash"
+                ),
+            });
         }
     }
     Ok(out)
