@@ -365,15 +365,33 @@ impl World {
     ///
     /// It serves **scenario setup**, before the game begins: it mutates the
     /// state without going through a `Command`, because the map is not a move by
-    /// the player. It is no longer the only one — `set_house_level`, behind the
-    /// `house-level` feature, founds a house at a chosen level for the same
-    /// reason — and those two are the whole of that list. It is not a channel
-    /// for the renderer, which only ever writes commands into the core.
-    /// `false` if the position is off the map.
+    /// the player. It is no longer the only one — `set_ground_height` right
+    /// below it, and `set_house_level`, behind the `house-level` feature,
+    /// which founds a house at a chosen level for the same reason — and those
+    /// three are the whole of that list. It is not a channel for the
+    /// renderer, which only ever writes commands into the core. `false` if
+    /// the position is off the map.
     pub fn set_terrain(&mut self, pos: TilePos, terrain: crate::grid::Terrain) -> bool {
         match self.grid.at_mut(pos) {
             Some(t) => {
                 t.set_terrain(terrain);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Sets the ground height of a tile — the twin of [`World::set_terrain`],
+    /// for the same reason and under the same rule: scenario setup, not a
+    /// player move. `false` if the position is off the map, or if `height` is
+    /// beyond `Tile::MAX_GROUND_HEIGHT`.
+    pub fn set_ground_height(&mut self, pos: TilePos, height: u8) -> bool {
+        if height > crate::grid::Tile::MAX_GROUND_HEIGHT {
+            return false;
+        }
+        match self.grid.at_mut(pos) {
+            Some(t) => {
+                t.set_ground_height(height);
                 true
             }
             None => false,

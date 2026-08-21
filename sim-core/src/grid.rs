@@ -176,36 +176,100 @@ pub struct TileOccupant {
     pub is_house: bool,
 }
 
+// Bit layout of `Tile::packed`. Three fields share one `u16` rather than each
+// taking a byte of their own, because a byte each makes `Tile` six bytes with
+// the alignment, and 40,000 tiles then take 240 KB instead of 160 KB — the
+// budget the assert below guards.
+//
+// terrain 0..4 (4 bits, sixteen kinds fit, three exist) · flags 4..8 (4 bits,
+// `TileFlags` uses three of them) · ground height 8..13 (5 bits, 0..=31) ·
+// 3 bits left spare on purpose: a bridge flag, a fourth occupant kind, a
+// second height for water depth are each one bit, and re-packing later moves
+// every recorded hash — leaving room now is the only time it is free.
+const TERRAIN_SHIFT: u16 = 0;
+const TERRAIN_BITS: u16 = 4;
+const TERRAIN_MASK: u16 = (1 << TERRAIN_BITS) - 1;
+
+const FLAGS_SHIFT: u16 = TERRAIN_SHIFT + TERRAIN_BITS;
+const FLAGS_BITS: u16 = 4;
+const FLAGS_MASK: u16 = (1 << FLAGS_BITS) - 1;
+
+const HEIGHT_SHIFT: u16 = FLAGS_SHIFT + FLAGS_BITS;
+const HEIGHT_BITS: u16 = 5;
+const HEIGHT_MASK: u16 = (1 << HEIGHT_BITS) - 1;
+
 /// NB: Budget: 4 bytes. 40,000 tiles ⇒ 160 KB, which fits in L2.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct Tile {
-    terrain: Terrain,
-    flags: TileFlags,
+    packed: u16,
     occupant_origin: TileIndex,
 }
 
+impl std::fmt::Debug for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tile")
+            .field("terrain", &self.terrain())
+            .field("ground_height", &self.ground_height())
+            .field("flags", &self.flags())
+            .field("occupant_origin", &self.occupant_origin)
+            .finish()
+    }
+}
+
 impl Tile {
+    /// The highest ground height the field can hold: five bits, `0..=31`.
+    pub const MAX_GROUND_HEIGHT: u8 = HEIGHT_MASK as u8;
+
     /// The kind of ground on the tile.
+    ///
+    /// Only 0, 1 and 2 are ever written (`Terrain::index`'s range); the other
+    /// thirteen codes the 4-bit field could hold are never produced by
+    /// `set_terrain`, so folding them onto `Plain` costs nothing real and
+    /// keeps the decode total over the field.
     pub const fn terrain(&self) -> Terrain {
-        self.terrain
+        match self.packed & TERRAIN_MASK {
+            1 => Terrain::Water,
+            2 => Terrain::Rock,
+            _ => Terrain::Plain,
+        }
+    }
+
+    /// How high the ground is on this tile, counted in steps, `0..=31`.
+    ///
+    /// **The grid's own `height` is its size in tiles**, which is a different
+    /// thing entirely — hence the longer name here. A step is a unit of
+    /// gameplay, not of length: the renderer multiplies it by a scale of its
+    /// own to get pixels.
+    pub const fn ground_height(&self) -> u8 {
+        ((self.packed >> HEIGHT_SHIFT) & HEIGHT_MASK) as u8
+    }
+
+    const fn flags(&self) -> TileFlags {
+        TileFlags(((self.packed >> FLAGS_SHIFT) & FLAGS_MASK) as u8)
+    }
+
+    const fn set_flags(&mut self, f: TileFlags) {
+        let bits = (f.0 as u16) & FLAGS_MASK;
+        self.packed = (self.packed & !(FLAGS_MASK << FLAGS_SHIFT)) | (bits << FLAGS_SHIFT);
     }
 
     /// Whether a road runs over the tile.
     pub const fn has_road(&self) -> bool {
-        self.flags.has_road()
+        self.flags().has_road()
     }
 
     /// The flag byte, which is what the state hash reads.
     pub const fn flag_bits(&self) -> u8 {
-        self.flags.bits()
+        self.flags().bits()
     }
 
     /// The tile's occupant, if there is one.
     pub const fn occupant(&self) -> Option<TileOccupant> {
-        if self.flags.has_occupant() {
+        let f = self.flags();
+        if f.has_occupant() {
             Some(TileOccupant {
                 origin: self.occupant_origin,
-                is_house: self.flags.occupant_is_house(),
+                is_house: f.occupant_is_house(),
             })
         } else {
             None
@@ -213,28 +277,46 @@ impl Tile {
     }
 
     pub const fn is_free(&self) -> bool {
-        !self.flags.has_occupant() && !self.flags.has_road()
+        let f = self.flags();
+        !f.has_occupant() && !f.has_road()
     }
 
     /// Sets the kind of ground, which only scenario setup does.
     pub(crate) const fn set_terrain(&mut self, terrain: Terrain) {
-        self.terrain = terrain;
+        let bits = (terrain.index() as u16) & TERRAIN_MASK;
+        self.packed = (self.packed & !TERRAIN_MASK) | bits;
+    }
+
+    /// Sets the ground height, which only scenario setup does — like
+    /// `set_terrain`, gameplay never changes the ground under a placed
+    /// building. The caller guarantees `height <= Tile::MAX_GROUND_HEIGHT`;
+    /// a larger value is masked to its low five bits rather than checked
+    /// here, the same trust `set_terrain` already places in its one caller.
+    pub(crate) const fn set_ground_height(&mut self, height: u8) {
+        let bits = (height as u16) & HEIGHT_MASK;
+        self.packed = (self.packed & !(HEIGHT_MASK << HEIGHT_SHIFT)) | (bits << HEIGHT_SHIFT);
     }
 
     /// Puts a road on the tile or takes it away.
     pub(crate) const fn set_road(&mut self, on: bool) {
-        self.flags.set(TileFlags::HAS_ROAD, on);
+        let mut f = self.flags();
+        f.set(TileFlags::HAS_ROAD, on);
+        self.set_flags(f);
     }
 
     pub(crate) const fn set_occupant(&mut self, occ: TileOccupant) {
         self.occupant_origin = occ.origin;
-        self.flags.set(TileFlags::HAS_OCCUPANT, true);
-        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, occ.is_house);
+        let mut f = self.flags();
+        f.set(TileFlags::HAS_OCCUPANT, true);
+        f.set(TileFlags::OCCUPANT_IS_HOUSE, occ.is_house);
+        self.set_flags(f);
     }
 
     pub(crate) const fn clear_occupant(&mut self) {
-        self.flags.set(TileFlags::HAS_OCCUPANT, false);
-        self.flags.set(TileFlags::OCCUPANT_IS_HOUSE, false);
+        let mut f = self.flags();
+        f.set(TileFlags::HAS_OCCUPANT, false);
+        f.set(TileFlags::OCCUPANT_IS_HOUSE, false);
+        self.set_flags(f);
         self.occupant_origin = TileIndex::new(0);
     }
 }
@@ -264,10 +346,8 @@ impl Grid {
             });
         }
         let len = usize::from(width) * usize::from(height);
-        let tile = Tile {
-            terrain,
-            ..Tile::default()
-        };
+        let mut tile = Tile::default();
+        tile.set_terrain(terrain);
         Ok(Self {
             width,
             height,
@@ -367,6 +447,90 @@ impl Grid {
         }
         out.into_iter().flatten()
     }
+
+    /// The slope over a set of tiles: the highest ground height among them
+    /// minus the lowest. Zero for a single tile or a level region — there is
+    /// nothing to flatten over one height.
+    ///
+    /// It is **never stored on the tile**. A stored slope would be a second
+    /// copy of a fact the heights already carry, and the two would drift
+    /// apart the first time a height changed without it — the reason a save
+    /// file is `seed + Vec<Command>` and not a dump of the state (D4), in
+    /// miniature. An index the grid cannot resolve is skipped, not reported,
+    /// the same convention the state hash's tile loop already follows.
+    pub fn slope_over(&self, tiles: &[TileIndex]) -> u8 {
+        let mut range: Option<(u8, u8)> = None;
+        for &idx in tiles {
+            let Some(h) = self.get(idx).map(Tile::ground_height) else {
+                continue;
+            };
+            range = Some(match range {
+                None => (h, h),
+                Some((lo, hi)) => (lo.min(h), hi.max(h)),
+            });
+        }
+        range.map_or(0, |(lo, hi)| hi - lo)
+    }
+
+    /// The walkable tiles (`Terrain::is_walkable`), grouped into connected
+    /// components under [`Grid::neighbors4`], one entry per component holding
+    /// its tile count.
+    ///
+    /// A plain flood fill, not `RoadNetwork`'s generation-tagged `Visited`:
+    /// that structure is tuned for being rebuilt on every road change, on the
+    /// hot path. This runs once, when a map is loaded, and simplicity is the
+    /// only thing worth optimising for here. The map loader is its one
+    /// caller: until bridges exist, a river severing the walkable ground is
+    /// refused at load rather than discovered later as an unreachable
+    /// district.
+    pub fn walkable_regions(&self) -> Vec<usize> {
+        let mut seen = vec![false; self.len() as usize];
+        let mut sizes = Vec::new();
+        let walkable = |g: &Grid, i: TileIndex| g.get(i).is_some_and(|t| t.terrain().is_walkable());
+
+        for root in self.indices() {
+            if seen[root.as_usize()] || !walkable(self, root) {
+                continue;
+            }
+            let mut count = 0usize;
+            let mut queue = vec![root];
+            seen[root.as_usize()] = true;
+            while let Some(t) = queue.pop() {
+                count += 1;
+                for v in self.neighbors4(t) {
+                    if !seen[v.as_usize()] && walkable(self, v) {
+                        seen[v.as_usize()] = true;
+                        queue.push(v);
+                    }
+                }
+            }
+            sizes.push(count);
+        }
+        sizes
+    }
+
+    /// Builds a grid from an already-validated map. Infallible: `MapDef`'s
+    /// own invariants — dimensions in range, row lengths matching, heights in
+    /// range, one connected walkable region — are `sim_data::validate_map`'s
+    /// job, not this constructor's.
+    pub fn from_map(def: &crate::map::MapDef) -> Self {
+        let tiles: Vec<Tile> = def
+            .terrain
+            .iter()
+            .zip(&def.ground)
+            .map(|(&terrain, &height)| {
+                let mut t = Tile::default();
+                t.set_terrain(terrain);
+                t.set_ground_height(height);
+                t
+            })
+            .collect();
+        Self {
+            width: def.width,
+            height: def.height,
+            tiles: tiles.into_boxed_slice(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -433,6 +597,31 @@ mod tests {
             4,
             "Tile has grown: 40,000 tiles have to fit in cache"
         );
+    }
+
+    /// The packing round-trips over the whole field, not just the terrain
+    /// codes actually in use: `Terrain::ALL` only has three members, but the
+    /// 4-bit field the packing gives it has sixteen, and a shift/mask bug in
+    /// an unused code would sit undetected until a fourth terrain used it.
+    #[test]
+    fn the_packing_round_trips() {
+        for terrain_bits in 0u16..16 {
+            for height in 0u8..=Tile::MAX_GROUND_HEIGHT {
+                for flags in 0u16..16 {
+                    let packed = (terrain_bits & TERRAIN_MASK)
+                        | ((flags & FLAGS_MASK) << FLAGS_SHIFT)
+                        | ((u16::from(height) & HEIGHT_MASK) << HEIGHT_SHIFT);
+                    let t = Tile {
+                        packed,
+                        occupant_origin: TileIndex::new(u16::MAX),
+                    };
+                    assert_eq!(t.packed & TERRAIN_MASK, terrain_bits);
+                    assert_eq!(t.ground_height(), height);
+                    assert_eq!(u16::from(t.flag_bits()), flags);
+                    assert_eq!(t.occupant_origin, TileIndex::new(u16::MAX));
+                }
+            }
+        }
     }
 
     #[test]
@@ -551,6 +740,54 @@ mod tests {
         assert_eq!(n(4, 3), 2, "opposite corner");
         assert_eq!(n(2, 0), 3, "edge");
         assert_eq!(n(2, 2), 4, "interior");
+    }
+
+    #[test]
+    fn slope_over_a_single_tile_is_always_zero() {
+        let mut g = Grid::new(3, 3, Terrain::Plain).expect("valid grid");
+        let idx = g.index(TilePos::new(1, 1)).expect("in bounds");
+        g.get_mut(idx).expect("tile").set_ground_height(17);
+        assert_eq!(g.slope_over(&[idx]), 0);
+    }
+
+    #[test]
+    fn slope_over_a_level_region_is_zero() {
+        let mut g = Grid::new(3, 3, Terrain::Plain).expect("valid grid");
+        let tiles: Vec<TileIndex> = g.indices().collect();
+        for &idx in &tiles {
+            g.get_mut(idx).expect("tile").set_ground_height(5);
+        }
+        assert_eq!(g.slope_over(&tiles), 0);
+    }
+
+    #[test]
+    fn slope_over_is_the_highest_minus_the_lowest() {
+        let mut g = Grid::new(2, 2, Terrain::Plain).expect("valid grid");
+        let heights = [2u8, 7, 3, 9];
+        let tiles: Vec<TileIndex> = g.indices().collect();
+        for (&idx, &h) in tiles.iter().zip(&heights) {
+            g.get_mut(idx).expect("tile").set_ground_height(h);
+        }
+        assert_eq!(g.slope_over(&tiles), 9 - 2);
+    }
+
+    #[test]
+    fn walkable_regions_of_a_uniform_grid_is_one() {
+        let g = Grid::new(4, 4, Terrain::Plain).expect("valid grid");
+        assert_eq!(g.walkable_regions(), vec![16]);
+    }
+
+    /// A strip of water down the middle of a 1-tall row severs it into two
+    /// regions, the shape a river drawn across a map takes.
+    #[test]
+    fn a_water_strip_severs_the_walkable_region() {
+        let mut g = Grid::new(5, 1, Terrain::Plain).expect("valid grid");
+        let water = g.index(TilePos::new(2, 0)).expect("in bounds");
+        g.get_mut(water).expect("tile").set_terrain(Terrain::Water);
+
+        let mut regions = g.walkable_regions();
+        regions.sort_unstable();
+        assert_eq!(regions, vec![2, 2]);
     }
 
     /// Grids of arbitrary size, plus a valid position inside them.
