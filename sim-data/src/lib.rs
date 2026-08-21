@@ -12,7 +12,10 @@ pub mod raw;
 pub mod validate;
 
 pub use load::{LoadError, from_ron_str, load_from_dir};
-pub use map::{MapLoadError, RawMap, load_map_by_id, maps_dir, validate_map};
+pub use map::{
+    MapLoadError, MapParseError, MapSaveError, RawMap, load_map_by_id, maps_dir, parse_map,
+    render_map, save_map, validate_map,
+};
 /// The dataset definitions live in `sim-core` (the `World` holds them in an
 /// `Arc`); what stays here is parsing, validation and I/O. Re-exported for
 /// the convenience of whoever loads the tables.
