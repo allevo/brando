@@ -1,0 +1,16 @@
+// 'w' decodes to 32 in base 36, one past the 5-bit field's maximum of 31.
+(
+    id: "broken",
+    width: 4,
+    height: 3,
+    terrain: [
+        "....",
+        "....",
+        "....",
+    ],
+    ground: [
+        "w000",
+        "0000",
+        "0000",
+    ],
+)
