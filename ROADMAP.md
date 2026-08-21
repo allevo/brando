@@ -43,6 +43,7 @@ tree has got — if another document tells you what is built, it is wrong and sh
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|
+| 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) | a map the tool wrote, with no hand editing, loads through `load_map_by_id`, and a city built on it reaches a living population | |
 | 17 | [Treasury and taxes](plan/17-treasury-taxes.md) | the treasury invariant stays an **exact equality** with the income in it | |
 | 18 | [`sim-scenario`](plan/18-sim-scenario.md) | "500 residents within 5 years" declares itself complete on the right tick, and not before | |
 | 19 | [Invariants and closing M1](plan/19-invariants-closeout-m1.md) | the new invariants are green property tests, and the cost of the coverage chasing the population is measured and attributed | |
