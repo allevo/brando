@@ -6,6 +6,7 @@
 
 mod bench;
 mod expected;
+mod gen_map;
 mod scenario;
 
 use std::process::ExitCode;
@@ -22,6 +23,7 @@ fn main() -> ExitCode {
         Some("record") => exit_code(record(&args[1..])),
         Some("regen-expected") => exit_code(regen_expected(&args[1..])),
         Some("bench") => exit_code(bench::bench(&args[1..])),
+        Some("gen-map") => exit_code(gen_map::gen_map(&args[1..])),
         Some("doc-check") => exit_code(xtask::doc_check::main(&args[1..])),
         _ => {
             usage();
@@ -52,6 +54,7 @@ fn usage() {
     eprintln!("        [--places <n> | --places <kind>=<n>,...] [--tables <dir>]");
     eprintln!("        [--houses <level>=<n>,...]   instead of --residents");
     eprintln!("        [--seed <n>]                 a ragged map instead of the lattice");
+    eprintln!("  gen-map --seed <n> --width <n> --height <n> --id <name> [--out <file>] [--print]");
     eprintln!("  doc-check                                    (also runs in cargo test)");
     eprintln!();
     eprintln!("scenarios: {}", scenario::NAMES.join(", "));

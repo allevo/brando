@@ -54,10 +54,18 @@ pub fn field(seed: u64, name: &str, width: u16, height: u16, corner_spacing: u16
         let corners = corner_values(seed, name, layer, cols * rows);
         add_layer(&mut out, &corners, width, height, spacing, weight);
         total += weight;
-        if spacing == 1 || weight == 1 {
+        // The layers stop while the corners are still at least two tiles
+        // apart. A layer whose corners are one tile apart is not noise with a
+        // shape at all — it is static, every tile drawn without reference to
+        // the one beside it — and the first thing that reads this field is the
+        // rule turning a large step between neighbours into rock, which is why
+        // drawing that layer gave ground speckled with rock instead of ground
+        // with cliffs on it.
+        let finer = spacing / 2;
+        if finer < 2 || weight == 1 {
             break;
         }
-        spacing = (spacing / 2).max(1);
+        spacing = finer;
         weight /= 2;
     }
 
@@ -113,12 +121,14 @@ fn part_of_the_way(offset: usize, spacing: usize) -> i64 {
     (offset as i64) * UNIT / (spacing as i64)
 }
 
-/// The curve between two corners, `3t² − 2t³`.
+/// The curve between two corners, `3t² − 2t³`, for `t` in `0..=UNIT`.
 ///
 /// Without it the corner grid shows through as straight creases lined up with
 /// the axes: the curve is flat where it meets a corner, so two neighbouring
-/// squares of the grid meet smoothly rather than at an angle.
-fn ease(t: i64) -> i64 {
+/// squares of the grid meet smoothly rather than at an angle. The border
+/// falloff borrows it for the same property at the other end — flat where it
+/// meets the land, so the shore is not a cliff of the tool's own making.
+pub fn ease(t: i64) -> i64 {
     (t * t / UNIT) * (3 * UNIT - 2 * t) / UNIT
 }
 

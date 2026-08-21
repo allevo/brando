@@ -100,13 +100,22 @@ pub fn draw(seed: u64, width: u16, height: u16, id: &str) -> Result<Drawn, DrawE
 
 /// Pulls the ground down towards nothing over the last [`BORDER_MARGIN`]
 /// tiles, so a map ends in sea rather than in land sliced off at the frame.
+///
+/// Down the same curve the noise eases between its corners, and not down a
+/// straight line. A straight fall meets the interior at an angle, and that
+/// angle is a step of its own — enough of one that [`classify`] read it as a
+/// cliff and ringed every map with rock, which looks like a bathtub and not
+/// like a coast. The curve is flat where it meets the land, so what steepness
+/// there is falls in the middle of the margin, where the ground has already
+/// gone under the sea and is water either way.
 fn fall_away_at_the_border(field: &mut [i64], width: u16, height: u16) {
     let (w, h) = (width as usize, height as usize);
     let margin = i64::from(BORDER_MARGIN);
     for y in 0..h {
         for x in 0..w {
             let to_edge = x.min(y).min(w - 1 - x).min(h - 1 - y) as i64;
-            field[y * w + x] = field[y * w + x] * to_edge.min(margin) / margin;
+            let part = to_edge.min(margin) * noise::UNIT / margin;
+            field[y * w + x] = field[y * w + x] * noise::ease(part) / noise::UNIT;
         }
     }
 }
@@ -143,40 +152,35 @@ fn to_steps(field: &[i64]) -> Vec<u8> {
 /// worth learning.
 fn classify(ground: &[u8], width: u16, height: u16) -> Vec<Terrain> {
     let (w, h) = (width as usize, height as usize);
-    let mut out = Vec::with_capacity(ground.len());
-    for y in 0..h {
-        for x in 0..w {
-            let here = ground[y * w + x];
-            out.push(if here < SEA_LEVEL {
+    (0..ground.len())
+        .map(|i| {
+            if ground[i] < SEA_LEVEL {
                 Terrain::Water
-            } else if here > ROCK_HEIGHT || steepest_step(ground, w, h, x, y) >= ROCK_STEP {
+            } else if ground[i] > ROCK_HEIGHT || steepest_step(ground, w, h, i) >= ROCK_STEP {
                 Terrain::Rock
             } else {
                 Terrain::Plain
-            });
-        }
-    }
-    out
+            }
+        })
+        .collect()
 }
 
 /// The largest difference in height between this tile and any of the four it
-/// touches. Zero on a tile whose neighbours are all level with it.
-fn steepest_step(ground: &[u8], w: usize, h: usize, x: usize, y: usize) -> u8 {
-    let here = ground[y * w + x];
-    let mut worst = 0;
-    if x > 0 {
-        worst = worst.max(here.abs_diff(ground[y * w + x - 1]));
-    }
-    if y > 0 {
-        worst = worst.max(here.abs_diff(ground[(y - 1) * w + x]));
-    }
-    if x + 1 < w {
-        worst = worst.max(here.abs_diff(ground[y * w + x + 1]));
-    }
-    if y + 1 < h {
-        worst = worst.max(here.abs_diff(ground[(y + 1) * w + x]));
-    }
-    worst
+/// touches **that is also land**. Zero on a tile whose neighbours are all
+/// level with it, and zero on an island of one tile.
+///
+/// The sea is left out, and that is not a detail: the ground goes on falling
+/// under the water, so the step from a shore tile to the sea beside it is
+/// large on almost every map — and counting it turned every coastline into
+/// cliffs, ringing each map with rock. A beach is not a cliff. Nobody climbs
+/// the drop into the sea, so it is not a step.
+fn steepest_step(ground: &[u8], w: usize, h: usize, i: usize) -> u8 {
+    let here = ground[i];
+    neighbours(i, w, h)
+        .filter(|&n| ground[n] >= SEA_LEVEL)
+        .map(|n| here.abs_diff(ground[n]))
+        .max()
+        .unwrap_or(0)
 }
 
 /// The water drops to height zero.

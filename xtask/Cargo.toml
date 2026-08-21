@@ -5,6 +5,10 @@ version.workspace = true
 
 [dependencies]
 sim-core = { path = "../sim-core", features = ["counters", "from-scratch", "house-level", "tick-number"] }
+# The map generator. This is the one crate in the workspace allowed to name it:
+# it is a tool that writes an asset, and `doc-check` refuses a `sim-*` crate
+# that depends on it.
+map-gen = { path = "../map-gen" }
 sim-data = { path = "../sim-data" }
 sim-replay = { path = "../sim-replay" }
 # The seeded map's dice. The same generator the core seeds its own streams with,
