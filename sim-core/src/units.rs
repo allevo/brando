@@ -129,6 +129,13 @@ pub struct Coins(i32);
 impl Coins {
     pub const ZERO: Self = Self(0);
 
+    /// The type's own ceiling — not a balancing number, the same status
+    /// `MAX_SIDE` has for `TileIndex`. A checked multiply or add whose real
+    /// result cannot fit clamps here instead of wrapping, so an absurd table
+    /// value is refused through the ordinary "not enough money" path rather
+    /// than charged at a wrapped, and possibly negative, price.
+    pub const MAX: Self = Self(i32::MAX);
+
     pub const fn new(v: i32) -> Self {
         Self(v)
     }
