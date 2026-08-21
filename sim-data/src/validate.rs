@@ -102,6 +102,50 @@ pub enum ValidationErrorKind {
         "satisfaction_weight + free_places_weight is {found}, not 1000: attractiveness would stop being a share expressed in thousandths"
     )]
     MigrationWeightsNotAThousand { found: u32 },
+
+    // --- map faults (phase 16) ---
+    #[error("invalid map size {width}x{height}: each side must be 1..={max}")]
+    InvalidMapSize { width: u16, height: u16, max: u16 },
+
+    #[error("expected {expected} rows of {block}, found {found}")]
+    WrongMapRowCount {
+        block: &'static str,
+        expected: u16,
+        found: usize,
+    },
+
+    #[error("row {row} of {block} has {found} characters, expected {expected}")]
+    WrongMapRowLength {
+        block: &'static str,
+        row: usize,
+        expected: u16,
+        found: usize,
+    },
+
+    #[error(
+        "unclaimed character {found:?} in {block} at row {row}, column {col}: known are {known}"
+    )]
+    UnclaimedMapCharacter {
+        block: &'static str,
+        row: usize,
+        col: usize,
+        found: char,
+        known: &'static str,
+    },
+
+    #[error("ground height {found} at row {row}, column {col} is beyond the maximum of {max}")]
+    GroundHeightBeyondMax {
+        row: usize,
+        col: usize,
+        found: u8,
+        max: u8,
+    },
+
+    #[error(
+        "the walkable ground does not form one connected region: {sizes:?} — until bridges \
+         exist, every walkable tile has to be able to reach every other"
+    )]
+    SeveredMap { sizes: Vec<usize> },
 }
 
 /// The set of problems found in one validation pass.
@@ -111,7 +155,7 @@ pub struct ValidationReport {
 }
 
 impl ValidationReport {
-    fn push(&mut self, path: impl Into<String>, kind: ValidationErrorKind) {
+    pub(crate) fn push(&mut self, path: impl Into<String>, kind: ValidationErrorKind) {
         self.errors.push(ValidationError {
             path: path.into(),
             kind,

@@ -1,0 +1,16 @@
+// 'x' claims neither Plain, Water nor Rock.
+(
+    id: "broken",
+    width: 4,
+    height: 3,
+    terrain: [
+        "....",
+        "..x.",
+        "....",
+    ],
+    ground: [
+        "0000",
+        "0000",
+        "0000",
+    ],
+)

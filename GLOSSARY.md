@@ -121,12 +121,13 @@ history and breaks the recorded replays.
 | Declaration order of `RngKind` | `Events, Migration, Production, Demographics` | `sim-replay/src/hash.rs` iterates `RngKind::ALL` and hashes each stream's position. Reordering silently changes every state hash — the same hazard as `Terrain` below. |
 | The dataset hash prefix | `b"brando/dataset/v1"` | Keeps this hash apart from every other hash in the project. |
 | The state hash prefix | `b"brando/world/v1"` | Same, for the state. |
+| The map hash prefix | `b"brando/map/v1"` | Same, for a named map's `MapDef`. `MapSpec::File` carries this hash in the recording's header (phase 16), the same device as the dataset hash and for the same reason. |
 | Declaration order of `Flow` and `Flow::index()` | `Births, Deaths, Immigration, Emigration` | `Demographics::remainder` is indexed by it and the whole array goes into the state hash, so reordering silently reassigns every accumulated fraction to a different flow. The same hazard as `RngKind` above. |
 | Declaration order of `Terrain` | `Plain, Water, Rock` | The hash stores the position, not the name. Reordering silently changes every hash. |
 | Declaration order of `ServiceKind` and `ServiceKind::index()` | `Water = 0, Food = 1` | Same. |
 | Building ids in `buildings.ron` | `"house"`, `"well"`, `"farm"` | `sim-core/src/data_hash.rs` feeds each id string into blake3, so renaming one moves every recorded hash. |
 | Difficulty ids in `difficulty.ron` | `"easy"`, `"normal"`, `"hard"` | Hashed the same way as the building ids, and the recording's header stores the id by name. |
-| `FORMAT_VERSION` | `2` | The shape of a save file. It went to `2` in phase 11, when the header started carrying the difficulty. It goes up when the shape changes, not when a name does. |
+| `FORMAT_VERSION` | `3` | The shape of a save file. It went to `2` in phase 11, when the header started carrying the difficulty, and to `3` in phase 16, when it started naming a map (`MapSpec`) instead of always describing a uniform grid (`GridSpec`). It goes up when the shape changes, not when a name does. |
 | `CHECKPOINT_EVERY` | `30` | How far apart the committed checkpoints are. |
 | `Calendar::TICKS_PER_MONTH`, `Calendar::MONTHS_PER_YEAR` | `30`, `12` | Not hashed directly — they left `Rules`/`DataSet::hash` for a Rust constant (D6, amended) — but changing either still moves every recorded replay, through the tick's own behaviour (when step 6.2's review fires) rather than through being fed into a hash byte for byte. `regen-expected --check` catches a change here exactly as it catches a reordered tick step. |
 | Benchmark labels `A.`–`G.` | — | `plan/09-invariants-closeout.md` records the end-of-M0 timings against those letters, and `xtask/src/bench.rs` carries them as its reference figures. `H`–`J` were added by phase 14 and are measured with `--zero-demographics`. |

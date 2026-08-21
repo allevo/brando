@@ -8,14 +8,26 @@ use sim_core::{Command, Terrain, Tick};
 /// Version of the format. It goes up when the shape of the file changes, not
 /// when the balancing does: that is what `dataset_hash` is for.
 ///
-/// 2 since phase 11: the header carries the difficulty profile.
-pub const FORMAT_VERSION: u16 = 2;
+/// 3 since phase 16: the header names a map instead of always describing a
+/// uniform grid.
+pub const FORMAT_VERSION: u16 = 3;
 
+/// Where the map came from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GridSpec {
-    pub width: u16,
-    pub height: u16,
-    pub terrain: Terrain,
+pub enum MapSpec {
+    /// One terrain, repeated over the whole grid.
+    Uniform {
+        width: u16,
+        height: u16,
+        terrain: Terrain,
+    },
+    /// A named map, loaded from `sim-data/maps/<id>.ron`.
+    ///
+    /// The blake3 of the validated `MapDef`, in hexadecimal — the same device
+    /// as `dataset_hash` and for the same reason: if the map is edited, the
+    /// replay fails immediately and for the right reason instead of
+    /// diverging ten ticks later through a side effect.
+    File { id: String, hash: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,7 +41,7 @@ pub struct Header {
     /// written. The cost is one lookup on opening; the return is that the file
     /// stays what a recording has to be, which is readable.
     pub difficulty: String,
-    pub grid: GridSpec,
+    pub map: MapSpec,
     /// blake3 of the `DataSet`, in hexadecimal so it stays readable in the file.
     ///
     /// If the balancing changes, the replay fails immediately and for the right

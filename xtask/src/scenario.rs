@@ -8,12 +8,13 @@
 use std::sync::Arc;
 
 use sim_core::{Command, DataSet, DifficultyId, Grid, Terrain, Tick, TilePos, World};
+use sim_replay::MapSpec;
 
 pub struct Scenario {
     pub name: &'static str,
     pub description: &'static str,
     pub seed: u64,
-    pub side: u16,
+    pub map: MapSpec,
     /// The profile the scenario is played on. It is state, so it travels in the
     /// recording's header and goes into the hash.
     pub difficulty: DifficultyId,
@@ -35,11 +36,18 @@ pub fn by_name(name: &str, data: &DataSet) -> Option<Scenario> {
     match name {
         "minimal" => Some(minimal(data)),
         "hunger" => Some(hunger(data)),
+        "river-valley" => Some(river_valley(data)),
         _ => None,
     }
 }
 
-pub const NAMES: [&str; 2] = ["minimal", "hunger"];
+/// Every scenario `--scenario`/`by_name` know about.
+pub const NAMES: [&str; 3] = ["minimal", "hunger", "river-valley"];
+/// The scenarios that get a committed recording. A separate list from
+/// [`NAMES`], deliberately: a scenario built on a named map is a real playtest
+/// (phase 16's test 12), by hand and by eye, not one more file `regen-expected`
+/// keeps hashed forever the day it is added.
+pub const RECORDED: [&str; 2] = ["minimal", "hunger"];
 
 fn kind(data: &DataSet, id: &str) -> sim_core::BuildingKindId {
     data.kind_by_id(id)
@@ -90,7 +98,11 @@ fn minimal(data: &DataSet) -> Scenario {
         name: "minimal",
         description: "four houses served by one well and one farm",
         seed: 42,
-        side: 32,
+        map: MapSpec::Uniform {
+            width: 32,
+            height: 32,
+            terrain: Terrain::Plain,
+        },
         difficulty: difficulty(data, RECORDED_DIFFICULTY),
         commands,
     }
@@ -120,14 +132,107 @@ fn hunger(data: &DataSet) -> Scenario {
     s
 }
 
+/// Phase 16's test 12: a real map, not a flat lattice. A river runs
+/// north-south, crossed by a ford at the south end; the west bank is the
+/// valley floor (flat, cheap to build on), the east bank rises gently into
+/// rock. The city sits mostly on the flat west bank, with one farm and one
+/// house reaching onto the gentler part of the east bank's slope — enough to
+/// pay a real, small `flatten_cost_per_step` surcharge without needing the
+/// map redrawn or the rule loosened.
+fn river_valley(data: &DataSet) -> Scenario {
+    let house = kind(data, "house");
+    let well = kind(data, "well");
+    let farm = kind(data, "farm");
+
+    let mut commands = Vec::new();
+    // The road network: a spine down the west bank, a ford crossing the
+    // river at the south end, and a short spur reaching the east-bank farm.
+    for y in 0..=7u8 {
+        commands.push((Tick::ZERO, Command::PlaceRoad { at: pos(2, y) }));
+    }
+    for x in [0u8, 1, 3, 4, 5, 6, 7, 8, 9] {
+        commands.push((Tick::ZERO, Command::PlaceRoad { at: pos(x, 6) }));
+    }
+    for y in [4u8, 5] {
+        commands.push((Tick::ZERO, Command::PlaceRoad { at: pos(8, y) }));
+    }
+
+    commands.push((
+        Tick::new(1),
+        Command::PlaceBuilding {
+            kind: well,
+            origin: pos(1, 1),
+        },
+    ));
+    // On the flat valley floor: no slope, no surcharge.
+    commands.push((
+        Tick::new(1),
+        Command::PlaceBuilding {
+            kind: farm,
+            origin: pos(0, 3),
+        },
+    ));
+    // On the east bank's gentle rise: a real slope of 1, so this one costs
+    // `flatten_cost_per_step` more than the west-bank farm above it.
+    commands.push((
+        Tick::new(1),
+        Command::PlaceBuilding {
+            kind: farm,
+            origin: pos(6, 3),
+        },
+    ));
+    for (x, y) in [(1, 0), (3, 0), (3, 1), (3, 2)] {
+        commands.push((
+            Tick::new(2),
+            Command::PlaceBuilding {
+                kind: house,
+                origin: pos(x, y),
+            },
+        ));
+    }
+    // A hut on the slope itself: one tile, one height, nothing to flatten.
+    commands.push((
+        Tick::new(2),
+        Command::PlaceBuilding {
+            kind: house,
+            origin: pos(7, 5),
+        },
+    ));
+
+    Scenario {
+        name: "river-valley",
+        description: "a river valley: two farms, one on the flat and one on the slope",
+        seed: 42,
+        map: MapSpec::File {
+            id: "river-valley".to_string(),
+            hash: sim_data::load_map_by_id("river-valley")
+                .unwrap_or_else(|e| panic!("the 'river-valley' map failed to load: {e}"))
+                .hash_hex(),
+        },
+        difficulty: difficulty(data, RECORDED_DIFFICULTY),
+        commands,
+    }
+}
+
 const fn pos(x: u8, y: u8) -> TilePos {
     TilePos::new(x, y)
 }
 
 impl Scenario {
     pub fn world(&self, data: Arc<DataSet>) -> World {
-        let grid = Grid::new(self.side, self.side, Terrain::Plain)
-            .unwrap_or_else(|e| panic!("the scenario's grid is invalid: {e}"));
+        let grid = match &self.map {
+            MapSpec::Uniform {
+                width,
+                height,
+                terrain,
+            } => Grid::new(*width, *height, *terrain)
+                .unwrap_or_else(|e| panic!("the scenario's grid is invalid: {e}")),
+            MapSpec::File { id, .. } => {
+                let def = sim_data::load_map_by_id(id)
+                    .unwrap_or_else(|e| panic!("the scenario's map {id:?} failed to load: {e}"));
+                Grid::from_map(&def)
+            }
+        };
         World::new(grid, data, self.seed, self.difficulty)
     }
 

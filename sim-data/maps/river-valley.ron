@@ -1,0 +1,32 @@
+// A river running north-south, crossed by a ford at the southern end so the
+// two banks stay one connected region; a plain rising gently on the east
+// bank into rock at the far edge. Two parallel blocks, not one interleaved
+// one: terrain and relief are read by eye separately, and a map nobody can
+// read in a diff is a map nobody checks.
+(
+    id: "river-valley",
+    width: 12,
+    height: 8,
+    // '.' plain   '~' water   '#' rock
+    terrain: [
+        ".....~....##",
+        ".....~....##",
+        ".....~....##",
+        ".....~....##",
+        ".....~....##",
+        "..........##",
+        "..........##",
+        "..........##",
+    ],
+    // ground height in base 32: '0'..'9' then 'a'..'v'
+    ground: [
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+        "00000001128e",
+    ],
+)

@@ -30,6 +30,21 @@ pub enum ReplayError {
 
     #[error("invalid grid in the header: {0}")]
     InvalidGrid(#[from] sim_core::GridError),
+
+    #[error("cannot load map {id:?}: {source}")]
+    MapLoad {
+        id: String,
+        #[source]
+        source: Box<sim_data::MapLoadError>,
+    },
+
+    #[error(
+        "the map does not match the one the game was recorded with:\n  \
+         expected {expected}\n  found    {found}\n\
+         if the map was edited on purpose, regenerate the recordings with \
+         `cargo xtask regen-expected`"
+    )]
+    MapMismatch { expected: String, found: String },
 }
 
 /// A checkpoint: the tick and the state hash at that tick.
@@ -65,8 +80,27 @@ pub fn initial_world(rec: &Recording, data: Arc<DataSet>) -> Result<World, Repla
             known: data.difficulty_ids(),
         })?;
 
-    let g = &rec.header.grid;
-    let grid = Grid::new(g.width, g.height, g.terrain)?;
+    let grid = match &rec.header.map {
+        crate::recording::MapSpec::Uniform {
+            width,
+            height,
+            terrain,
+        } => Grid::new(*width, *height, *terrain)?,
+        crate::recording::MapSpec::File { id, hash } => {
+            let def = sim_data::load_map_by_id(id).map_err(|source| ReplayError::MapLoad {
+                id: id.clone(),
+                source: Box::new(source),
+            })?;
+            let found = def.hash_hex();
+            if &found != hash {
+                return Err(ReplayError::MapMismatch {
+                    expected: hash.clone(),
+                    found,
+                });
+            }
+            Grid::from_map(&def)
+        }
+    };
     Ok(World::new(grid, data, rec.header.seed, difficulty))
 }
 

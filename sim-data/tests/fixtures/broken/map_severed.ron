@@ -1,0 +1,13 @@
+// A river drawn corner to corner: the water column at x=2 leaves two
+// walkable regions of two tiles each, with no bridge between them.
+(
+    id: "broken",
+    width: 5,
+    height: 1,
+    terrain: [
+        "..~..",
+    ],
+    ground: [
+        "00000",
+    ],
+)

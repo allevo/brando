@@ -329,6 +329,9 @@ fn the_hash_covers_the_whole_state() {
         ("a tile", |w| {
             w.set_terrain(TilePos::new(0, 0), sim_core::Terrain::Rock);
         }),
+        ("a tile's ground height", |w| {
+            w.set_ground_height(TilePos::new(0, 0), 5);
+        }),
         ("a building", |w| {
             let id = w.buildings().next().map(|(id, _)| id).expect("a building");
             let b = w.building_mut(id).expect("alive");

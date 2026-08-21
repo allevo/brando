@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use sim_core::{Calendar, DataSet, Tick};
-use sim_replay::{CHECKPOINT_EVERY, GridSpec, Header, Recording, checkpoints};
+use sim_replay::{CHECKPOINT_EVERY, Header, Recording, checkpoints};
 
 use crate::scenario::{self, Scenario};
 
@@ -21,11 +21,7 @@ pub fn record(sc: &Scenario, data: &DataSet) -> Recording {
             format_version: sim_replay::FORMAT_VERSION,
             seed: sc.seed,
             difficulty,
-            grid: GridSpec {
-                width: sc.side,
-                height: sc.side,
-                terrain: sim_core::Terrain::Plain,
-            },
+            map: sc.map.clone(),
             dataset_hash: data.hash_hex(),
         },
         // `Recording::commands` is the wire format and stays a bare `u32` (see
@@ -47,7 +43,7 @@ pub fn regen(data: &Arc<DataSet>, check: bool) -> Result<Vec<String>, String> {
     }
 
     let mut changed = Vec::new();
-    for name in scenario::NAMES {
+    for name in scenario::RECORDED {
         let sc =
             scenario::by_name(name, data).ok_or_else(|| format!("unknown scenario: {name}"))?;
         let rec = record(&sc, data);

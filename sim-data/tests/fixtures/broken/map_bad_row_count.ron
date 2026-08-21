@@ -1,0 +1,15 @@
+// height says 3, terrain has only 2 rows.
+(
+    id: "broken",
+    width: 4,
+    height: 3,
+    terrain: [
+        "....",
+        "....",
+    ],
+    ground: [
+        "0000",
+        "0000",
+        "0000",
+    ],
+)

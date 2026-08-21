@@ -7,14 +7,17 @@
 //! never inside `sim-core` (D4).
 
 pub mod load;
+pub mod map;
 pub mod raw;
 pub mod validate;
 
 pub use load::{LoadError, from_ron_str, load_from_dir};
+pub use map::{MapLoadError, RawMap, load_map_by_id, maps_dir, validate_map};
 /// The dataset definitions live in `sim-core` (the `World` holds them in an
 /// `Arc`); what stays here is parsing, validation and I/O. Re-exported for
 /// the convenience of whoever loads the tables.
 pub use sim_core::data::{BuildingDef, DataSet, DifficultyDef, DifficultyId, Rules, ServiceDef};
+pub use sim_core::map::MapDef;
 pub use validate::{ValidationError, ValidationErrorKind, ValidationReport, validate};
 
 /// The directory of the production tables, resolved at compile time.
