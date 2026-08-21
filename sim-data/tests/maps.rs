@@ -39,6 +39,17 @@ fn valid_map() -> RawMap {
     }
 }
 
+/// The production `river-valley` map (test 12 of the phase) loads and is one
+/// connected region, the same guarantee any other map gets.
+#[test]
+fn the_river_valley_map_loads() {
+    let def = sim_data::load_map_by_id("river-valley").expect("river-valley loads");
+    assert_eq!(def.width, 12);
+    assert_eq!(def.height, 8);
+    let grid = Grid::from_map(&def);
+    assert_eq!(grid.walkable_regions().len(), 1);
+}
+
 #[test]
 fn a_valid_map_loads() {
     let def = validate_map(&valid_map()).expect("a uniform flat map is valid");

@@ -1,14 +1,16 @@
 ---
 id: 16
 kind: phase
-status: not-yet-built
+status: implemented
 opened: 2026-08-13
+closed: 2026-08-21
 ---
 
 # Phase 16 — Terrain: relief and cost
 
-> Nothing in it is implemented. It is a plan, and the tree may well diverge from it once the
-> work is really done — see [ROADMAP.md](../ROADMAP.md).
+> See [How it went](#how-it-went) at the end, which is where the shape it really took is written
+> down. Everything above that section is the plan as it was written, including the parts the work
+> proved wrong — the prediction next to the outcome is the point.
 
 **Goal:** the same building costs more on a hillside than on the flat, is refused outright on a cliff,
 and the map it stands on is loaded from a file rather than being one terrain repeated.
@@ -371,3 +373,76 @@ recordings, and that is the only reason it is allowed to move.
 **Done when:** test 4 passes with `the_treasury_adds_up` still an exact equality, test 8 refuses a
 severed map, and test 10's dumps are identical — the last of which is what proves the hashes moved for
 the packing and not for the game.
+
+## How it went
+
+**The sketch was stale on two points before a line of code changed, both harmless.** Phase 14.9.8 had
+already made every `Tile` field private (`terrain()`, `flag_bits()`, `occupant()` already existed), so
+the "stops being a public field" half of the plan was already true. And nothing anywhere serialises a
+`Tile` directly — a recording carries a lightweight `MapSpec` and the grid is always rebuilt from it —
+so `Tile` gained no `Serialize`/`Deserialize` derive, unlike the doc's sketch.
+
+**`MapDef` could not live in `sim-data`, as the plan's own prose said it would.** `sim-core` cannot
+depend on `sim-data` (its own module doc says so), and `Grid::from_map` is a method on `sim-core`'s
+`Grid`. It landed in a new `sim-core/src/map.rs`, and `sim-data` gained `RawMap` and `validate_map`
+instead — exactly the split `Rules`/`RawRules`/`validate_rules` already use, just not the one sentence
+in "What gets built" above literally proposed.
+
+**The ground-height alphabet needed a two-stage read, or one of the four faults could never be
+written.** `'0'..'9'` then `'a'..'v'` is exactly 32 symbols over exactly the 5-bit field — every
+character the alphabet claims already decodes in range, so a test fixture for "height beyond the
+maximum" could not exist under a literal reading of the sketch. `decode_ground` accepts a digit
+through the wider `'0'..'9', 'a'..'z'` (`char::to_digit(36)`) and range-checks the decoded value
+separately, so `'w'..'z'` are syntactically digits but out of range: two distinct, independently
+triggerable faults instead of one that swallows the other.
+
+**Two names, not one, needed the field-rename.** `GridSpec` became `MapSpec` as planned, but its
+`Header` field went from `grid` to `map` too — a `File` variant under a field still called `grid`
+would read as a lie. Bundled into the same `FORMAT_VERSION` bump rather than treated as a second
+reason for it.
+
+**The absurd-`flatten_cost_per_step` refusal needed one new constant and no new error path.**
+`Coins::MAX` (`i32::MAX`) is what an overflowing checked multiply or add clamps to; the existing
+`charge()` then refuses it through the ordinary `NotEnoughMoney`, since no realistic treasury affords
+`i32::MAX`. `CommandError` gained exactly one new variant, `TooSteep`, not two.
+
+**One more piece of scenario setup than the plan named:** `World::set_ground_height`, the twin of the
+existing `set_terrain`, for the same reason and under the same rule — tests 4 through 6 build a flat
+fixture world and then poke specific tiles' heights by hand, the way existing tests already poke
+terrain.
+
+**`river-valley` does not get a committed recording, and that needed a small mechanism the plan didn't
+have a name for.** `xtask::scenario::NAMES` (every scenario the runner knows by name) and `RECORDED`
+(the ones `regen-expected` iterates) are now two lists, not one — otherwise the day `river-valley` was
+added it would have silently demanded a third permanent `.hashes` file, which is not what "a real
+map plays" (test 12) asked for.
+
+**Test 12, concretely:** a 12x8 map — a river running north-south with a ford at the southern end (so
+the walkable region stays one piece), a flat west-bank valley floor, and an east bank rising gently
+into rock. The scenario places a well, two farms and six houses; one farm sits on the flat (no
+surcharge) and the other spans a slope of 1 (paying exactly `flatten_cost_per_step` more — confirmed
+by watching the treasury: 97 spent against a 92 that would be expected with no slope, the difference
+being one step's surcharge). Zero commands rejected across 900 ticks; the city reaches 32-34 residents
+across 3 house levels, the same band `minimal`'s 4-house city reaches (27-29), one house ahead because
+this scenario places five rather than four. No redrawing of the map or loosening of `max_build_slope`
+was needed.
+
+**The numbers landed at `max_build_slope: 3` and `flatten_cost_per_step: 5`**, chosen against that
+playtest rather than in the abstract, per the plan's own "not deciding the numbers" stance: large
+enough that a careless 2x2 on the mountain's edge is refused, small enough that the deliberately
+sloped farm above was worth building rather than avoided.
+
+**`bench` was re-run once and produced sane, stable-looking figures for the three reference numbers
+(A, D, G) at both reference scales** — the state hash it prints moved, as predicted, for the one
+reason that is allowed to move it. This was a sanity check, not a rigorous paired-interleaved-rounds
+comparison; nothing in this phase touches step 3's inner loop or any other per-tick path (the whole
+change sits in step 1, in `place_building`, proportional to the tiles of a command actually issued,
+not to the size of the city), so a deeper before/after was not judged necessary.
+
+**Landed as five commits in one PR**, each green on its own against `cargo test --workspace` and
+`cargo xtask regen-expected --check`: the `Tile` packing and `Grid`'s two new derived queries; the
+slope-cost rule with its own dataset-hash-only regeneration; the `sim-data`/`sim-core` map pipeline,
+fully tested against fixtures with no production map yet; `MapSpec`/`FORMAT_VERSION 3`/the state-hash
+byte, with the recordings regenerated and their divergence checked to start at tick 30 and nowhere
+later; and finally `river-valley` itself with the closing documentation. Not the single commit the
+skill's letter suggests, but each one a single reason, which is the rule underneath it.

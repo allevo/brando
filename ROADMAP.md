@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 15.5.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -37,20 +37,9 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 14.9.9.5 | [The streets stop being perfect](plan/14.9.9.5-the-streets-stop-being-perfect.md) — `--seed <n>` builds a ragged, provably connected map; a tick on one costs 40% more than on the lattice every figure was measured on | 2026-08-18 |
 | 15 | [Immigration and emigration](plan/15-migration.md) — the destination is never gated on coverage (slot 14.5's answer generalised), immigration is counted per free place and not per resident, and the coverage↔population loop damps: a `hard` city, born with nobody in it, reaches a living population within five years by migration alone | 2026-08-19 |
 | 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
+| 16 | [Terrain: relief and cost](plan/16-terrain.md) — a building's footprint spans a `slope`, never stored; a step of it beyond zero costs `flatten_cost_per_step`, and past `max_build_slope` the placement is refused with `TooSteep`; a map is loaded from `sim-data/maps/<id>.ron` through the same raw/validate/`Def` pipeline as the balancing tables, refusing a bad row, an unclaimed character, a height out of range or a severed walkable region | 2026-08-21 |
 
 ## To do
-
-Built next, ahead of the rest of M1: terrain touches `Tile`'s byte layout and the save format, and
-that structural change is cheapest against the tree as M0 left it, before treasury, `sim-scenario` and
-the invariants closeout each add their own state on top of it. Nothing in the three phases after it
-depends on it, so this is a scheduling choice, not a milestone change — M1 is still treasury +
-`sim-scenario` + the invariants closeout, just built after terrain instead of before it.
-
-| # | What | Verified by | Blocks |
-|---|---|---|---|
-| 16 | [Terrain: relief and cost](plan/16-terrain.md) | a 2×2 building on a slope costs more, a cliff refuses it outright, and the treasury invariant stays an exact equality with the new cost term in it | |
-
-### The rest of M1
 
 | # | What | Verified by | Blocks |
 |---|---|---|---|

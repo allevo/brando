@@ -39,6 +39,13 @@ footprint spans is the highest ground height among its tiles minus the lowest â€
 needed, never stored â€” and it is zero for a single tile: a 1x1 building never has a slope to measure
 and can never be refused or charged for one.
 
+**Maps.** A game is played on either one terrain repeated over the whole grid, or a named map. A named
+map is validated the same way the balancing tables are: every row of it matches the map's declared
+width and height, every character is a known terrain or a known ground height, and every tile a
+building or a road could stand on is reachable from every other. Until bridges exist, a river drawn
+all the way across a map would silently strand half of it, so that last check is refused at load
+rather than discovered later as an unreachable district.
+
 ## Roads and distance
 
 A `road` may be laid on a tile that is on the map, whose terrain is `walkable`, and that carries
