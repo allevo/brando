@@ -3,9 +3,9 @@
 //! Two thresholds, and no others: below [`SEA_LEVEL`] is water, and among
 //! the land, a tile whose step to its steepest land neighbour reaches
 //! [`ROCK_STEP`] is rock, otherwise plain. This crate adds no third,
-//! absolute "always rock above height N" rule the way `map-gen` has — the
-//! specification this crate implements names exactly two thresholds, and a
-//! third would be scope nobody asked for.
+//! absolute "always rock above height N" rule — the specification it
+//! implements names exactly two thresholds, and a third would be scope
+//! nobody asked for.
 
 use sim_core::{Grid, Terrain, TileIndex};
 
@@ -34,13 +34,13 @@ pub(crate) fn run(height: &[u8], grid: &Grid) -> Vec<Terrain> {
 }
 
 /// The largest height difference to a neighbour that is also land (height
-/// at least [`SEA_LEVEL`]) — the quantity `map-gen` calls "the step to the
-/// steepest neighbour" (`GLOSSARY.md`'s `slope` entry reserves that word
-/// for a different quantity over a different set of tiles and never this
-/// one). Sub-sea neighbours are excluded for the same reason `map-gen`
-/// excludes them: the ground keeps falling under the water, so the drop
-/// from a shore tile to the sea beside it is large on almost every map, and
-/// counting it rings every coastline with rock. A beach is not a cliff.
+/// at least [`SEA_LEVEL`]) — "the step to the steepest neighbour"
+/// (`GLOSSARY.md`'s `slope` entry reserves that word for a different
+/// quantity over a different set of tiles and never this one). Sub-sea
+/// neighbours are excluded: the ground keeps falling under the water, so
+/// the drop from a shore tile to the sea beside it is large on almost every
+/// map, and counting it rings every coastline with rock. A beach is not a
+/// cliff.
 fn steepest_step(height: &[u8], grid: &Grid, idx: TileIndex) -> u8 {
     let here = height[usize::from(idx.get())];
     grid.neighbors4(idx)
@@ -50,10 +50,10 @@ fn steepest_step(height: &[u8], grid: &Grid, idx: TileIndex) -> u8 {
         .unwrap_or(0)
 }
 
-/// The water drops to height zero, **after** classification — the same
-/// order `map-gen` uses and for the same reason: dropping it first would
-/// put a large step between every shore tile and the water beside it, and
-/// the pass above would read that step as a cliff.
+/// The water drops to height zero, **after** classification, and that
+/// order is the whole point: dropping it first would put a large step
+/// between every shore tile and the water beside it, and the pass above
+/// would read that step as a cliff.
 pub(crate) fn flatten_the_water(terrain: &[Terrain], height: &mut [u8]) {
     for (t, h) in terrain.iter().zip(height) {
         if *t == Terrain::Water {

@@ -1,36 +1,60 @@
 #![forbid(unsafe_code)]
 
-//! Draws a map from a seed, and says what it drew.
+//! Draws a map from a seeded list of sources that compete for tiles and
+//! then shape their own ground: growth outward from named points, not
+//! layered noise.
 //!
-//! It is a tool, not part of the game. A generator inside the core would become
-//! a frozen part of the determinism contract: every improvement to it would move
-//! every recorded hash, and the rule at the head of every `.hashes` file — *if
-//! this changes without the balancing having changed, a source of
-//! non-determinism has been introduced* — would stop meaning anything at all. So
-//! the core only ever loads files, and this crate only ever produces the map a
-//! person then reads and commits.
-//!
-//! **Nothing here touches a disk.** [`draw`] takes numbers and gives back a
-//! `MapDef`; writing one out belongs to the crate that owns the format. The
-//! dependency list says so and is the whole of what this crate promises, and
-//! `cargo xtask doc-check` refuses a workspace in which any crate the simulation
-//! loads names this one.
-//!
-//! **The numbers that shape a map live here and not in the tables.** What binds
-//! a number to `sim-data` is the simulation reading it, and the simulation never
-//! reads any of these: it reads the file this tool wrote, by which point they
-//! have become terrain and heights indistinguishable from ones a person typed.
-//! The one number here the tables do own, `max_build_slope`, arrives through the
-//! dataset and is never restated.
+//! **Nothing here touches a disk.** [`draw`] takes a [`DrawInput`] and gives
+//! back a `MapDef` in memory; writing one out belongs to the crate that owns
+//! the format (`sim_data::save_map`). `cargo xtask doc-check` refuses a
+//! workspace in which any crate the simulation loads names this one — a
+//! generator the simulation could reach would become a frozen part of the
+//! determinism contract, and every improvement to it would move every
+//! recorded hash.
 
-mod noise;
+mod assign;
+mod classify;
+mod dice;
 mod pipeline;
+mod relief;
+mod repair;
 
 use std::fmt;
 
-use sim_core::{DataSet, Grid, MapDef, Terrain, TileIndex};
+use sim_core::{DataSet, Grid, MapDef, Terrain, TileIndex, TilePos};
 
 pub use pipeline::{DrawError, Drawn, Repair, draw};
+
+/// What a source turns the tiles it claims into, and — for two of the three
+/// kinds — how it goes on shaping their height afterwards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SourceKind {
+    Mountain,
+    Land,
+    Sea,
+}
+
+/// One point a map grows from: where it starts, what it makes, and how
+/// often it gets a turn relative to the others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Source {
+    pub point: TilePos,
+    pub kind: SourceKind,
+    pub strength: u16,
+}
+
+/// Everything one draw needs, gathered so [`draw`] does not grow a seventh
+/// positional argument the day an eighth is wanted.
+#[derive(Debug, Clone)]
+pub struct DrawInput {
+    pub seed: u64,
+    pub sources: Vec<Source>,
+    pub width: u16,
+    pub height: u16,
+    pub min_height: u8,
+    pub max_height: u8,
+    pub id: String,
+}
 
 /// What the map turned out like, for the person deciding whether to keep it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,10 +73,9 @@ pub struct Report {
 
 /// How many positions on the map one footprint could stand in.
 ///
-/// It is the number that actually decides whether a map is worth keeping. A map
-/// that is 60% land and beautiful in a diff is worthless if no farm fits on it,
-/// and the terrain shares cannot tell you that — they are the statistic that is
-/// easy to compute rather than the one that answers the question.
+/// It is the number that actually decides whether a map is worth keeping: a
+/// map that reads as mostly land in a diff is worthless if no farm fits on
+/// it, and the terrain shares cannot tell you that.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Places {
     /// (width, height) in tiles.
@@ -62,11 +85,9 @@ pub struct Places {
     pub count: u32,
 }
 
-/// Reads a drawn map and says what is in it.
-///
-/// It never changes what was generated. A tool that quietly redraws until its
-/// own statistics look good is a tool whose seed no longer means anything, and
-/// the seed meaning something is the only reason to have one.
+/// Reads a drawn map and says what is in it. It never changes what was
+/// generated — a tool that quietly redraws until its own statistics look
+/// good is a tool whose seed no longer means anything.
 pub fn report(drawn: &Drawn, data: &DataSet) -> Report {
     let def = &drawn.def;
     let grid = Grid::from_map(def);
@@ -101,14 +122,11 @@ pub fn report(drawn: &Drawn, data: &DataSet) -> Report {
     }
 }
 
-/// Where one footprint could stand: every tile of it buildable ground, and the
-/// slope across it within `max_build_slope`.
+/// Where one footprint could stand: every tile of it buildable ground, and
+/// the slope across it within `max_build_slope`.
 ///
-/// The two conditions the game applies that are missing here — a road on the
-/// tile, a building already on it — are the two that cannot be true of a map
-/// nothing has been built on yet. What is left is read from the real tables
-/// through the real `Grid::slope_over`, so the tool and the game cannot come to
-/// different conclusions about what is placeable.
+/// Read through the real `Grid::slope_over`, so the tool and the game cannot
+/// come to different conclusions about what is placeable.
 fn places_for(grid: &Grid, def: &MapDef, size: (u8, u8), max_slope: u8) -> u32 {
     let (bw, bh) = (u16::from(size.0), u16::from(size.1));
     if bw == 0 || bh == 0 || bw > def.width || bh > def.height {
@@ -126,13 +144,11 @@ fn places_for(grid: &Grid, def: &MapDef, size: (u8, u8), max_slope: u8) -> u32 {
                     let i = usize::from(oy + dy) * usize::from(def.width) + usize::from(ox + dx);
                     if def.terrain[i].is_buildable() {
                         // The map is at most 256x256, so the last index is
-                        // `u16::MAX` and every index fits.
+                        // u16::MAX and every index fits.
                         footprint.push(TileIndex::new(i as u16));
                     }
                 }
             }
-            // Every tile of it, and not merely some: a footprint with a hole
-            // in it is not a place a building can stand.
             let whole = footprint.len() == area;
             if whole && grid.slope_over(&footprint) <= max_slope {
                 count += 1;
@@ -176,7 +192,8 @@ impl fmt::Display for Report {
     }
 }
 
-/// `n` as a percentage of `total`, and nothing at all of a map with no tiles.
+/// `n` as a percentage of `total`, and nothing at all of a map with no
+/// tiles.
 fn share(n: u32, total: u32) -> u32 {
     (n * 100).checked_div(total).unwrap_or(0)
 }

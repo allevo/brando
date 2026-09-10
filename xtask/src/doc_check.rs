@@ -1355,14 +1355,7 @@ fn read(root: &Path, rel: &str) -> Result<String, String> {
 /// Every `.rs`, `.ron` and `.toml` that is source rather than recording.
 fn source_files(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     let mut out = Vec::new();
-    for crate_dir in [
-        "map-gen",
-        "map-gen2",
-        "sim-core",
-        "sim-data",
-        "sim-replay",
-        "xtask",
-    ] {
+    for crate_dir in ["map-gen", "sim-core", "sim-data", "sim-replay", "xtask"] {
         walk(&root.join(crate_dir), root, &mut out)?;
     }
     for file in ["Cargo.toml", "clippy.toml"] {
@@ -1521,18 +1514,17 @@ fn rules_match_what_a_terrain_allows(root: &Path) -> Result<Vec<Finding>, String
 /// since the first commit, and it has never been anything but a sentence. This
 /// is the same rule as something that fails, which is this repository's own
 /// lesson applied without modification: a relation that has to hold is a
-/// check, not a comment. `xtask` may name either generator, and does.
+/// check, not a comment. `xtask` may name the generator, and does.
 ///
 /// Reading the manifest as text is enough, and that is not laziness: the test
-/// edge points from a generator to `sim-data` and never the other way, so
-/// these three files have no honest reason to contain either name at all.
-/// `GENERATORS` is listed in full rather than checked through one shared
-/// prefix — `"map-gen2"` happens to contain the substring `"map-gen"`, but
-/// that is a coincidence of two names and not a rule this check should lean
-/// on: the day a third generator arrives with an unrelated name, a check
-/// built on the coincidence would miss it silently.
+/// edge points from the generator to `sim-data` and never the other way, so
+/// these three files have no honest reason to contain its name at all.
+/// `GENERATORS` stays a list, one entry today, rather than a single constant:
+/// this workspace has already named two generators at once (phase 16.6-16.8),
+/// and a list is what let the second one join the check by adding an entry
+/// rather than rewriting the function.
 fn the_simulation_does_not_depend_on_the_generator(root: &Path) -> Result<Vec<Finding>, String> {
-    const GENERATORS: [&str; 2] = ["map-gen", "map-gen2"];
+    const GENERATORS: [&str; 1] = ["map-gen"];
     let mut out = Vec::new();
     for name in ["sim-core", "sim-data", "sim-replay"] {
         let at = format!("{name}/Cargo.toml");

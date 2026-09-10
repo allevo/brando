@@ -3,24 +3,16 @@ name = "map-gen"
 edition.workspace = true
 version.workspace = true
 
-# WARNING: nothing that can touch a disk goes in this list. That absence is the
-# whole of what this crate promises, and it is the reason the generator can be a
-# crate at all rather than a module hidden inside a binary.
+# WARNING: nothing that can touch a disk goes in this list. A generator the
+# simulation could load from would become a frozen part of the determinism
+# contract.
 [dependencies]
 sim-core = { path = "../sim-core" }
 thiserror = { workspace = true }
-# The map's dice: the same generator the core seeds its own streams with, rather
-# than a second one invented here.
 rand = { workspace = true }
 rand_pcg = { workspace = true }
 blake3 = { workspace = true }
 
-# `sim-data` is a dev-dependency and never an ordinary one. The sweep test needs
-# the real loader to judge what `draw` produced, and the loader is the only
-# honest judge of it — but the edge points this way round on purpose, so the
-# words `map-gen` never appear in `sim-data`'s manifest at all. That is what lets
-# `doc-check` prove the simulation does not depend on the generator by reading
-# three manifests, instead of having to tell a build edge from a test one.
 [dev-dependencies]
 sim-data = { path = "../sim-data" }
 proptest = { workspace = true }

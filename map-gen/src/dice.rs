@@ -1,19 +1,17 @@
 //! One `Pcg64` stream per purpose, seeded from the run's seed and a fixed
-//! salt — the same blake3-then-`Pcg64` device `map-gen`'s noise uses
-//! (`map-gen/src/noise.rs`), with this crate's own salt so the two
-//! generators' streams can never collide with each other or with anything
-//! the simulation itself draws.
+//! salt — the same blake3-then-`Pcg64` device `sim_core::rng` uses to keep
+//! its own streams apart, with this crate's own salt so its streams can
+//! never collide with anything the simulation itself draws.
 
 use rand::{RngCore, SeedableRng};
 use rand_pcg::Pcg64;
 
 /// Keeps this crate's dice apart from every other stream drawn from a seed.
-const SALT: &str = "brando/map-gen2/v1";
+const SALT: &str = "brando/map-gen/v1";
 
 /// One stream for one purpose. Two purposes of the same seed draw from
 /// independent streams, so a later change to one pass's draws can never
-/// shift another pass's — the same separation `map-gen::noise::field` keeps
-/// between its fields by name.
+/// shift another pass's.
 pub(crate) fn stream(seed: u64, purpose: &str) -> Pcg64 {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&seed.to_le_bytes());

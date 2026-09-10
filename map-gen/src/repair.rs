@@ -2,14 +2,12 @@
 //!
 //! Nothing in the three passes before this one guarantees it: a ring of sea
 //! sources, or an unlucky run of mountain claims, can sever the walkable
-//! ground exactly as easily as a noise field can, and the loader refuses a
-//! severed map (`RULES.md`: "every tile a building or a road could stand on
-//! is reachable from every other"). Adapted from `map-gen`'s own
-//! `keep_one_walkable_region`, against a real [`Grid`] rather than a
-//! hand-rolled adjacency function: unlike `map-gen`'s pipeline, this one
-//! already has a `Grid` in hand at every step for its geometry, so a second
-//! adjacency implementation kept in sync with [`Grid::neighbors4`] by
-//! convention alone would buy nothing.
+//! ground, and the loader refuses a severed map (`RULES.md`: "every tile a
+//! building or a road could stand on is reachable from every other"). Run
+//! against a real [`Grid`] rather than a hand-rolled adjacency function:
+//! this crate already has a `Grid` in hand at every step for its geometry,
+//! so a second adjacency implementation kept in sync with
+//! [`Grid::neighbors4`] by convention alone would buy nothing.
 
 use sim_core::{Grid, Terrain};
 

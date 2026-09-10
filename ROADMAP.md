@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 16.7.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.9.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -41,6 +41,8 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) — `cargo xtask gen-map` draws one in the new `map-gen` crate and `sim-data` writes it, refusing anything the loader would not accept; the format now reads and writes through one owner, and `doc-check` refuses a workspace in which any crate the simulation loads names the generator | 2026-08-21 |
 | 16.6 | [Sources claim a map, and shape what they claim](plan/16.6-sources-claim-a-map-and-shape-what-they-claim.md) — `cargo xtask gen-map2` draws a map in the new `map-gen2` crate from a list of mountain/land/sea sources that compete for tiles and then shape their own ground, `map-gen`'s sibling built from a different algorithm; the growth rule turns out to guarantee at least one land tile survives any input, so unlike `map-gen` it has no "no land left" refusal | 2026-09-10 |
 | 16.7 | [A source is typed, not just written](plan/16.7-a-source-is-typed-not-just-written.md) — `gen-map2` also takes one `--source <x>,<y>,<kind>,<strength>` flag per source, so a map can be drawn with no RON file written or read; it and `--sources <path>` are mutually exclusive | 2026-09-10 |
+| 16.8 | [`map-gen2` is the only generator now](plan/16.8-map-gen2-is-the-only-generator-now.md) — `map-gen` and `gen-map` are removed; nothing in the tree was ever choosing between two generators, and `map-gen2` alone now draws every map that is not hand-written | 2026-09-10 |
+| 16.9 | [The generator takes back its name](plan/16.9-the-generator-takes-back-its-name.md) — `map-gen2`/`gen-map2` are renamed to `map-gen`/`gen-map`, freed by 16.8; the dice salt moves with the name, which changes what a given seed draws and is safe because nothing commits to a specific seed's output | 2026-09-10 |
 
 ## To do
 

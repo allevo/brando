@@ -5,15 +5,14 @@ version.workspace = true
 
 [dependencies]
 sim-core = { path = "../sim-core", features = ["counters", "from-scratch", "house-level", "tick-number"] }
-# The map generators. This is the one crate in the workspace allowed to name
-# them: they are tools that write an asset, and `doc-check` refuses a `sim-*`
-# crate that depends on either.
+# The map generator. This is the one crate in the workspace allowed to name
+# it: it is a tool that writes an asset, and `doc-check` refuses a `sim-*`
+# crate that depends on it.
 map-gen = { path = "../map-gen" }
-map-gen2 = { path = "../map-gen2" }
 sim-data = { path = "../sim-data" }
 sim-replay = { path = "../sim-replay" }
-# gen-map2's own front door: reading the RON file a list of sources comes in
-# as. map-gen2 itself gains no serde/ron dependency — see gen_map2.rs.
+# gen-map's own front door: reading the RON file a list of sources comes in
+# as. map-gen itself gains no serde/ron dependency — see gen_map.rs.
 serde = { workspace = true }
 ron = { workspace = true }
 # The seeded map's dice. The same generator the core seeds its own streams with,
