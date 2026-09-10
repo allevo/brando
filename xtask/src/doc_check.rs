@@ -1355,7 +1355,14 @@ fn read(root: &Path, rel: &str) -> Result<String, String> {
 /// Every `.rs`, `.ron` and `.toml` that is source rather than recording.
 fn source_files(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     let mut out = Vec::new();
-    for crate_dir in ["map-gen", "sim-core", "sim-data", "sim-replay", "xtask"] {
+    for crate_dir in [
+        "map-gen",
+        "map-gen2",
+        "sim-core",
+        "sim-data",
+        "sim-replay",
+        "xtask",
+    ] {
         walk(&root.join(crate_dir), root, &mut out)?;
     }
     for file in ["Cargo.toml", "clippy.toml"] {
@@ -1499,10 +1506,10 @@ fn rules_match_what_a_terrain_allows(root: &Path) -> Result<Vec<Finding>, String
     Ok(out)
 }
 
-// --- 12. the simulation does not depend on the generator -------------------
+// --- 12. the simulation does not depend on a generator ---------------------
 
-/// The crate that draws a map is a tool, and no crate the simulation loads may
-/// name it.
+/// A crate that draws a map is a tool, and no crate the simulation loads may
+/// name one.
 ///
 /// A generator the simulation could reach would be a frozen part of the
 /// determinism contract: every improvement to it would move every recorded
@@ -1514,27 +1521,36 @@ fn rules_match_what_a_terrain_allows(root: &Path) -> Result<Vec<Finding>, String
 /// since the first commit, and it has never been anything but a sentence. This
 /// is the same rule as something that fails, which is this repository's own
 /// lesson applied without modification: a relation that has to hold is a
-/// check, not a comment. `xtask` may name it, and does.
+/// check, not a comment. `xtask` may name either generator, and does.
 ///
 /// Reading the manifest as text is enough, and that is not laziness: the test
-/// edge points from the generator to `sim-data` and never the other way, so
-/// these three files have no honest reason to contain the word at all.
+/// edge points from a generator to `sim-data` and never the other way, so
+/// these three files have no honest reason to contain either name at all.
+/// `GENERATORS` is listed in full rather than checked through one shared
+/// prefix — `"map-gen2"` happens to contain the substring `"map-gen"`, but
+/// that is a coincidence of two names and not a rule this check should lean
+/// on: the day a third generator arrives with an unrelated name, a check
+/// built on the coincidence would miss it silently.
 fn the_simulation_does_not_depend_on_the_generator(root: &Path) -> Result<Vec<Finding>, String> {
-    const GENERATOR: &str = "map-gen";
+    const GENERATORS: [&str; 2] = ["map-gen", "map-gen2"];
     let mut out = Vec::new();
     for name in ["sim-core", "sim-data", "sim-replay"] {
         let at = format!("{name}/Cargo.toml");
-        if read(root, &at)?.contains(GENERATOR) {
-            out.push(Finding {
-                check: "generator-edge",
-                at,
-                what: format!(
-                    "names `{GENERATOR}`. The generator draws the maps the game \
-                     loads and is a tool: a crate the simulation loads may not \
-                     depend on it, or every improvement to it would move every \
-                     recorded hash"
-                ),
-            });
+        let text = read(root, &at)?;
+        for generator in GENERATORS {
+            if text.contains(generator) {
+                out.push(Finding {
+                    check: "generator-edge",
+                    at,
+                    what: format!(
+                        "names `{generator}`. A generator draws the maps the game \
+                         loads and is a tool: a crate the simulation loads may not \
+                         depend on one, or every improvement to it would move every \
+                         recorded hash"
+                    ),
+                });
+                break;
+            }
         }
     }
     Ok(out)

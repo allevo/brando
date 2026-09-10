@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 16.5.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.7.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -39,6 +39,8 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
 | 16 | [Terrain: relief and cost](plan/16-terrain.md) — a building's footprint spans a `slope`, never stored; a step of it beyond zero costs `flatten_cost_per_step`, and past `max_build_slope` the placement is refused with `TooSteep`; a map is loaded from `sim-data/maps/<id>.ron` through the same raw/validate/`Def` pipeline as the balancing tables, refusing a bad row, an unclaimed character, a height out of range or a severed walkable region | 2026-08-21 |
 | 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) — `cargo xtask gen-map` draws one in the new `map-gen` crate and `sim-data` writes it, refusing anything the loader would not accept; the format now reads and writes through one owner, and `doc-check` refuses a workspace in which any crate the simulation loads names the generator | 2026-08-21 |
+| 16.6 | [Sources claim a map, and shape what they claim](plan/16.6-sources-claim-a-map-and-shape-what-they-claim.md) — `cargo xtask gen-map2` draws a map in the new `map-gen2` crate from a list of mountain/land/sea sources that compete for tiles and then shape their own ground, `map-gen`'s sibling built from a different algorithm; the growth rule turns out to guarantee at least one land tile survives any input, so unlike `map-gen` it has no "no land left" refusal | 2026-09-10 |
+| 16.7 | [A source is typed, not just written](plan/16.7-a-source-is-typed-not-just-written.md) — `gen-map2` also takes one `--source <x>,<y>,<kind>,<strength>` flag per source, so a map can be drawn with no RON file written or read; it and `--sources <path>` are mutually exclusive | 2026-09-10 |
 
 ## To do
 

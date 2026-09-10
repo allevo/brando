@@ -201,6 +201,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "map-gen2"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "proptest",
+ "rand",
+ "rand_pcg",
+ "sim-core",
+ "sim-data",
+ "thiserror",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,8 +592,11 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "map-gen",
+ "map-gen2",
  "rand",
  "rand_pcg",
+ "ron",
+ "serde",
  "sim-core",
  "sim-data",
  "sim-replay",
