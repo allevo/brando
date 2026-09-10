@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 16.9.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.9.5.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -43,6 +43,7 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 16.7 | [A source is typed, not just written](plan/16.7-a-source-is-typed-not-just-written.md) — `gen-map2` also takes one `--source <x>,<y>,<kind>,<strength>` flag per source, so a map can be drawn with no RON file written or read; it and `--sources <path>` are mutually exclusive | 2026-09-10 |
 | 16.8 | [`map-gen2` is the only generator now](plan/16.8-map-gen2-is-the-only-generator-now.md) — `map-gen` and `gen-map` are removed; nothing in the tree was ever choosing between two generators, and `map-gen2` alone now draws every map that is not hand-written | 2026-09-10 |
 | 16.9 | [The generator takes back its name](plan/16.9-the-generator-takes-back-its-name.md) — `map-gen2`/`gen-map2` are renamed to `map-gen`/`gen-map`, freed by 16.8; the dice salt moves with the name, which changes what a given seed draws and is safe because nothing commits to a specific seed's output | 2026-09-10 |
+| 16.9.5 | [A map the generator draws can be played](plan/16.9.5-a-map-the-generator-draws-can-be-played.md) — `hills-and-sea`, drawn by `gen-map` and committed unedited, loads through the replay's entry point and plays thirty months with no command rejected; what still disagrees sits around the file, not in it: the runner cannot name a map, the header `gen-map` writes is a command it refuses, and the generator's rock step keeps every footprint below the slope the runtime would refuse | 2026-09-10 |
 
 ## To do
 
