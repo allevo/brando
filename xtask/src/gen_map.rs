@@ -1,13 +1,13 @@
-//! `gen-map`: draws a map from a seed and a list of sources, says what it
-//! drew, and writes it out.
+//! `gen-map`: generates a map from a seed and a list of sources, says what it
+//! turned out like, and writes it out.
 //!
-//! Thin on purpose: the arithmetic belongs to `map-gen` and the writing to
-//! `sim-data`. The one thing this front door owns is the shape a list of
-//! sources comes in — either a small RON file (`--sources <path>`) or one
-//! `--source <x>,<y>,<kind>,<strength>` flag per source, typed straight on
-//! the command line — because nothing else in the tree ever reads or writes
-//! either shape, so it belongs here rather than costing `map-gen` a
-//! `serde`/`ron` dependency of its own. The principle is the crate's own:
+//! Thin on purpose: the arithmetic belongs to `map-gen`, the summary to
+//! `map_report`, and the writing to `sim-data`. The one thing this front door
+//! owns is the shape a list of sources comes in — either a small RON file
+//! (`--sources <path>`) or one `--source <x>,<y>,<kind>,<strength>` flag per
+//! source, typed straight on the command line — because nothing else in the
+//! tree ever reads or writes either shape, so it belongs here rather than
+//! costing `map-gen` a `serde`/`ron` dependency of its own. The principle is the crate's own:
 //! the crate that consumes a format for a purpose owns it, the way
 //! `sim-data` owns the map format itself.
 
@@ -47,8 +47,7 @@ pub fn gen_map(args: &[String]) -> Result<(), String> {
         .unwrap_or_else(|| sim_data::maps_dir().join(format!("{id}.ron")));
 
     let (sources, sources_flags) = read_sources(args)?;
-    let data = sim_data::load_default().map_err(|e| format!("tables: {e}"))?;
-    let drawn = map_gen::draw(&map_gen::DrawInput {
+    let map = map_gen::generate(&map_gen::Config {
         seed,
         sources,
         width,
@@ -59,14 +58,14 @@ pub fn gen_map(args: &[String]) -> Result<(), String> {
     })
     .map_err(|e| e.to_string())?;
 
-    print!("{}", map_gen::report(&drawn, &data));
+    let data = sim_data::load_default().map_err(|e| format!("tables: {e}"))?;
+    print!("{}", crate::map_report::report(&map, &data));
     if args.iter().any(|a| a == "--print") {
         println!();
-        print!("{}", sim_data::render_map(&drawn.def));
+        print!("{}", sim_data::render_map(&map));
     }
 
-    sim_data::save_map(&drawn.def, &note(seed, &sources_flags, &id), &out)
-        .map_err(|e| e.to_string())?;
+    sim_data::save_map(&map, &note(seed, &sources_flags, &id), &out).map_err(|e| e.to_string())?;
     println!("\nwrote {}", out.display());
     Ok(())
 }

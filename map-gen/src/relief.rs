@@ -1,6 +1,6 @@
 //! Step 2: mountains and seas shape their own ground.
 //!
-//! Every tile starts at [`crate::pipeline::SEA_LEVEL`]. Only mountain and
+//! Every tile starts at [`crate::SEA_LEVEL`]. Only mountain and
 //! sea sources act here; a tile a `Land` source claimed keeps that height
 //! for good. Each participating source picks one tile of its own `A`
 //! uniformly at random as its origin, and keeps a growing set `C`, seeded
@@ -26,8 +26,7 @@
 use sim_core::{Grid, TileIndex, TilePos};
 
 use crate::assign::{AssignResult, SourceId};
-use crate::pipeline::SEA_LEVEL;
-use crate::{Source, SourceKind, dice};
+use crate::{SEA_LEVEL, Source, SourceKind, dice};
 
 pub(crate) fn run(
     seed: u64,

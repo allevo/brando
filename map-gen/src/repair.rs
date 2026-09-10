@@ -11,19 +11,13 @@
 
 use sim_core::{Grid, Terrain};
 
-use crate::pipeline::Repair;
-
 /// Drowns every walkable tile outside the largest connected region.
 ///
 /// Largest by tile count, ties broken by the lowest tile index in the
 /// region: the regions are found in index order, so keeping the first of
 /// equal size *is* that tie-break, and writing it down is what means nobody
 /// has to wonder later.
-pub(crate) fn keep_one_walkable_region(
-    terrain: &mut [Terrain],
-    ground: &mut [u8],
-    grid: &Grid,
-) -> Repair {
+pub(crate) fn keep_one_walkable_region(terrain: &mut [Terrain], ground: &mut [u8], grid: &Grid) {
     const NONE: u32 = u32::MAX;
     let mut region = vec![NONE; terrain.len()];
     let mut sizes: Vec<usize> = Vec::new();
@@ -58,19 +52,13 @@ pub(crate) fn keep_one_walkable_region(
         }
     }
 
-    let mut tiles_drowned = 0;
     if let Some((_, keep)) = best {
         for i in 0..terrain.len() {
             if region[i] != NONE && region[i] != keep {
                 terrain[i] = Terrain::Water;
                 ground[i] = 0;
-                tiles_drowned += 1;
             }
         }
-    }
-    Repair {
-        regions_before: sizes.len(),
-        tiles_drowned,
     }
 }
 
@@ -89,9 +77,7 @@ mod tests {
             Terrain::Plain,
         ];
         let mut ground = vec![10, 10, 10, 0, 10];
-        let repair = keep_one_walkable_region(&mut terrain, &mut ground, &g);
-        assert_eq!(repair.regions_before, 2);
-        assert_eq!(repair.tiles_drowned, 1);
+        keep_one_walkable_region(&mut terrain, &mut ground, &g);
 
         let repaired = Grid::from_map(&sim_core::MapDef::new(
             "t".to_string(),
@@ -102,9 +88,9 @@ mod tests {
         ));
         assert_eq!(repaired.walkable_regions().len(), 1);
         assert_eq!(
-            terrain[4],
-            Terrain::Water,
-            "the smaller region gets drowned"
+            (terrain[4], ground[4]),
+            (Terrain::Water, 0),
+            "the smaller region gets drowned, and sits at the water's height"
         );
         assert_eq!(
             terrain[0],

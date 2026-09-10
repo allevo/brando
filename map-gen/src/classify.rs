@@ -9,7 +9,7 @@
 
 use sim_core::{Grid, Terrain, TileIndex};
 
-use crate::pipeline::SEA_LEVEL;
+use crate::SEA_LEVEL;
 
 /// A tile whose step to its steepest land neighbour reaches this is rock,
 /// however flat the rest of the map around it: "slopes lower than 2 are

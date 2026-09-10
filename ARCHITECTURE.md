@@ -26,7 +26,7 @@ of the determinism contract, and every improvement to it would move every record
 | `sim-core` | **yes** | State, tick, commands. No dependency beyond serde/rand_pcg/slotmap/blake3. |
 | `sim-data` | **yes** | RON tables, validated at load. The only crate doing I/O on game data. Owns the map format in both directions: `parse_map` reads it, `render_map` and `save_map` write it. |
 | `sim-replay` | **yes** | `seed + Vec<Command>`, the state hash, the recorded replays. |
-| `map-gen` | **yes** | Draws a map from a seeded list of mountain/land/sea sources that compete for tiles and then shape their own ground. Pure arithmetic: it touches no disk, and nothing the simulation loads may depend on it. |
+| `map-gen` | **yes** | Generates a map from a seeded list of mountain/land/sea sources that compete for tiles and then shape their own ground. One entry point: `generate` turns a `Config` into the `MapDef` the game plays, the same type the loader returns. Pure arithmetic: it touches no disk, and nothing the simulation loads may depend on it. |
 | `xtask` | **yes** | Headless runner: `run`, `record`, `regen-expected`, `bench`, `gen-map`, `doc-check`. |
 | `sim-scenario` | no | Scenarios, objectives, victory conditions. Phase 17. |
 | `sim-civ` | no | The `CivilizationRules` trait. **M3, together with the second civilisation** — not before. |

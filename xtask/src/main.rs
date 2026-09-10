@@ -7,6 +7,7 @@
 mod bench;
 mod expected;
 mod gen_map;
+mod map_report;
 mod scenario;
 
 use std::process::ExitCode;

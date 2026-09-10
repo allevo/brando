@@ -89,7 +89,7 @@ impl Frontier {
 
 /// Runs step 1: every tile ends up owned by exactly one source.
 ///
-/// `sources` is already validated by `pipeline::draw` — every point in
+/// `sources` is already validated by `check::run` — every point in
 /// bounds, no two coinciding — and this function trusts both.
 pub(crate) fn run(seed: u64, sources: &[Source], grid: &Grid, max_strength: u16) -> AssignResult {
     let n = grid.len() as usize;

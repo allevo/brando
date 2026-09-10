@@ -1,29 +1,32 @@
 #![forbid(unsafe_code)]
 
-//! Draws a map from a seeded list of sources that compete for tiles and
+//! Generates a map from a seeded list of sources that compete for tiles and
 //! then shape their own ground: growth outward from named points, not
 //! layered noise.
 //!
-//! **Nothing here touches a disk.** [`draw`] takes a [`DrawInput`] and gives
-//! back a `MapDef` in memory; writing one out belongs to the crate that owns
-//! the format (`sim_data::save_map`). `cargo xtask doc-check` refuses a
-//! workspace in which any crate the simulation loads names this one — a
-//! generator the simulation could reach would become a frozen part of the
-//! determinism contract, and every improvement to it would move every
+//! One entry point: [`generate`] takes a [`Config`] and gives back the
+//! [`MapDef`] the game plays — the same type `sim_data::load_map_by_id`
+//! returns, so a generated map and a loaded one are the same kind of thing.
+//! **Nothing here touches a disk**: writing a map out belongs to the crate
+//! that owns the format (`sim_data::save_map`). `cargo xtask doc-check`
+//! refuses a workspace in which any crate the simulation loads names this
+//! one — a generator the simulation could reach would become a frozen part
+//! of the determinism contract, and every improvement to it would move every
 //! recorded hash.
 
 mod assign;
+mod check;
 mod classify;
 mod dice;
-mod pipeline;
 mod relief;
 mod repair;
 
-use std::fmt;
+use sim_core::{MapDef, TilePos};
 
-use sim_core::{DataSet, Grid, MapDef, Terrain, TileIndex, TilePos};
-
-pub use pipeline::{DrawError, Drawn, Repair, draw};
+/// Every tile starts here (step 1's own words: "initially, all tiles have
+/// height 8"), and it is also step 3's water threshold — one constant, not
+/// two literal `8`s that could otherwise drift apart from each other.
+pub(crate) const SEA_LEVEL: u8 = 8;
 
 /// What a source turns the tiles it claims into, and — for two of the three
 /// kinds — how it goes on shaping their height afterwards.
@@ -43,10 +46,9 @@ pub struct Source {
     pub strength: u16,
 }
 
-/// Everything one draw needs, gathered so [`draw`] does not grow a seventh
-/// positional argument the day an eighth is wanted.
+/// Everything one map is generated from.
 #[derive(Debug, Clone)]
-pub struct DrawInput {
+pub struct Config {
     pub seed: u64,
     pub sources: Vec<Source>,
     pub width: u16,
@@ -56,144 +58,96 @@ pub struct DrawInput {
     pub id: String,
 }
 
-/// What the map turned out like, for the person deciding whether to keep it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Report {
-    pub id: String,
-    pub width: u16,
-    pub height: u16,
-    /// How many tiles of each terrain, indexed by `Terrain::index`.
-    pub tiles: [u32; Terrain::COUNT],
-    pub lowest: u8,
-    pub highest: u8,
-    pub repair: Repair,
-    /// One entry per distinct footprint in the buildings table.
-    pub places: Vec<Places>,
+/// Every way a [`Config`] can be unusable, and no others.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ConfigError {
+    #[error("cannot generate a {width}x{height} map: each side must be 1..={max}")]
+    UnusableSize { width: u16, height: u16, max: u16 },
+
+    #[error(
+        "height range {min_height}..={max_height} is not usable: each bound must be 0..={cap}, and min <= max"
+    )]
+    InvalidHeightRange {
+        min_height: u8,
+        max_height: u8,
+        cap: u8,
+    },
+
+    #[error(
+        "height range {min_height}..={max_height} excludes sea level ({sea_level}): every tile starts there"
+    )]
+    HeightRangeExcludesSeaLevel {
+        min_height: u8,
+        max_height: u8,
+        sea_level: u8,
+    },
+
+    #[error("no sources: nothing would ever get a type")]
+    NoSources,
+
+    #[error("source {index} sits at ({x}, {y}), outside the {width}x{height} map")]
+    SourceOutOfBounds {
+        index: usize,
+        x: u8,
+        y: u8,
+        width: u16,
+        height: u16,
+    },
+
+    #[error(
+        "sources {first} and {second} both start at ({x}, {y}); every source needs its own tile"
+    )]
+    DuplicateSourceOrigin {
+        first: usize,
+        second: usize,
+        x: u8,
+        y: u8,
+    },
 }
 
-/// How many positions on the map one footprint could stand in.
-///
-/// It is the number that actually decides whether a map is worth keeping: a
-/// map that reads as mostly land in a diff is worthless if no farm fits on
-/// it, and the terrain shares cannot tell you that.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Places {
-    /// (width, height) in tiles.
-    pub size: (u8, u8),
-    /// Every building in the table that has this footprint.
-    pub buildings: Vec<String>,
-    pub count: u32,
-}
+/// Generates the map `config` describes — pure, so the same config always
+/// gives the same map, and nothing is read from or written to a disk.
+pub fn generate(config: &Config) -> Result<MapDef, ConfigError> {
+    let grid = check::run(config)?;
 
-/// Reads a drawn map and says what is in it. It never changes what was
-/// generated — a tool that quietly redraws until its own statistics look
-/// good is a tool whose seed no longer means anything.
-pub fn report(drawn: &Drawn, data: &DataSet) -> Report {
-    let def = &drawn.def;
-    let grid = Grid::from_map(def);
+    // Every source's strength is at most this by construction, so
+    // `max_strength - s.strength` in the passes never underflows.
+    let max_strength = config
+        .sources
+        .iter()
+        .map(|s| s.strength)
+        .max()
+        .expect("check::run refuses an empty source list");
 
-    let mut tiles = [0u32; Terrain::COUNT];
-    for t in &def.terrain {
-        tiles[t.index()] += 1;
-    }
+    let assigned = assign::run(config.seed, &config.sources, &grid, max_strength);
+    let mut ground = relief::run(
+        config.seed,
+        &config.sources,
+        &assigned,
+        &grid,
+        max_strength,
+        config.min_height,
+        config.max_height,
+    );
+    let mut terrain = classify::run(&ground, &grid);
+    classify::flatten_the_water(&terrain, &mut ground);
 
-    let mut places: Vec<Places> = Vec::new();
-    for b in &data.buildings {
-        if let Some(p) = places.iter_mut().find(|p| p.size == b.size) {
-            p.buildings.push(b.id.clone());
-        } else {
-            places.push(Places {
-                size: b.size,
-                buildings: vec![b.id.clone()],
-                count: places_for(&grid, def, b.size, data.rules.max_build_slope),
-            });
-        }
-    }
+    // Provable, not a guess: every source leaves a tile step 2 never rolls
+    // on — a `Land` source never touches height, and a mountain or sea
+    // source never acts again after the act that grows `C` up to `A` (or
+    // never acts at all, when `A` is one tile), so the tiles that act adds
+    // stay at sea level, which is land.
+    debug_assert!(
+        terrain.iter().any(|t| t.is_walkable()),
+        "no walkable tile survived, which step 2's own growth rule rules out"
+    );
+    repair::keep_one_walkable_region(&mut terrain, &mut ground, &grid);
 
-    Report {
-        id: def.id.clone(),
-        width: def.width,
-        height: def.height,
-        tiles,
-        lowest: def.ground.iter().copied().min().unwrap_or(0),
-        highest: def.ground.iter().copied().max().unwrap_or(0),
-        repair: drawn.repair,
-        places,
-    }
-}
-
-/// Where one footprint could stand: every tile of it buildable ground, and
-/// the slope across it within `max_build_slope`.
-///
-/// Read through the real `Grid::slope_over`, so the tool and the game cannot
-/// come to different conclusions about what is placeable.
-fn places_for(grid: &Grid, def: &MapDef, size: (u8, u8), max_slope: u8) -> u32 {
-    let (bw, bh) = (u16::from(size.0), u16::from(size.1));
-    if bw == 0 || bh == 0 || bw > def.width || bh > def.height {
-        return 0;
-    }
-
-    let area = usize::from(bw) * usize::from(bh);
-    let mut count = 0;
-    let mut footprint = Vec::with_capacity(area);
-    for oy in 0..=(def.height - bh) {
-        for ox in 0..=(def.width - bw) {
-            footprint.clear();
-            for dy in 0..bh {
-                for dx in 0..bw {
-                    let i = usize::from(oy + dy) * usize::from(def.width) + usize::from(ox + dx);
-                    if def.terrain[i].is_buildable() {
-                        // The map is at most 256x256, so the last index is
-                        // u16::MAX and every index fits.
-                        footprint.push(TileIndex::new(i as u16));
-                    }
-                }
-            }
-            let whole = footprint.len() == area;
-            if whole && grid.slope_over(&footprint) <= max_slope {
-                count += 1;
-            }
-        }
-    }
-    count
-}
-
-impl fmt::Display for Report {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let total = u32::from(self.width) * u32::from(self.height);
-        writeln!(f, "map '{}' — {}x{}", self.id, self.width, self.height)?;
-        for t in Terrain::ALL {
-            let n = self.tiles[t.index()];
-            writeln!(
-                f,
-                "  {:<8} {n:>6}  {:>3}%",
-                format!("{t:?}"),
-                share(n, total)
-            )?;
-        }
-        writeln!(f, "  height   {:>6}..{}", self.lowest, self.highest)?;
-        writeln!(
-            f,
-            "  repair   {:>6} walkable regions, {} tiles drowned to leave one",
-            self.repair.regions_before, self.repair.tiles_drowned
-        )?;
-        writeln!(f, "  places a building of each footprint could stand in:")?;
-        for p in &self.places {
-            writeln!(
-                f,
-                "    {}x{} {:>6}   {}",
-                p.size.0,
-                p.size.1,
-                p.count,
-                p.buildings.join(", ")
-            )?;
-        }
-        Ok(())
-    }
-}
-
-/// `n` as a percentage of `total`, and nothing at all of a map with no
-/// tiles.
-fn share(n: u32, total: u32) -> u32 {
-    (n * 100).checked_div(total).unwrap_or(0)
+    Ok(MapDef::new(
+        config.id.clone(),
+        config.width,
+        config.height,
+        terrain,
+        ground,
+    ))
 }
