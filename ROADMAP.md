@@ -3,7 +3,7 @@
 **What is done, what is next, and what is not decided.** This is the only file that states how far the
 tree has got — if another document tells you what is built, it is wrong and should point here.
 
-> **Implemented through phase 16.** M0 is complete; M1 is in progress.
+> **Implemented through phase 16.9.6.** M0 is complete; M1 is in progress.
 
 ## Done
 
@@ -38,6 +38,13 @@ tree has got — if another document tells you what is built, it is wrong and sh
 | 15 | [Immigration and emigration](plan/15-migration.md) — the destination is never gated on coverage (slot 14.5's answer generalised), immigration is counted per free place and not per resident, and the coverage↔population loop damps: a `hard` city, born with nobody in it, reaches a living population within five years by migration alone | 2026-08-19 |
 | 15.5 | [A full city turns people away, and the player can see it](plan/15.5-a-full-city-turns-people-away-and-the-player-can-see-it.md) — immigration draws on the residents a city already has once it is past a founding threshold, and below it on the free places, so a city born empty still starts; everyone a full city cannot house is counted in `turned_away`, outside the conservation equality because they never became a resident | 2026-08-20 |
 | 16 | [Terrain: relief and cost](plan/16-terrain.md) — a building's footprint spans a `slope`, never stored; a step of it beyond zero costs `flatten_cost_per_step`, and past `max_build_slope` the placement is refused with `TooSteep`; a map is loaded from `sim-data/maps/<id>.ron` through the same raw/validate/`Def` pipeline as the balancing tables, refusing a bad row, an unclaimed character, a height out of range or a severed walkable region | 2026-08-21 |
+| 16.5 | [A seed draws a map, and a person commits it](plan/16.5-a-seed-draws-a-map-and-a-person-commits-it.md) — `cargo xtask gen-map` draws one in the new `map-gen` crate and `sim-data` writes it, refusing anything the loader would not accept; the format now reads and writes through one owner, and `doc-check` refuses a workspace in which any crate the simulation loads names the generator | 2026-08-21 |
+| 16.6 | [Sources claim a map, and shape what they claim](plan/16.6-sources-claim-a-map-and-shape-what-they-claim.md) — `cargo xtask gen-map2` draws a map in the new `map-gen2` crate from a list of mountain/land/sea sources that compete for tiles and then shape their own ground, `map-gen`'s sibling built from a different algorithm; the growth rule turns out to guarantee at least one land tile survives any input, so unlike `map-gen` it has no "no land left" refusal | 2026-09-10 |
+| 16.7 | [A source is typed, not just written](plan/16.7-a-source-is-typed-not-just-written.md) — `gen-map2` also takes one `--source <x>,<y>,<kind>,<strength>` flag per source, so a map can be drawn with no RON file written or read; it and `--sources <path>` are mutually exclusive | 2026-09-10 |
+| 16.8 | [`map-gen2` is the only generator now](plan/16.8-map-gen2-is-the-only-generator-now.md) — `map-gen` and `gen-map` are removed; nothing in the tree was ever choosing between two generators, and `map-gen2` alone now draws every map that is not hand-written | 2026-09-10 |
+| 16.9 | [The generator takes back its name](plan/16.9-the-generator-takes-back-its-name.md) — `map-gen2`/`gen-map2` are renamed to `map-gen`/`gen-map`, freed by 16.8; the dice salt moves with the name, which changes what a given seed draws and is safe because nothing commits to a specific seed's output | 2026-09-10 |
+| 16.9.5 | [A map the generator draws can be played](plan/16.9.5-a-map-the-generator-draws-can-be-played.md) — `hills-and-sea`, drawn by `gen-map` and committed unedited, loads through the replay's entry point and plays thirty months with no command rejected; what still disagrees sits around the file, not in it: the runner cannot name a map, the header `gen-map` writes is a command it refuses, and the generator's rock step keeps every footprint below the slope the runtime would refuse | 2026-09-10 |
+| 16.9.6 | [A generated map is the same thing as a loaded one](plan/16.9.6-a-generated-map-is-the-same-thing-as-a-loaded-one.md) — `map-gen`'s one entry point is `generate`, which turns a `Config` into the `MapDef` the game plays; the report and its tables move to `xtask`, the repair counts go, and every map generated before comes out byte-identical | 2026-09-10 |
 
 ## To do
 

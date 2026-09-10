@@ -1,0 +1,21 @@
+[package]
+name = "map-gen"
+edition.workspace = true
+version.workspace = true
+
+# WARNING: nothing that can touch a disk goes in this list. A generator the
+# simulation could load from would become a frozen part of the determinism
+# contract.
+[dependencies]
+sim-core = { path = "../sim-core" }
+thiserror = { workspace = true }
+rand = { workspace = true }
+rand_pcg = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+sim-data = { path = "../sim-data" }
+proptest = { workspace = true }
+
+[lints]
+workspace = true

@@ -188,6 +188,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
+name = "map-gen"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "proptest",
+ "rand",
+ "rand_pcg",
+ "sim-core",
+ "sim-data",
+ "thiserror",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -565,8 +578,11 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "map-gen",
  "rand",
  "rand_pcg",
+ "ron",
+ "serde",
  "sim-core",
  "sim-data",
  "sim-replay",
